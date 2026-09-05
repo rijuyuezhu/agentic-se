@@ -81,7 +81,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 | [06](modules/06-working-with-legacy-code.md) | 阅读和接管 Legacy Code | 在 spec/test 不足时，怎样先 characterize、打开最小 seam，再安全变化？ |
 | [07](modules/07-concurrency-lifecycle-failure.md) | Concurrency、Lifecycle 与 Failure | race、retry、crash、restart 下哪些不变量最容易被破坏？ |
 | [08](modules/08-dependency-compatibility-migration.md) | Dependency、Compatibility 与 Migration | 怎样让旧 caller / 旧数据 / 旧协议穿过新旧版本共存期而不被破坏？ |
-| 09 | Architecture：边界、数据流与故障域 | 什么值得上升到系统级设计？哪些决定以后很难改？ |
+| [09](modules/09-architecture-boundaries-dataflow-failure-domains.md) | Architecture：边界、数据流与故障域 | 什么值得上升到系统级设计？哪些决定会跨模块放大 authority / failure / evolution consequence？ |
 | 10 | Code Review 与 Change Engineering | 怎样把一次 PR 当作“系统演化的最小单位”审查？ |
 | 11 | Production、Observability 与 Reliability | 系统在现实世界坏掉时，设计是否仍然成立？ |
 | 12 | Agentic Software Engineering | 如何给 Agent 任务、限制搜索空间、要求证据、独立验收？ |
@@ -137,13 +137,13 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 ## 当前状态
 
-前九个核心模块已经形成连续学习链：
+前十个核心模块已经形成连续学习链：
 
-- M00–M08 已有自包含中文讲义；
-- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m08-source-audit.md` 记录逐模块 source audit；
-- M02–M07 的 ownership、testing、boundary、refactoring、legacy-takeover、concurrency/failure labs 与 instructor references 已形成连续 TaskForge 历史；
-- [`labs/08-compatibility-migration.md`](labs/08-compatibility-migration.md) 新增 durable snapshot v1→v2 演化，要求先画 R/W compatibility matrix，再只实现 Expand phase；
-- `labs/taskforge/tools/m08_compat_probe.py` 已实际验证 historical v1 data 可读、default writer 仍能被 frozen v1 reader 接受、naive v2 cutover 会破坏 old reader、future version fail-closed；
-- [`case-studies/m08/instructor-analysis.md`](case-studies/m08/instructor-analysis.md) 记录 reference path：R2 同时读 v1/v2，但 default writer 继续 W1；临时副本原 6 个 core tests + 10 个 M08 tests 共 `16 passed`。
+- M00–M09 已有自包含中文讲义；
+- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m09-source-audit.md` 记录逐模块 source audit；
+- M02–M08 的 ownership、testing、boundary、refactoring、legacy-takeover、concurrency/failure、compatibility/migration labs 与 instructor references 已形成连续 TaskForge 历史；
+- [`labs/09-architecture-boundaries.md`](labs/09-architecture-boundaries.md) 要求先恢复 responsibility / authority / runtime / failure / evolution 五个 view，再比较 remote-worker architecture alternatives，最后只做 deployment-neutral 的 authority-boundary refactor；
+- `labs/taskforge/tools/m09_architecture_probe.py` 已实际 inventory baseline：5 个 direct-state dependencies、3 个 lifecycle mutators，并明确 long-lived surfaces；
+- [`case-studies/m09/instructor-analysis.md`](case-studies/m09/instructor-analysis.md) 记录 reference direction：normal product path 收敛到一个 in-process `JobAuthority`，M07 fault-injection path 作为显式 historical exception；临时副本 `9 passed`，M05–M08 probes 全保持，direct state import 最终只剩 `job_authority` 与 `concurrent_claim`。
 
-下一阶段进入 M09 Architecture：把前面学到的 contract、ownership、evidence、boundary、failure 与 migration 提升到系统级，判断**哪些边界值得成为长期 architecture，哪些只是局部 implementation detail。**
+下一阶段进入 M10 Code Review / Change Engineering：把前面所有 reasoning 收束到一次真实 change unit 上，训练 reviewer 怎样验证 scope、contract、failure、migration、architecture invariant 和 evidence，而不是只读 diff 看 style。

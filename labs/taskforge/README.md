@@ -4,7 +4,7 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02–M08 teaching baseline
+## 当前版本：v0 / M02–M09 teaching baseline
 
 core 仍只有四类行为：
 
@@ -244,3 +244,31 @@ unknown future schema -> explicit reject
 ```
 
 完整实验见 [`../08-compatibility-migration.md`](../08-compatibility-migration.md)。本轮只实现 Expand phase：先让新 reader 支持 v1/v2，但默认 writer 继续写 v1；writer cutover 必须等 compatibility matrix 的前置条件满足后再独立执行。
+
+## M09：从源码恢复 architecture，而不是先画 topology
+
+M09 新增：
+
+```text
+tools/m09_architecture_probe.py
+```
+
+这个 probe 用 AST inventory 当前 direct-state dependencies 与 lifecycle mutators。它不是 architecture score，也不会自动提出 target design；它只是把一个容易被 diagram 隐藏的事实变成 evidence。
+
+运行：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project python tools/m09_architecture_probe.py
+```
+
+baseline 已实际验证：
+
+```text
+direct state dependencies:
+  concurrent_claim, legacy_audit, metrics, service, worker
+
+lifecycle mutators:
+  concurrent_claim, service, worker
+```
+
+完整实验见 [`../09-architecture-boundaries.md`](../09-architecture-boundaries.md)。实验要求先分类 product / reporting / historical-fault-injection paths，再比较 remote-worker architecture；reference 只在临时副本里把 normal product path 收敛到 in-process `JobAuthority`，不提前加入 RPC、database 或 message queue。

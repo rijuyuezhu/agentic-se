@@ -606,3 +606,9 @@ M08 继续使用同一标准，见：
 `reading-notes/m08-source-audit.md`
 
 这份审计实际检查了 Google AIP-180 的 source/wire/semantic compatibility、Semantic Versioning 2.0.0 规范、Software Engineering at Google 的 Dependency Management 与 Deprecation、Martin Fowler / Danilo Sato 的 Parallel Change、Protocol Buffers 官方 schema-evolution guidance，以及 Kubernetes Deprecation Policy。课程据此把 compatibility 建模成 producer/consumer/version/direction/time-window 的矩阵，并把 expand→migrate→contract 与 reader-first/writer-later rollout 作为核心迁移模型；同时明确拒绝“major bump 就自动安全”“所有 migration 都 dual-write”“reader 应无限宽容”“历史 fixture 可以随新实现一起更新”等机械规则。
+
+M09 继续使用同一标准，见：
+
+`reading-notes/m09-source-audit.md`
+
+这份审计实际检查了 SEI 对 software architecture 的结构化定义与历史说明、Martin Fowler 的 Software Architecture Guide / Monolith First / 2026 Architecture Decision Record、Stanford CS190 Modular Design、AWS Well-Architected 的 cell-based scope-of-impact guidance，以及 Google SRE Cascading Failures。课程据此把 architecture 建模成用于 system-level reasoning 的 consequential boundaries，并区分 semantic / process / deployment / failure boundary；同时明确拒绝“architecture=最高层目录”“microservices=成熟度”“画了 cell/service box 就形成 failure isolation”“ADR 越多越成熟”等机械规则。Parnas 1972 本轮仅保留 historical pointer，因为未获得愿意升级成新 primary-source authority 的完整原始出版正文。
