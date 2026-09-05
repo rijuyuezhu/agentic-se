@@ -612,3 +612,9 @@ M09 继续使用同一标准，见：
 `reading-notes/m09-source-audit.md`
 
 这份审计实际检查了 SEI 对 software architecture 的结构化定义与历史说明、Martin Fowler 的 Software Architecture Guide / Monolith First / 2026 Architecture Decision Record、Stanford CS190 Modular Design、AWS Well-Architected 的 cell-based scope-of-impact guidance，以及 Google SRE Cascading Failures。课程据此把 architecture 建模成用于 system-level reasoning 的 consequential boundaries，并区分 semantic / process / deployment / failure boundary；同时明确拒绝“architecture=最高层目录”“microservices=成熟度”“画了 cell/service box 就形成 failure isolation”“ADR 越多越成熟”等机械规则。Parnas 1972 本轮仅保留 historical pointer，因为未获得愿意升级成新 primary-source authority 的完整原始出版正文。
+
+M10 继续使用同一标准，见：
+
+`reading-notes/m10-source-audit.md`
+
+这份审计实际检查了 Google Engineering Practices 的 Code Review Standard / What to Look For / Navigating a CL / Small CLs / CL Descriptions / Review Comments / Review Speed、`Software Engineering at Google` Chapter 9 Code Review、Gerrit 官方 Review Labels / Submit Requirements、Stanford CS190 Code Review teaching material，以及 GitHub PR review governance mechanism。课程据此把 PR/CL 建模成 bounded engineering argument，把 author description 视为待验证 claim，并区分 machine verification 与 human review signal；同时明确拒绝“CI 绿就 approve”“评论越多 review 越认真”“所有 PR 必须小于固定 LOC”“所有旧债都必须在当前 PR 修”“实现 Agent 可以成为唯一 reviewer”等机械规则。

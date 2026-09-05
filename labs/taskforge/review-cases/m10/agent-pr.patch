@@ -1,0 +1,184 @@
+diff --git a/src/taskforge/job_authority.py b/src/taskforge/job_authority.py
+new file mode 100644
+index 0000000..73191ef
+--- /dev/null
++++ b/src/taskforge/job_authority.py
+@@ -0,0 +1,61 @@
++from __future__ import annotations
++
++from taskforge import state
++from taskforge.model import Job, JobStatus
++
++
++class JobAuthority:
++    """Single semantic owner for TaskForge job lifecycle state."""
++
++    def submit(self, command: str) -> str:
++        job_id = f"job-{state.next_job_number}"
++        state.next_job_number += 1
++        state.jobs[job_id] = Job(id=job_id, command=command)
++        return job_id
++
++    def get(self, job_id: str) -> Job:
++        return state.jobs[job_id]
++
++    def list_jobs(self) -> list[Job]:
++        # Stable ordering makes downstream output deterministic.
++        return [state.jobs[job_id] for job_id in sorted(state.jobs)]
++
++    def cancel(self, job_id: str) -> bool:
++        # Missing jobs are not cancellable, just like running/terminal jobs.
++        try:
++            job = state.jobs[job_id]
++        except KeyError:
++            return False
++        if job.terminal or job.status == JobStatus.RUNNING:
++            return False
++        job.status = JobStatus.CANCELLED
++        return True
++
++    def claim_next(self) -> Job | None:
++        # Use the same stable ordering as list_jobs so all readers agree.
++        for job_id in sorted(state.jobs):
++            job = state.jobs[job_id]
++            if job.status == JobStatus.QUEUED:
++                job.status = JobStatus.RUNNING
++                return job
++        return None
++
++    def finish(self, job_id: str, exit_code: int) -> None:
++        job = state.jobs[job_id]
++        if job.status != JobStatus.RUNNING:
++            raise ValueError(f"cannot finish {job_id} from {job.status.value}")
++        job.exit_code = exit_code
++        job.status = JobStatus.SUCCEEDED if exit_code == 0 else JobStatus.FAILED
++
++    def queued_count(self) -> int:
++        return sum(job.status == JobStatus.QUEUED for job in state.jobs.values())
++
++    def terminal_count(self) -> int:
++        return sum(job.terminal for job in state.jobs.values())
++
++    def reset_for_tests(self) -> None:
++        state.jobs.clear()
++        state.next_job_number = 1
++
++
++default_authority = JobAuthority()
+diff --git a/src/taskforge/legacy_audit.py b/src/taskforge/legacy_audit.py
+index 5d7b4ad..dc8e99e 100644
+--- a/src/taskforge/legacy_audit.py
++++ b/src/taskforge/legacy_audit.py
+@@ -8 +8 @@ import socket
+-from taskforge import state
++from taskforge import service
+@@ -24 +24 @@ def publish_daily_audit() -> str:
+-    jobs = list(state.jobs.values())
++    jobs = service.list_jobs()
+diff --git a/src/taskforge/metrics.py b/src/taskforge/metrics.py
+index 6dc512d..924469c 100644
+--- a/src/taskforge/metrics.py
++++ b/src/taskforge/metrics.py
+@@ -3,2 +3 @@ from __future__ import annotations
+-from taskforge import state
+-from taskforge.model import JobStatus
++from taskforge.job_authority import default_authority
+@@ -8 +7 @@ def queued_count() -> int:
+-    return sum(job.status == JobStatus.QUEUED for job in state.jobs.values())
++    return default_authority.queued_count()
+@@ -12 +11 @@ def terminal_count() -> int:
+-    return sum(job.terminal for job in state.jobs.values())
++    return default_authority.terminal_count()
+diff --git a/src/taskforge/service.py b/src/taskforge/service.py
+index 1fc8956..69f5e70 100644
+--- a/src/taskforge/service.py
++++ b/src/taskforge/service.py
+@@ -3,2 +3,2 @@ from __future__ import annotations
+-from taskforge import state
+-from taskforge.model import Job, JobStatus
++from taskforge.job_authority import default_authority
++from taskforge.model import Job
+@@ -8,4 +8 @@ def submit(command: str) -> str:
+-    job_id = f"job-{state.next_job_number}"
+-    state.next_job_number += 1
+-    state.jobs[job_id] = Job(id=job_id, command=command)
+-    return job_id
++    return default_authority.submit(command)
+@@ -15,6 +12 @@ def get(job_id: str) -> Job:
+-    """Return the job currently stored by TaskForge.
+-
+-    M02 baseline deliberately returns the authoritative mutable object.
+-    The lab asks whether that is part of the intended abstraction.
+-    """
+-    return state.jobs[job_id]
++    return default_authority.get(job_id)
+@@ -24 +16 @@ def list_jobs() -> list[Job]:
+-    return list(state.jobs.values())
++    return default_authority.list_jobs()
+@@ -28,5 +20 @@ def cancel(job_id: str) -> bool:
+-    job = state.jobs[job_id]
+-    if job.terminal or job.status == JobStatus.RUNNING:
+-        return False
+-    job.status = JobStatus.CANCELLED
+-    return True
++    return default_authority.cancel(job_id)
+@@ -36,3 +24 @@ def reset_for_tests() -> None:
+-    # This is convenient, but it also demonstrates that tests are another writer.
+-    state.jobs.clear()
+-    state.next_job_number = 1
++    default_authority.reset_for_tests()
+diff --git a/src/taskforge/worker.py b/src/taskforge/worker.py
+index cae159c..3fa3705 100644
+--- a/src/taskforge/worker.py
++++ b/src/taskforge/worker.py
+@@ -3,2 +3,2 @@ from __future__ import annotations
+-from taskforge import state
+-from taskforge.model import Job, JobStatus
++from taskforge.job_authority import default_authority
++from taskforge.model import Job
+@@ -8,6 +8 @@ def claim_next() -> Job | None:
+-    """Claim the first queued job in insertion order."""
+-    for job in state.jobs.values():
+-        if job.status == JobStatus.QUEUED:
+-            job.status = JobStatus.RUNNING
+-            return job
+-    return None
++    return default_authority.claim_next()
+@@ -17,5 +12 @@ def finish(job_id: str, exit_code: int) -> None:
+-    job = state.jobs[job_id]
+-    if job.status != JobStatus.RUNNING:
+-        raise ValueError(f"cannot finish {job_id} from {job.status.value}")
+-    job.exit_code = exit_code
+-    job.status = JobStatus.SUCCEEDED if exit_code == 0 else JobStatus.FAILED
++    default_authority.finish(job_id, exit_code)
+diff --git a/tests/test_job_authority.py b/tests/test_job_authority.py
+new file mode 100644
+index 0000000..96cd40b
+--- /dev/null
++++ b/tests/test_job_authority.py
+@@ -0,0 +1,25 @@
++from __future__ import annotations
++
++from taskforge import metrics, service, worker
++
++
++def test_authority_keeps_service_and_worker_on_same_state() -> None:
++    service.reset_for_tests()
++    first = service.submit("echo first")
++    second = service.submit("echo second")
++    assert [job.id for job in service.list_jobs()] == [first, second]
++    assert worker.claim_next().id == first
++    assert metrics.queued_count() == 1
++
++
++def test_cancel_missing_job_is_false() -> None:
++    service.reset_for_tests()
++    assert service.cancel("job-missing") is False
++
++
++def test_finish_still_records_exit_code() -> None:
++    service.reset_for_tests()
++    job_id = service.submit("false")
++    worker.claim_next()
++    worker.finish(job_id, 7)
++    assert service.get(job_id).exit_code == 7

@@ -4,7 +4,7 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02–M09 teaching baseline
+## 当前版本：v0 / M02–M10 teaching baseline
 
 core 仍只有四类行为：
 
@@ -272,3 +272,35 @@ lifecycle mutators:
 ```
 
 完整实验见 [`../09-architecture-boundaries.md`](../09-architecture-boundaries.md)。实验要求先分类 product / reporting / historical-fault-injection paths，再比较 remote-worker architecture；reference 只在临时副本里把 normal product path 收敛到 in-process `JobAuthority`，不提前加入 RPC、database 或 message queue。
+
+## M10：一个 Green CI 的 Review Case
+
+M10 不直接改 canonical TaskForge baseline，而是新增一个可重放的 candidate PR：
+
+```text
+review-cases/m10/reviewer-brief.md
+review-cases/m10/agent-pr-description.md
+review-cases/m10/agent-pr.patch
+tools/m10_review_case.py
+```
+
+先只运行 author-supplied CI：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project python tools/m10_review_case.py
+```
+
+它会得到：
+
+```text
+9 passed
+```
+
+但这不是 merge decision。完成自己的 first-pass review 后，再运行：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project \
+  python tools/m10_review_case.py --reviewer-probes
+```
+
+targeted probes 会展示为什么“clean abstraction + green tests”仍可能违反已有 ordering / FIFO / public-boundary contract。完整实验见 [`../10-code-review-change-engineering.md`](../10-code-review-change-engineering.md)。
