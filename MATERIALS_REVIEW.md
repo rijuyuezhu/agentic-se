@@ -550,3 +550,23 @@ system model → task contract → agent implementation → evidence → indepen
 ```
 
 这才形成从“小程序正确性”到“长期复杂系统变化”的完整 story。
+
+---
+
+# 11. 审计粒度：教材级与模块级分开
+
+`MATERIALS_REVIEW.md` 只负责回答“这门课/这本书总体值得怎样使用”。
+
+当某个模块真正采用具体观点时，还要有更细的 source audit，至少记录：
+
+- 实际读了哪个公开正文/讲义/作业/review；
+- 这个来源到底支持哪条 claim；
+- 哪些术语或外推是本课程自己的综合，不是假装来源原话；
+- 有哪些规模、语言、年代或组织背景限制；
+- 哪些著名材料尚未完成一手审计，因此暂时不能升级成必读。
+
+M02 的第一份模块级记录见：
+
+`reading-notes/m02-source-audit.md`
+
+其中 Parnas 论文被明确保留为 historical pointer，而没有因为“经典”就伪装成已经完成一手审计。
