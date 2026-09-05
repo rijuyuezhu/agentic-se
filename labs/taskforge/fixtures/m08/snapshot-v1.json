@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "jobs": [
+    {
+      "id": "job-41",
+      "command": "echo historical",
+      "status": "succeeded",
+      "exit_code": 0
+    },
+    {
+      "id": "job-42",
+      "command": "false",
+      "status": "failed",
+      "exit_code": 7
+    },
+    {
+      "id": "job-43",
+      "command": "sleep 30",
+      "status": "queued",
+      "exit_code": null
+    }
+  ]
+}

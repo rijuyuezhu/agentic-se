@@ -4,7 +4,7 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02–M07 teaching baseline
+## 当前版本：v0 / M02–M08 teaching baseline
 
 core 仍只有四类行为：
 
@@ -213,3 +213,34 @@ record-first ordering -> possible lost effect
 ```
 
 完整实验见 [`../07-concurrency-lifecycle-failure.md`](../07-concurrency-lifecycle-failure.md)。
+
+## M08：durable snapshot 的 compatibility window
+
+M08 新增：
+
+```text
+src/taskforge/snapshot.py
+fixtures/m08/snapshot-v1.json
+tools/m08_compat_probe.py
+```
+
+core authority 仍然在内存里；`snapshot.py` 只是把当前 jobs 编码成 durable JSON artifact，并读取历史 artifact。这样可以单独训练 file-format compatibility，而不用提前把整个 TaskForge 改成数据库系统。
+
+当前 starter 只有 v1 reader/writer。probe 还内置一个 frozen v1 reader，代表已经部署、不能随当前 PR 一起修改的 consumer。
+
+运行：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project python tools/m08_compat_probe.py
+```
+
+baseline 已实际验证：
+
+```text
+historical v1 snapshot -> current reader PASS
+current default writer -> frozen v1 reader PASS
+naive v2 writer -> frozen v1 reader FAIL
+unknown future schema -> explicit reject
+```
+
+完整实验见 [`../08-compatibility-migration.md`](../08-compatibility-migration.md)。本轮只实现 Expand phase：先让新 reader 支持 v1/v2，但默认 writer 继续写 v1；writer cutover 必须等 compatibility matrix 的前置条件满足后再独立执行。

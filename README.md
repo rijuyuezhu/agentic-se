@@ -80,7 +80,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 | [05](modules/05-refactoring-evolutionary-design.md) | Refactoring 与 Evolutionary Design | 如何改变设计但保持行为？什么时候先设计、什么时候后重构？ |
 | [06](modules/06-working-with-legacy-code.md) | 阅读和接管 Legacy Code | 在 spec/test 不足时，怎样先 characterize、打开最小 seam，再安全变化？ |
 | [07](modules/07-concurrency-lifecycle-failure.md) | Concurrency、Lifecycle 与 Failure | race、retry、crash、restart 下哪些不变量最容易被破坏？ |
-| 08 | Dependency、Compatibility 与 Migration | 为什么一个看似局部的 API 改动会伤到未知用户？ |
+| [08](modules/08-dependency-compatibility-migration.md) | Dependency、Compatibility 与 Migration | 怎样让旧 caller / 旧数据 / 旧协议穿过新旧版本共存期而不被破坏？ |
 | 09 | Architecture：边界、数据流与故障域 | 什么值得上升到系统级设计？哪些决定以后很难改？ |
 | 10 | Code Review 与 Change Engineering | 怎样把一次 PR 当作“系统演化的最小单位”审查？ |
 | 11 | Production、Observability 与 Reliability | 系统在现实世界坏掉时，设计是否仍然成立？ |
@@ -137,13 +137,13 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 ## 当前状态
 
-前八个核心模块已经形成连续学习链：
+前九个核心模块已经形成连续学习链：
 
-- M00–M07 已有自包含中文讲义；
-- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m07-source-audit.md` 记录逐模块 source audit；
-- M02–M06 的 ownership、testing、boundary、refactoring、legacy-takeover labs 与 instructor references 已形成连续 TaskForge 历史；
-- [`labs/07-concurrency-lifecycle-failure.md`](labs/07-concurrency-lifecycle-failure.md) 引入 deterministic double-claim interleaving、linearization point、safety/liveness、crash window 与 delivery guarantee 分析；
-- `labs/taskforge/tools/m07_interleaving_probe.py` 已实际稳定复现：一个 queued job 产生两个 successful claims，以及 external effect 已发生但 completion record 丢失后 retry 产生 duplicate effect；
-- [`case-studies/m07/instructor-analysis.md`](case-studies/m07/instructor-analysis.md) 记录 reference path：只同步 claim decision，并在 commit 前 re-check；临时副本原 6 个 core tests + 3 个 M07 tests 共 `9 passed`，同时用 idempotent sink 明确区分“两次 attempt”与“一个 logical effect”。
+- M00–M08 已有自包含中文讲义；
+- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m08-source-audit.md` 记录逐模块 source audit；
+- M02–M07 的 ownership、testing、boundary、refactoring、legacy-takeover、concurrency/failure labs 与 instructor references 已形成连续 TaskForge 历史；
+- [`labs/08-compatibility-migration.md`](labs/08-compatibility-migration.md) 新增 durable snapshot v1→v2 演化，要求先画 R/W compatibility matrix，再只实现 Expand phase；
+- `labs/taskforge/tools/m08_compat_probe.py` 已实际验证 historical v1 data 可读、default writer 仍能被 frozen v1 reader 接受、naive v2 cutover 会破坏 old reader、future version fail-closed；
+- [`case-studies/m08/instructor-analysis.md`](case-studies/m08/instructor-analysis.md) 记录 reference path：R2 同时读 v1/v2，但 default writer 继续 W1；临时副本原 6 个 core tests + 10 个 M08 tests 共 `16 passed`。
 
-下一阶段进入 M08 Dependency / Compatibility / Migration：即使新实现本身正确，**已有 caller、旧数据、旧配置、旧协议、未知依赖仍可能把一个局部 change 变成兼容性事故。**
+下一阶段进入 M09 Architecture：把前面学到的 contract、ownership、evidence、boundary、failure 与 migration 提升到系统级，判断**哪些边界值得成为长期 architecture，哪些只是局部 implementation detail。**

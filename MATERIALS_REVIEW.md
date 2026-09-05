@@ -600,3 +600,9 @@ M07 继续使用同一标准，见：
 `reading-notes/m07-source-audit.md`
 
 这份审计实际检查了 MIT 6.102 当前 Concurrency / Mutual Exclusion / Message-Passing & Networking 正文、Herlihy & Wing `Linearizability: A Correctness Condition for Concurrent Objects` 原论文，以及 Google SRE `Addressing Cascading Failures`、AWS backoff/jitter 与 retry guidance。课程吸收 race-as-interleaving、safety/liveness、operation-level linearization point、retry amplification 与 deterministic failure reasoning，但拒绝把“有 race 就加全局锁”“message passing 自动无 race”“idempotent 可以无限 retry”“stress test 跑够次数就证明线程安全”升级成课程规则。
+
+M08 继续使用同一标准，见：
+
+`reading-notes/m08-source-audit.md`
+
+这份审计实际检查了 Google AIP-180 的 source/wire/semantic compatibility、Semantic Versioning 2.0.0 规范、Software Engineering at Google 的 Dependency Management 与 Deprecation、Martin Fowler / Danilo Sato 的 Parallel Change、Protocol Buffers 官方 schema-evolution guidance，以及 Kubernetes Deprecation Policy。课程据此把 compatibility 建模成 producer/consumer/version/direction/time-window 的矩阵，并把 expand→migrate→contract 与 reader-first/writer-later rollout 作为核心迁移模型；同时明确拒绝“major bump 就自动安全”“所有 migration 都 dual-write”“reader 应无限宽容”“历史 fixture 可以随新实现一起更新”等机械规则。
