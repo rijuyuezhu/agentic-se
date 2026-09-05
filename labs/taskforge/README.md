@@ -4,7 +4,7 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02–M05 teaching baseline
+## 当前版本：v0 / M02–M06 teaching baseline
 
 core 仍只有四类行为：
 
@@ -158,3 +158,30 @@ all existing text dashboard behavior preserved
 M05 的 structural phase 不允许更新这些 expected outputs 来“让测试变绿”；如果真的要改变 text behavior，那应成为独立 behavior change。
 
 完整实验：[`../05-refactoring-evolutionary-design.md`](../05-refactoring-evolutionary-design.md)。
+
+## M06：故意引入一个 legacy integration module
+
+M06 新增：
+
+```text
+src/taskforge/legacy_audit.py
+tools/m06_legacy_probe.py
+```
+
+`legacy_audit.py` 没有 unit tests，直接读取 global job state、env、UTC time、hostname，并 append 文件和写 stdout。这里不是为了展示“坏代码”，而是为了制造真实 takeover 条件：**现有行为有人可能依赖，但我们没有完整 spec。**
+
+先不要重构。运行：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project python tools/m06_legacy_probe.py
+```
+
+课程 baseline 已实际 characterize：
+
+```text
+empty
+mixed lifecycle
+same-day append
+```
+
+probe 利用 Python module binding、环境变量和 temporary directory 控制 nondeterminism，因此第一阶段不需要修改 production code。完整实验见 [`../06-legacy-code-takeover.md`](../06-legacy-code-takeover.md)。

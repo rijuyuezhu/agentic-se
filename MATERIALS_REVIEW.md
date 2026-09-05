@@ -588,3 +588,9 @@ M05 继续使用同一标准，见：
 `reading-notes/m05-source-audit.md`
 
 这份审计实际检查了 Fowler 对 refactoring 的定义/边界/Two Hats/preparatory refactoring、Kent Beck `Tidy First?` 可公开访问的 structure-vs-behavior / batch-size / timing / untangling 章节、Google Small CLs 与 Large-Scale Changes，以及 Stanford CS190 的 iterative review/revision 和 `Design it twice`。课程据此把“大重写”“cleanup”“large-scale migration”和严格意义的 behavior-preserving refactoring 分开。
+
+M06 继续使用同一标准，见：
+
+`reading-notes/m06-source-audit.md`
+
+这份审计实际检查了 Michael Feathers `Working Effectively with Legacy Code` 的官方目录、Changing Software、Sensing and Separation、The Seam Model、公开 glossary 中的 characterization-test 定义，以及 Martin Fowler 2024 的 `Legacy Seam`、Software Engineering at Google 的 Testing Overview / Test Doubles / Larger Testing / Hermetic Testing。课程吸收 change point、targeted feedback、sensing/separation、seam/enabling point、characterization 等模型，但拒绝把“legacy=旧代码”“先补全局 coverage”“所有 dependency 都必须 DI”“全 mock unit test 最高级”升级为课程规则。
