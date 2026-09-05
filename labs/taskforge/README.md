@@ -4,7 +4,7 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02 baseline
+## 当前版本：v0 / M02–M03 baseline
 
 当前系统只有四类行为：
 
@@ -29,7 +29,7 @@ TaskForge 是本课程的贯穿实验系统。
 如果有 `uv`，最省事：
 
 ```bash
-uv run --with pytest --no-project python -m pytest
+PYTHONPATH=src uv run --with pytest --no-project python -m pytest
 ```
 
 或者先安装 editable test dependencies：
@@ -75,3 +75,27 @@ representation exposure
 ```
 
 M02 的目标就是学会在 bug 出现之前识别这类结构风险，并把其中能够转化为 contract 的部分补成可执行证据。
+
+## M03：用 meaningful mutants 检查测试是否有“牙齿”
+
+完成 M02 后，进入 [`../03-testing-evidence.md`](../03-testing-evidence.md)。
+
+课程提供一个**不会修改工作区**的小型 mutation probe：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project python tools/mutation_probe.py
+```
+
+baseline 已实际验证：
+
+```text
+3 killed, 3 survived
+```
+
+这里的目标不是追 mutation score，而是逐个解释：
+
+```text
+这个 mutant 破坏了哪条 contract？
+现有 oracle 为什么看不见？
+怎样用最小、behavior-oriented 的 test 暴露它？
+```

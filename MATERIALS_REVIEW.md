@@ -570,3 +570,9 @@ M02 的第一份模块级记录见：
 `reading-notes/m02-source-audit.md`
 
 其中 Parnas 论文被明确保留为 historical pointer，而没有因为“经典”就伪装成已经完成一手审计。
+
+M03 继续使用同一标准，见：
+
+`reading-notes/m03-source-audit.md`
+
+这份审计实际检查了 MIT 6.102 Testing、Software Engineering at Google 的 Testing Overview / Unit Testing / Test Doubles / Larger Testing、Hypothesis 官方文档和 mutmut 官方文档，并明确把固定 test-pyramid 比例、coverage target、strict TDD、mocking 绝对规则和 mutation score 降级为需要 context 的工具/经验，而不是课程定律。
