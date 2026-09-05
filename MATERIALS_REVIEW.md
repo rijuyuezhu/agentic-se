@@ -594,3 +594,9 @@ M06 继续使用同一标准，见：
 `reading-notes/m06-source-audit.md`
 
 这份审计实际检查了 Michael Feathers `Working Effectively with Legacy Code` 的官方目录、Changing Software、Sensing and Separation、The Seam Model、公开 glossary 中的 characterization-test 定义，以及 Martin Fowler 2024 的 `Legacy Seam`、Software Engineering at Google 的 Testing Overview / Test Doubles / Larger Testing / Hermetic Testing。课程吸收 change point、targeted feedback、sensing/separation、seam/enabling point、characterization 等模型，但拒绝把“legacy=旧代码”“先补全局 coverage”“所有 dependency 都必须 DI”“全 mock unit test 最高级”升级为课程规则。
+
+M07 继续使用同一标准，见：
+
+`reading-notes/m07-source-audit.md`
+
+这份审计实际检查了 MIT 6.102 当前 Concurrency / Mutual Exclusion / Message-Passing & Networking 正文、Herlihy & Wing `Linearizability: A Correctness Condition for Concurrent Objects` 原论文，以及 Google SRE `Addressing Cascading Failures`、AWS backoff/jitter 与 retry guidance。课程吸收 race-as-interleaving、safety/liveness、operation-level linearization point、retry amplification 与 deterministic failure reasoning，但拒绝把“有 race 就加全局锁”“message passing 自动无 race”“idempotent 可以无限 retry”“stress test 跑够次数就证明线程安全”升级成课程规则。

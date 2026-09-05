@@ -79,7 +79,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 | [04](modules/04-api-errors-boundary-design.md) | API、错误与边界设计 | 怎样让边界吸收复杂度，并把 retry / error 变成明确 contract？ |
 | [05](modules/05-refactoring-evolutionary-design.md) | Refactoring 与 Evolutionary Design | 如何改变设计但保持行为？什么时候先设计、什么时候后重构？ |
 | [06](modules/06-working-with-legacy-code.md) | 阅读和接管 Legacy Code | 在 spec/test 不足时，怎样先 characterize、打开最小 seam，再安全变化？ |
-| 07 | Concurrency、Lifecycle 与 Failure | race、retry、crash、restart 下哪些不变量最容易被破坏？ |
+| [07](modules/07-concurrency-lifecycle-failure.md) | Concurrency、Lifecycle 与 Failure | race、retry、crash、restart 下哪些不变量最容易被破坏？ |
 | 08 | Dependency、Compatibility 与 Migration | 为什么一个看似局部的 API 改动会伤到未知用户？ |
 | 09 | Architecture：边界、数据流与故障域 | 什么值得上升到系统级设计？哪些决定以后很难改？ |
 | 10 | Code Review 与 Change Engineering | 怎样把一次 PR 当作“系统演化的最小单位”审查？ |
@@ -137,13 +137,13 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 ## 当前状态
 
-前七个核心模块已经形成连续学习链：
+前八个核心模块已经形成连续学习链：
 
-- M00–M06 已有自包含中文讲义；
-- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m06-source-audit.md` 记录逐模块 source audit；
-- M02–M05 的 state ownership、testing、boundary、refactoring labs 与 instructor references 已形成连续 TaskForge 历史；
-- [`labs/06-legacy-code-takeover.md`](labs/06-legacy-code-takeover.md) 把条件刻意恶化：加入没有 unit tests、直接碰 global state / env / time / hostname / filesystem / stdout 的 `legacy_audit.py`；
-- `labs/taskforge/tools/m06_legacy_probe.py` 已实际 characterize empty / mixed / same-day append 三组旧行为，并控制 time/hostname/env/tmpdir 形成 deterministic feedback；
-- [`case-studies/m06/instructor-analysis.md`](case-studies/m06/instructor-analysis.md) 记录 reference judgment：现有 Python module seam 已足够，因此没有为了“可测试性”强行增加 production DI framework；临时 reference 加 failed-only 后实际 `9 passed`，默认 file fingerprints 保持不变。
+- M00–M07 已有自包含中文讲义；
+- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m07-source-audit.md` 记录逐模块 source audit；
+- M02–M06 的 ownership、testing、boundary、refactoring、legacy-takeover labs 与 instructor references 已形成连续 TaskForge 历史；
+- [`labs/07-concurrency-lifecycle-failure.md`](labs/07-concurrency-lifecycle-failure.md) 引入 deterministic double-claim interleaving、linearization point、safety/liveness、crash window 与 delivery guarantee 分析；
+- `labs/taskforge/tools/m07_interleaving_probe.py` 已实际稳定复现：一个 queued job 产生两个 successful claims，以及 external effect 已发生但 completion record 丢失后 retry 产生 duplicate effect；
+- [`case-studies/m07/instructor-analysis.md`](case-studies/m07/instructor-analysis.md) 记录 reference path：只同步 claim decision，并在 commit 前 re-check；临时副本原 6 个 core tests + 3 个 M07 tests 共 `9 passed`，同时用 idempotent sink 明确区分“两次 attempt”与“一个 logical effect”。
 
-下一阶段进入 M07 Concurrency / Lifecycle / Failure：即使 contract、tests、seams 都存在，**一旦两个动作交错、进程 crash、请求 retry，单线程下看起来正确的 invariant 仍然可能被破坏。**
+下一阶段进入 M08 Dependency / Compatibility / Migration：即使新实现本身正确，**已有 caller、旧数据、旧配置、旧协议、未知依赖仍可能把一个局部 change 变成兼容性事故。**

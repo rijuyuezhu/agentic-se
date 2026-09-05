@@ -4,7 +4,7 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02–M06 teaching baseline
+## 当前版本：v0 / M02–M07 teaching baseline
 
 core 仍只有四类行为：
 
@@ -185,3 +185,31 @@ same-day append
 ```
 
 probe 利用 Python module binding、环境变量和 temporary directory 控制 nondeterminism，因此第一阶段不需要修改 production code。完整实验见 [`../06-legacy-code-takeover.md`](../06-legacy-code-takeover.md)。
+
+## M07：把 race 与 crash window 变成 deterministic evidence
+
+M07 新增：
+
+```text
+src/taskforge/concurrent_claim.py
+src/taskforge/effect_delivery.py
+tools/m07_interleaving_probe.py
+```
+
+`concurrent_claim.py` 故意保留 check-then-act race；probe 用 `threading.Barrier` 强制两个 worker 都先观察同一个 `QUEUED` job，因此不会靠 `sleep()` 或压力循环碰运气。`effect_delivery.py` 则故意把 external effect 与 local completion record 分开，用 explicit failpoint 展示 crash 后 retry duplication。
+
+运行：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project python tools/m07_interleaving_probe.py
+```
+
+课程 baseline 已实际验证：
+
+```text
+one queued job -> two successful claim receipts
+effect happened -> crash -> retry -> duplicate external effect
+record-first ordering -> possible lost effect
+```
+
+完整实验见 [`../07-concurrency-lifecycle-failure.md`](../07-concurrency-lifecycle-failure.md)。
