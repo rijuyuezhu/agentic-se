@@ -83,7 +83,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 | [08](modules/08-dependency-compatibility-migration.md) | Dependency、Compatibility 与 Migration | 怎样让旧 caller / 旧数据 / 旧协议穿过新旧版本共存期而不被破坏？ |
 | [09](modules/09-architecture-boundaries-dataflow-failure-domains.md) | Architecture：边界、数据流与故障域 | 什么值得上升到系统级设计？哪些决定会跨模块放大 authority / failure / evolution consequence？ |
 | [10](modules/10-code-review-change-engineering.md) | Code Review 与 Change Engineering | 怎样把一次 PR 当作 bounded engineering argument 独立验证，而不是把 CI green 当 approval？ |
-| 11 | Production、Observability 与 Reliability | 系统在现实世界坏掉时，设计是否仍然成立？ |
+| [11](modules/11-production-observability-reliability.md) | Production、Observability 与 Reliability | 系统上线后，怎样从 user contract 设计 SLI/SLO、telemetry、alert 与 overload evidence，而不是只堆 metrics？ |
 | 12 | Agentic Software Engineering | 如何给 Agent 任务、限制搜索空间、要求证据、独立验收？ |
 | 13 | Capstone | 在一个持续演化的真实风格系统里完成多轮变更与 review |
 
@@ -137,13 +137,13 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 ## 当前状态
 
-前十一个核心模块已经形成连续学习链：
+前十二个核心模块已经形成连续学习链：
 
-- M00–M10 已有自包含中文讲义；
-- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m10-source-audit.md` 记录逐模块 source audit；
-- M02–M09 的 ownership、testing、boundary、refactoring、legacy、concurrency、migration 与 architecture labs 已形成连续 TaskForge 历史；
-- [`labs/10-code-review-change-engineering.md`](labs/10-code-review-change-engineering.md) 提供一个真实可 replay 的 Agent candidate PR：author CI `9 passed`，但 reviewer 必须独立检查 change contract 与 evidence；
-- `labs/taskforge/tools/m10_review_case.py` 可在 temporary tree 重放 candidate；author CI 保持绿色，而 targeted reviewer probes 稳定暴露 lexical-ID ordering/FIFO regression、undeclared public cancel behavior change，以及 ordering 泄漏到 snapshot 的 downstream consequence；
-- [`case-studies/m10/instructor-analysis.md`](case-studies/m10/instructor-analysis.md) 记录 corrected reference：保留 `JobAuthority` architecture direction，恢复旧 semantics 并补 `job-10` boundary test 后实际 `10 passed`，M04–M08 evidence 保持；M09 topology inventory 与 M03 exact-source mutation harness 被明确判定为 version-scoped historical probes，而非永久 product contract。
+- M00–M11 已有自包含中文讲义；
+- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m11-source-audit.md` 记录逐模块 source audit；
+- M02–M10 的 ownership、testing、boundary、refactoring、legacy、concurrency、migration、architecture 与 review labs 已形成连续 TaskForge 历史；
+- [`labs/11-production-observability-reliability.md`](labs/11-production-observability-reliability.md) 用 deterministic burst 展示“所有 job 最终成功 + ending queue=0”仍可严重违反 user start-latency SLO；
+- `labs/taskforge/tools/m11_production_probe.py` 实际复现 naive dashboard `healthy=true`，但 user-centered SLI 只有 `2/12 = 0.167`，同时暴露 `job_id` metric-label cardinality trap；
+- [`case-studies/m11/instructor-analysis.md`](case-studies/m11/instructor-analysis.md) 记录 reference：`good/bad/unknown/total` measurement、bounded aggregate metric identity、diagnostic events 与 error-budget reasoning；临时副本原 6 个 core tests + 5 个 M11 tests 共 `11 passed`。
 
-下一阶段进入 M11 Production / Observability / Reliability：把“代码在测试里正确”推进到“系统上线后我们怎样知道它正在正确工作、怎样定义 SLI/SLO、怎样让日志/metrics/traces 支撑 diagnosis，而不是制造 observability 噪声”。
+下一阶段进入 M12 Agentic Software Engineering：把前面所有能力变成一套 Agent orchestration discipline，明确 human authority、exploration/implementation/review 分工、evidence contract、stop conditions 与 production action boundaries。

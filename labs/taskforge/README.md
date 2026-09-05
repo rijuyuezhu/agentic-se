@@ -4,7 +4,7 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02–M10 teaching baseline
+## 当前版本：v0 / M02–M11 teaching baseline
 
 core 仍只有四类行为：
 
@@ -304,3 +304,41 @@ PYTHONPATH=src uv run --with pytest --no-project \
 ```
 
 targeted probes 会展示为什么“clean abstraction + green tests”仍可能违反已有 ordering / FIFO / public-boundary contract。完整实验见 [`../10-code-review-change-engineering.md`](../10-code-review-change-engineering.md)。
+
+## M11：Production Observability Gap
+
+M11 新增：
+
+```text
+src/taskforge/production_signals.py
+tools/m11_production_probe.py
+```
+
+`production_signals.py` 不接任何 telemetry vendor；它只构造一个 deterministic production-style lifecycle window。12 个 job 几乎同时提交，一个 worker 每秒处理一个。所有 job 最终成功，而且 observation window 结束时 queue depth 回到 0。
+
+运行：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project \
+  python tools/m11_production_probe.py
+```
+
+baseline 已实际验证：
+
+```text
+naive dashboard:
+  success_ratio = 1.0
+  ending_queue_depth = 0
+  healthy = true
+
+user start-latency SLI:
+  good = 2
+  bad = 10
+  total = 12
+  ratio = 0.167
+
+naive metric labels:
+  12 jobs -> 12 distinct series identities
+```
+
+这个实验训练 `SLI specification → measurement implementation → telemetry shape → SLO/alert/action`，并要求把 `job_id` 这类 correlation identity 留给 diagnostic events，而不是 workload-proportional aggregate metric labels。完整实验见 [`../11-production-observability-reliability.md`](../11-production-observability-reliability.md)。

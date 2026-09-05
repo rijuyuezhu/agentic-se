@@ -618,3 +618,9 @@ M10 继续使用同一标准，见：
 `reading-notes/m10-source-audit.md`
 
 这份审计实际检查了 Google Engineering Practices 的 Code Review Standard / What to Look For / Navigating a CL / Small CLs / CL Descriptions / Review Comments / Review Speed、`Software Engineering at Google` Chapter 9 Code Review、Gerrit 官方 Review Labels / Submit Requirements、Stanford CS190 Code Review teaching material，以及 GitHub PR review governance mechanism。课程据此把 PR/CL 建模成 bounded engineering argument，把 author description 视为待验证 claim，并区分 machine verification 与 human review signal；同时明确拒绝“CI 绿就 approve”“评论越多 review 越认真”“所有 PR 必须小于固定 LOC”“所有旧债都必须在当前 PR 修”“实现 Agent 可以成为唯一 reviewer”等机械规则。
+
+M11 继续使用同一标准，见：
+
+`reading-notes/m11-source-audit.md`
+
+这份审计实际检查了 Google SRE 的 Service Level Objectives / Monitoring Distributed Systems / Production Services Best Practices / Handling Overload，SRE Workbook 的 Implementing SLOs / Alerting on SLOs，Prometheus 官方 Instrumentation / Naming / Zen guidance，以及 OpenTelemetry Logs Data Model / Semantic Conventions。课程据此把 production evidence 建模成 `user expectation → SLI specification → measurement implementation → telemetry → aggregation/window → SLO/error budget → alert/action`，并区分 symptom/cause、aggregate/diagnostic signals 与 telemetry schema compatibility；同时明确拒绝“接上 OTel 就有 observability”“四个 golden signals 就是固定 dashboard”“所有 metric threshold 都 page”“job/request ID 适合 metric label”“固定 SLO/burn-rate 数值适用于所有系统”等机械规则。
