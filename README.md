@@ -77,7 +77,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 | [02](modules/02-abstraction-information-hiding-state-ownership.md) | Abstraction、Information Hiding 与 State Ownership | 系统应该在哪里切开？谁拥有状态？ |
 | [03](modules/03-testing-as-executable-evidence.md) | Testing 作为可执行证据 | 测试究竟证明什么？怎样避免 brittle tests？ |
 | [04](modules/04-api-errors-boundary-design.md) | API、错误与边界设计 | 怎样让边界吸收复杂度，并把 retry / error 变成明确 contract？ |
-| 05 | Refactoring 与 Evolutionary Design | 如何改变设计但保持行为？什么时候先设计、什么时候后重构？ |
+| [05](modules/05-refactoring-evolutionary-design.md) | Refactoring 与 Evolutionary Design | 如何改变设计但保持行为？什么时候先设计、什么时候后重构？ |
 | 06 | 阅读和接管 Legacy Code | 不敢改的代码怎样建立反馈回路？什么是 seam？ |
 | 07 | Concurrency、Lifecycle 与 Failure | race、retry、crash、restart 下哪些不变量最容易被破坏？ |
 | 08 | Dependency、Compatibility 与 Migration | 为什么一个看似局部的 API 改动会伤到未知用户？ |
@@ -137,11 +137,11 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 ## 当前状态
 
-前五个核心模块已经形成连续学习链：
+前六个核心模块已经形成连续学习链：
 
-- M00、M01、M02、M03、M04 已有自包含中文讲义；
+- M00、M01、M02、M03、M04、M05 已有自包含中文讲义；
 - `MATERIALS_REVIEW.md` 记录教材级审计；
-- `reading-notes/m02-source-audit.md`、`reading-notes/m03-source-audit.md`、`reading-notes/m04-source-audit.md` 记录逐模块 source audit；
+- `reading-notes/m02-source-audit.md` 到 `reading-notes/m05-source-audit.md` 记录逐模块 source audit；
 - [`labs/taskforge/`](labs/taskforge/) 已有可运行的 v0 baseline，实际验证 `6 passed`；
 - [`labs/02-state-ownership.md`](labs/02-state-ownership.md) 已把 M02 概念转成 system-model → design-it-twice → implementation → evidence → Agent comparison → independent review 的完整实验；
 - [`case-studies/m02/baseline-analysis.md`](case-studies/m02/baseline-analysis.md) 提供 instructor reference（有 spoiler）。
@@ -151,5 +151,8 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 - [`labs/04-api-error-boundary.md`](labs/04-api-error-boundary.md) 引入 external-style boundary、error taxonomy、no-effect guarantee、request identity 与 idempotent submit；
 - `labs/taskforge/tools/m04_boundary_probe.py` 已实际验证 starter 的语义缺口：blank command 被接受、`KeyError` 穿透、cancel failure 被 `False` collapse、same payload 默认仍代表 distinct requests；
 - [`case-studies/m04/instructor-analysis.md`](case-studies/m04/instructor-analysis.md) 记录 reference boundary；临时副本已实际验证原 6 个 core tests + 12 个 M04 contract tests，共 `18 passed`。
+- [`labs/05-refactoring-evolutionary-design.md`](labs/05-refactoring-evolutionary-design.md) 用 dashboard 的 JSON feature 训练 behavior inventory、Two Hats、preparatory refactoring、semantic checkpoints 与 change topology；
+- `labs/taskforge/tools/m05_behavior_probe.py` 锁定三个现有 text-dashboard 场景，structural phase 必须 byte-for-byte 保持；
+- [`case-studies/m05/instructor-analysis.md`](case-studies/m05/instructor-analysis.md) 记录一条实际跑通的 `structural-only → verify → JSON feature` reference sequence。
 
-下一阶段进入 M05 Refactoring / Evolutionary Design：在已经存在 contract 与测试证据的前提下，练习怎样改变结构而不偷改行为，以及怎样把大改拆成可独立验证的小步。
+下一阶段进入 M06 Legacy Code：从“已经有足够 evidence 才能安全 refactor”转向更困难的现实问题——**如果现有代码没有可靠测试、dependency 很难切开、你甚至不知道旧行为是不是 contract，怎样先建立 feedback，再做受控变化。**

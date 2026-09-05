@@ -4,7 +4,7 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02–M04 teaching baseline
+## 当前版本：v0 / M02–M05 teaching baseline
 
 core 仍只有四类行为：
 
@@ -128,3 +128,33 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/m04_boundary_probe
 然后进入 [`../04-api-error-boundary.md`](../04-api-error-boundary.md)。
 
 这里仍不加入 HTTP/gRPC framework；M04 要训练的是 API semantics，而不是框架配置。
+
+## M05：把 change sequence 本身当作设计对象
+
+M05 增加：
+
+```text
+src/taskforge/dashboard.py
+tools/m05_behavior_probe.py
+```
+
+`dashboard.py` 当前功能正确，但故意把 status/count interpretation 和 text formatting 缠在一起。新需求是增加 JSON renderer；课程要求先比较 direct duplication 与 preparatory refactoring 两条路径。
+
+运行：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project python tools/m05_behavior_probe.py
+```
+
+课程 baseline 已实际验证：
+
+```text
+[OK] empty: sha256=eaadf634b7104332
+[OK] queued: sha256=ec17ac5523b4b8bd
+[OK] mixed: sha256=1181854b1e08cc1c
+all existing text dashboard behavior preserved
+```
+
+M05 的 structural phase 不允许更新这些 expected outputs 来“让测试变绿”；如果真的要改变 text behavior，那应成为独立 behavior change。
+
+完整实验：[`../05-refactoring-evolutionary-design.md`](../05-refactoring-evolutionary-design.md)。

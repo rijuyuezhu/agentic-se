@@ -582,3 +582,9 @@ M04 继续使用同一标准，见：
 `reading-notes/m04-source-audit.md`
 
 这份审计实际检查了 Stanford CS190 Error Handling / APOSD discussion、Google AIP-193 / 194 / 155、AWS Builders' Library 的 idempotent API case study、RFC 9110 §9.2.2、Alexis King 的原始 `Parse, don't validate` 文章，以及 gRPC 官方 error/status 文档。它明确拒绝把“更多 exception class”“payload hash 去重”“retry everything”“HTTP method 决定业务幂等性”或“所有 invariant 都必须编码进 type system”升级成课程规则。
+
+M05 继续使用同一标准，见：
+
+`reading-notes/m05-source-audit.md`
+
+这份审计实际检查了 Fowler 对 refactoring 的定义/边界/Two Hats/preparatory refactoring、Kent Beck `Tidy First?` 可公开访问的 structure-vs-behavior / batch-size / timing / untangling 章节、Google Small CLs 与 Large-Scale Changes，以及 Stanford CS190 的 iterative review/revision 和 `Design it twice`。课程据此把“大重写”“cleanup”“large-scale migration”和严格意义的 behavior-preserving refactoring 分开。
