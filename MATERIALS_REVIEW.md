@@ -576,3 +576,9 @@ M03 继续使用同一标准，见：
 `reading-notes/m03-source-audit.md`
 
 这份审计实际检查了 MIT 6.102 Testing、Software Engineering at Google 的 Testing Overview / Unit Testing / Test Doubles / Larger Testing、Hypothesis 官方文档和 mutmut 官方文档，并明确把固定 test-pyramid 比例、coverage target、strict TDD、mocking 绝对规则和 mutation score 降级为需要 context 的工具/经验，而不是课程定律。
+
+M04 继续使用同一标准，见：
+
+`reading-notes/m04-source-audit.md`
+
+这份审计实际检查了 Stanford CS190 Error Handling / APOSD discussion、Google AIP-193 / 194 / 155、AWS Builders' Library 的 idempotent API case study、RFC 9110 §9.2.2、Alexis King 的原始 `Parse, don't validate` 文章，以及 gRPC 官方 error/status 文档。它明确拒绝把“更多 exception class”“payload hash 去重”“retry everything”“HTTP method 决定业务幂等性”或“所有 invariant 都必须编码进 type system”升级成课程规则。

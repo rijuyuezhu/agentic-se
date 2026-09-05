@@ -4,9 +4,9 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02–M03 baseline
+## 当前版本：v0 / M02–M04 teaching baseline
 
-当前系统只有四类行为：
+core 仍只有四类行为：
 
 - submit job；
 - worker claim job；
@@ -22,7 +22,7 @@ TaskForge 是本课程的贯穿实验系统。
 - retry；
 - crash recovery。
 
-这些不是遗漏，而是刻意的 non-goals。课程希望先把 **abstraction / information hiding / state ownership** 看清，再逐步加入 mechanism complexity。
+这些不是遗漏，而是刻意的 non-goals。课程先把 **abstraction / ownership / testing / boundary semantics** 看清，再逐步加入 mechanism complexity。
 
 ## 运行测试
 
@@ -99,3 +99,32 @@ baseline 已实际验证：
 现有 oracle 为什么看不见？
 怎样用最小、behavior-oriented 的 test 暴露它？
 ```
+
+## M04：starter public boundary
+
+M04 新增一个刻意较浅的 external-style boundary：
+
+```text
+src/taskforge/public_api.py
+```
+
+它已经做对一件事：把 mutable internal `Job` 转成 detached public view，因此不会重新暴露 M02 的 authoritative object handle。
+
+但它仍故意保留：
+
+```text
+blank command accepted
+KeyError leaks across boundary
+cancel failure collapses to False
+no request identity / idempotency contract
+```
+
+运行：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project python tools/m04_boundary_probe.py
+```
+
+然后进入 [`../04-api-error-boundary.md`](../04-api-error-boundary.md)。
+
+这里仍不加入 HTTP/gRPC framework；M04 要训练的是 API semantics，而不是框架配置。

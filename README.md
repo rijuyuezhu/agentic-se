@@ -76,7 +76,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 | [01](modules/01-specification-contract-invariant.md) | Specification、Contract 与 Invariant | 什么是“正确”？谁对什么负责？ |
 | [02](modules/02-abstraction-information-hiding-state-ownership.md) | Abstraction、Information Hiding 与 State Ownership | 系统应该在哪里切开？谁拥有状态？ |
 | [03](modules/03-testing-as-executable-evidence.md) | Testing 作为可执行证据 | 测试究竟证明什么？怎样避免 brittle tests？ |
-| 04 | API、错误与边界设计 | 怎样让错误更少传播，让接口更稳定？ |
+| [04](modules/04-api-errors-boundary-design.md) | API、错误与边界设计 | 怎样让边界吸收复杂度，并把 retry / error 变成明确 contract？ |
 | 05 | Refactoring 与 Evolutionary Design | 如何改变设计但保持行为？什么时候先设计、什么时候后重构？ |
 | 06 | 阅读和接管 Legacy Code | 不敢改的代码怎样建立反馈回路？什么是 seam？ |
 | 07 | Concurrency、Lifecycle 与 Failure | race、retry、crash、restart 下哪些不变量最容易被破坏？ |
@@ -137,16 +137,19 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 ## 当前状态
 
-前四个核心模块已经形成连续学习链：
+前五个核心模块已经形成连续学习链：
 
-- M00、M01、M02、M03 已有自包含中文讲义；
+- M00、M01、M02、M03、M04 已有自包含中文讲义；
 - `MATERIALS_REVIEW.md` 记录教材级审计；
-- `reading-notes/m02-source-audit.md`、`reading-notes/m03-source-audit.md` 记录逐模块 source audit；
+- `reading-notes/m02-source-audit.md`、`reading-notes/m03-source-audit.md`、`reading-notes/m04-source-audit.md` 记录逐模块 source audit；
 - [`labs/taskforge/`](labs/taskforge/) 已有可运行的 v0 baseline，实际验证 `6 passed`；
 - [`labs/02-state-ownership.md`](labs/02-state-ownership.md) 已把 M02 概念转成 system-model → design-it-twice → implementation → evidence → Agent comparison → independent review 的完整实验；
 - [`case-studies/m02/baseline-analysis.md`](case-studies/m02/baseline-analysis.md) 提供 instructor reference（有 spoiler）。
 - [`labs/03-testing-evidence.md`](labs/03-testing-evidence.md) 从同一 baseline 出发，加入 contract audit、behavior partition、manual mutation probe、fail-before/pass-after 与 Agent test review；
 - `labs/taskforge/tools/mutation_probe.py` 已实际验证 baseline 为 `3 killed / 3 survived`，补 3 个 behavior-oriented tests 后为 `6 killed / 0 survived`；
 - [`case-studies/m03/instructor-analysis.md`](case-studies/m03/instructor-analysis.md) 记录 M03 的 instructor reference 与实际 red→green 验证。
+- [`labs/04-api-error-boundary.md`](labs/04-api-error-boundary.md) 引入 external-style boundary、error taxonomy、no-effect guarantee、request identity 与 idempotent submit；
+- `labs/taskforge/tools/m04_boundary_probe.py` 已实际验证 starter 的语义缺口：blank command 被接受、`KeyError` 穿透、cancel failure 被 `False` collapse、same payload 默认仍代表 distinct requests；
+- [`case-studies/m04/instructor-analysis.md`](case-studies/m04/instructor-analysis.md) 记录 reference boundary；临时副本已实际验证原 6 个 core tests + 12 个 M04 contract tests，共 `18 passed`。
 
-下一阶段进入 M04 API / Error / Boundary Design，让 TaskForge 开始面对更明确的 error semantics、illegal states、idempotency 和 temporal coupling。
+下一阶段进入 M05 Refactoring / Evolutionary Design：在已经存在 contract 与测试证据的前提下，练习怎样改变结构而不偷改行为，以及怎样把大改拆成可独立验证的小步。
