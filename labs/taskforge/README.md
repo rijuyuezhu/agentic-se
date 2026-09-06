@@ -4,7 +4,7 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02–M11 teaching baseline
+## 当前版本：v0 / M02–M12 teaching baseline
 
 core 仍只有四类行为：
 
@@ -342,3 +342,37 @@ naive metric labels:
 ```
 
 这个实验训练 `SLI specification → measurement implementation → telemetry shape → SLO/alert/action`，并要求把 `job_id` 这类 correlation identity 留给 diagnostic events，而不是 workload-proportional aggregate metric labels。完整实验见 [`../11-production-observability-reliability.md`](../11-production-observability-reliability.md)。
+
+## M12：Agent Delegation / Authority Harness
+
+M12 不直接把 canonical TaskForge 改成“Agent 平台”。它新增的是工程控制面的 teaching artifacts：
+
+```text
+agent-contracts/m12/vague-task.json
+agent-contracts/m12/engineered-task.json
+agent-contracts/m12/unsafe-agent-plan.json
+agent-contracts/m12/bounded-agent-plan.json
+agent-contracts/m12/human-decision.json
+agent-contracts/m12/authorized-agent-plan.json
+tools/m12_orchestration_probe.py
+```
+
+运行：
+
+```bash
+PYTHONPATH=src uv run --with pytest --no-project \
+  python tools/m12_orchestration_probe.py
+```
+
+baseline 实际验证四种不同 engineering state：
+
+```text
+vague task       -> INSUFFICIENT_CONTRACT
+unsafe plan      -> REJECT_PLAN
+bounded plan     -> STOP_AND_ESCALATE
+authorized plan  -> AUTHORIZED_TO_IMPLEMENT
+```
+
+实验随后要求在人类 `M12-ADMISSION-001` decision record 之后，才在 isolated copy/worktree 中实现 opt-in admission control。Instructor 临时 reference 得到原 6 个 core tests + 5 个 focused tests = `11 passed`，并用 deterministic barrier counterexample 证明 naive `check queue -> submit` 可以让两个 contender 同时穿过一个 slot。
+
+完整实验见 [`../12-agentic-software-engineering.md`](../12-agentic-software-engineering.md)。Canonical baseline 不提交 reference implementation，因为 M12 的主要对象是 delegation / authority / evidence workflow，而不是提前改变后续 Capstone 的 product starting point。

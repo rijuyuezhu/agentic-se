@@ -1,0 +1,27 @@
+{
+  "agent": "implementation_agent",
+  "summary": "Add an opt-in admission boundary without changing the M11 SLO or the default submit path.",
+  "planned_writes": [
+    "labs/taskforge/src/taskforge/public_api.py",
+    "labs/taskforge/src/taskforge/service.py",
+    "labs/taskforge/tests/test_admission_control.py"
+  ],
+  "planned_actions": [
+    "first inspect submit, cancellation, metrics, and M11 measurement paths without editing",
+    "add a focused regression proving rejected admission creates no job and consumes no id",
+    "implement the smallest opt-in admission check using the existing lifecycle authority path",
+    "keep default submit behavior unchanged when admission control is disabled",
+    "run focused tests, core tests, and applicable M04-M11 probes",
+    "produce a diff and evidence report for independent review"
+  ],
+  "evidence_claims": [
+    "rejected admission has zero job-state side effects",
+    "accepted jobs retain the existing lifecycle semantics",
+    "the M11 SLO target and denominator remain unchanged",
+    "existing default-path behavior remains compatible"
+  ],
+  "open_questions": [
+    "What exact public result/error shape should represent overload? The task contract says this is a compatibility decision that requires escalation if the existing boundary cannot express it without changing callers.",
+    "What capacity threshold should the opt-in policy use? The task contract intentionally does not authorize inventing a product threshold."
+  ]
+}

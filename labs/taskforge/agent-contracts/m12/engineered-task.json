@@ -1,0 +1,109 @@
+{
+  "goal": "Add an opt-in admission-control path for TaskForge so burst overload is rejected explicitly before creating work, while preserving the existing default behavior when admission control is disabled.",
+  "context": [
+    "M11 demonstrated that 12 accepted jobs can all eventually succeed while only 2/12 meet the <=2s submit-to-claim objective.",
+    "The current canonical TaskForge baseline is intentionally in-memory and still preserves M04/M07/M08 historical teaching behavior.",
+    "Queue depth is a cause signal, not itself the user-facing SLI. Admission control must not be described as proving the start-latency SLO."
+  ],
+  "non_goals": [
+    "Do not change the M11 SLO target or redefine its denominator.",
+    "Do not add a database, RPC system, message queue, or production deployment machinery.",
+    "Do not fix unrelated historical teaching defects from M03-M10.",
+    "Do not silently change existing submit semantics when admission control is disabled."
+  ],
+  "contracts_and_invariants": [
+    "Rejected admission must create no Job and consume no job id.",
+    "An accepted job follows the existing lifecycle contract unchanged.",
+    "Admission rejection must be distinguishable from a successfully accepted submission.",
+    "The existing default path remains backward-compatible when admission control is disabled.",
+    "M11 start-latency evidence must continue to count accepted jobs using the original denominator semantics.",
+    "No second lifecycle state authority may be introduced."
+  ],
+  "allowed_write_paths": [
+    "labs/taskforge/src/taskforge/public_api.py",
+    "labs/taskforge/src/taskforge/service.py",
+    "labs/taskforge/src/taskforge/metrics.py",
+    "labs/taskforge/tests/",
+    "labs/taskforge/tools/"
+  ],
+  "forbidden_actions": [
+    "modify historical fixtures to match the new implementation",
+    "lower or redefine the M11 SLO",
+    "delete or weaken existing regression probes",
+    "write directly to production systems",
+    "merge to main",
+    "push a release",
+    "change secrets or credentials"
+  ],
+  "evidence_contract": [
+    {
+      "claim": "Rejection has no side effect",
+      "required_evidence": "A focused test proves job count and next accepted id are unchanged by a rejected admission."
+    },
+    {
+      "claim": "Default behavior remains compatible",
+      "required_evidence": "Original core tests and M04-M11 applicable baseline probes remain unchanged unless an old probe is explicitly version-scoped and superseded."
+    },
+    {
+      "claim": "Overload is explicit rather than disguised as success",
+      "required_evidence": "A public-boundary test distinguishes accepted and rejected outcomes without parsing human-readable text."
+    },
+    {
+      "claim": "The change does not game the SLO",
+      "required_evidence": "M11 SLI threshold and denominator logic are not edited; accepted jobs remain the population measured by the SLI."
+    }
+  ],
+  "stages": [
+    "Read-only reconnaissance: map submit path, state authority, M11 measurement path, and relevant tests before editing.",
+    "Write a short change model and list unresolved semantic questions.",
+    "Implement the smallest opt-in admission boundary after the model is stable.",
+    "Run focused evidence, then the applicable regression set.",
+    "Perform a self-review, then hand the base commit, task contract, diff, and evidence to an independent reviewer."
+  ],
+  "stop_conditions": [
+    "Stop before implementation if rejection semantics cannot be expressed without changing an existing public contract that the task did not authorize.",
+    "Stop if a required fix needs a second lifecycle authority or direct mutation outside the existing owner path.",
+    "Stop if the only way to make the SLO look healthy is to change the target, denominator, or accepted-work definition.",
+    "Stop if required regression evidence is unavailable or non-deterministic; report the evidence gap instead of claiming completion."
+  ],
+  "escalate_when": [
+    "A compatibility decision requires choosing whether existing callers receive a new error/result type.",
+    "The implementation would require durable coordination or atomicity not present in the in-memory baseline.",
+    "The desired admission policy needs a product-level threshold or capacity policy that is not specified here."
+  ],
+  "authority_matrix": {
+    "exploration_agent": [
+      "read repository files",
+      "search code",
+      "run non-mutating probes and tests",
+      "write reconnaissance notes outside production source"
+    ],
+    "implementation_agent": [
+      "edit allowed_write_paths in an isolated working tree or feature branch",
+      "add focused tests",
+      "run tests and local probes",
+      "produce a diff and evidence report"
+    ],
+    "review_agent": [
+      "read the base, task contract, diff, and evidence",
+      "run independent targeted probes",
+      "report findings without modifying the candidate patch during first-pass review"
+    ],
+    "human_only": [
+      "change product acceptance semantics not already authorized by this contract",
+      "change the SLO or its denominator",
+      "expand write scope beyond the listed paths",
+      "accept residual risk",
+      "merge",
+      "deploy or operate production",
+      "change credentials"
+    ]
+  },
+  "done_when": [
+    "The requested opt-in behavior is implemented without unauthorized semantic changes.",
+    "Every evidence-contract claim has concrete reproducible evidence.",
+    "No stop condition was crossed silently.",
+    "Independent review findings are resolved or explicitly adjudicated by a human authority.",
+    "The working tree is clean and the final diff contains no unrelated cleanup."
+  ]
+}

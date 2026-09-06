@@ -624,3 +624,9 @@ M11 继续使用同一标准，见：
 `reading-notes/m11-source-audit.md`
 
 这份审计实际检查了 Google SRE 的 Service Level Objectives / Monitoring Distributed Systems / Production Services Best Practices / Handling Overload，SRE Workbook 的 Implementing SLOs / Alerting on SLOs，Prometheus 官方 Instrumentation / Naming / Zen guidance，以及 OpenTelemetry Logs Data Model / Semantic Conventions。课程据此把 production evidence 建模成 `user expectation → SLI specification → measurement implementation → telemetry → aggregation/window → SLO/error budget → alert/action`，并区分 symptom/cause、aggregate/diagnostic signals 与 telemetry schema compatibility；同时明确拒绝“接上 OTel 就有 observability”“四个 golden signals 就是固定 dashboard”“所有 metric threshold 都 page”“job/request ID 适合 metric label”“固定 SLO/burn-rate 数值适用于所有系统”等机械规则。
+
+M12 继续使用同一标准，见：
+
+`reading-notes/m12-source-audit.md`
+
+这份审计实际检查了 OpenAI Codex 当前 Best Practices / `AGENTS.md` / ExecPlans / Subagents / agent-loop 材料，Anthropic 的 effective agents、long-running harness、harness simplification、agent eval 与 parallel compiler experiment，SWE-bench 原论文，METR 2025–2026 maintainer-acceptance / developer-productivity 研究，以及 GitHub Copilot code-review instruction behavior。课程据此把 Agentic SWE 建模成 `durable context + scoped capability/permission + explicit engineering authority + evidence contract + stop/escalation + independent acceptance`，并明确拒绝“prompt 越长越好”“一定先 plan”“多 Agent 一定更好”“benchmark/test pass 等于 mergeable”“所有 production action 永远必须人工点击”“某个固定 AI productivity uplift 数字可以当课程定律”等机械规则。

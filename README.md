@@ -84,7 +84,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 | [09](modules/09-architecture-boundaries-dataflow-failure-domains.md) | Architecture：边界、数据流与故障域 | 什么值得上升到系统级设计？哪些决定会跨模块放大 authority / failure / evolution consequence？ |
 | [10](modules/10-code-review-change-engineering.md) | Code Review 与 Change Engineering | 怎样把一次 PR 当作 bounded engineering argument 独立验证，而不是把 CI green 当 approval？ |
 | [11](modules/11-production-observability-reliability.md) | Production、Observability 与 Reliability | 系统上线后，怎样从 user contract 设计 SLI/SLO、telemetry、alert 与 overload evidence，而不是只堆 metrics？ |
-| 12 | Agentic Software Engineering | 如何给 Agent 任务、限制搜索空间、要求证据、独立验收？ |
+| [12](modules/12-agentic-software-engineering.md) | Agentic Software Engineering | 怎样把 system model、authority、evidence、stop/escalation 与 independent review 组织成 Agent 可安全执行的工作系统？ |
 | 13 | Capstone | 在一个持续演化的真实风格系统里完成多轮变更与 review |
 
 详细教学设计见 [`COURSE_DESIGN.md`](COURSE_DESIGN.md)。
@@ -137,13 +137,13 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 ## 当前状态
 
-前十二个核心模块已经形成连续学习链：
+前十三个核心模块已经形成连续学习链：
 
-- M00–M11 已有自包含中文讲义；
-- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m11-source-audit.md` 记录逐模块 source audit；
-- M02–M10 的 ownership、testing、boundary、refactoring、legacy、concurrency、migration、architecture 与 review labs 已形成连续 TaskForge 历史；
-- [`labs/11-production-observability-reliability.md`](labs/11-production-observability-reliability.md) 用 deterministic burst 展示“所有 job 最终成功 + ending queue=0”仍可严重违反 user start-latency SLO；
-- `labs/taskforge/tools/m11_production_probe.py` 实际复现 naive dashboard `healthy=true`，但 user-centered SLI 只有 `2/12 = 0.167`，同时暴露 `job_id` metric-label cardinality trap；
-- [`case-studies/m11/instructor-analysis.md`](case-studies/m11/instructor-analysis.md) 记录 reference：`good/bad/unknown/total` measurement、bounded aggregate metric identity、diagnostic events 与 error-budget reasoning；临时副本原 6 个 core tests + 5 个 M11 tests 共 `11 passed`。
+- M00–M12 已有自包含中文讲义；
+- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m12-source-audit.md` 记录逐模块 source audit；
+- M12 不把 Agentic SWE 收缩成 prompt 技巧，而是把前十一章组合成 delegation contract、authority matrix、evidence contract、stop/escalation 与 independent review；
+- [`labs/12-agentic-software-engineering.md`](labs/12-agentic-software-engineering.md) 用同一个 overload/backpressure change 比较 vague delegation 与 engineered delegation，并要求 bounded Agent 在 public-result/threshold authority 未决时正确 `STOP_AND_ESCALATE`；
+- `labs/taskforge/tools/m12_orchestration_probe.py` 实际稳定复现 `INSUFFICIENT_CONTRACT → REJECT_PLAN → STOP_AND_ESCALATE → AUTHORIZED_TO_IMPLEMENT` 四种状态；
+- [`case-studies/m12/instructor-analysis.md`](case-studies/m12/instructor-analysis.md) 记录授权后的 opt-in admission reference：原 6 个 core tests + 5 个 focused tests 共 `11 passed`，naive check→submit race 另有 deterministic counterexample，同时把 M10 replay harness 明确分类为 version-scoped teaching artifact。
 
-下一阶段进入 M12 Agentic Software Engineering：把前面所有能力变成一套 Agent orchestration discipline，明确 human authority、exploration/implementation/review 分工、evidence contract、stop conditions 与 production action boundaries。
+下一阶段进入 M13 Capstone：不再引入新的单点主题，而是在一次持续演化的 TaskForge change 中完整执行 system modeling、specification、architecture、migration、Agent-assisted implementation、production evidence 与 independent review。

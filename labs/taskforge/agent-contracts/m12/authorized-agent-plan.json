@@ -1,0 +1,27 @@
+{
+  "agent": "implementation_agent",
+  "authorization": "M12-ADMISSION-001",
+  "summary": "Implement the human-authorized opt-in admitted submit operation without changing legacy submit or M11 measurement semantics.",
+  "planned_writes": [
+    "labs/taskforge/src/taskforge/public_api.py",
+    "labs/taskforge/src/taskforge/service.py",
+    "labs/taskforge/tests/test_admission_control.py"
+  ],
+  "planned_actions": [
+    "add submit_job_admitted(command, max_queued_jobs=...) as a new opt-in public operation",
+    "serialize admission-check plus job creation for concurrent admitted submissions",
+    "return machine-readable accepted or OVERLOADED results",
+    "prove rejection creates no job and consumes no id",
+    "prove concurrent admitted submissions do not exceed the configured queued-work threshold among themselves",
+    "run focused tests, core tests, and applicable M04-M11 regression probes",
+    "produce a diff and evidence report for independent review"
+  ],
+  "evidence_claims": [
+    "legacy submit_job behavior is unchanged",
+    "rejected admission has zero job-state side effects",
+    "accepted admitted jobs use the existing lifecycle path",
+    "two concurrent admitted submissions cannot both pass a one-slot admission window",
+    "M11 SLO target and denominator are unchanged"
+  ],
+  "open_questions": []
+}

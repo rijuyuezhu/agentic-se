@@ -1,0 +1,31 @@
+{
+  "decision_id": "M12-ADMISSION-001",
+  "decided_by": "human engineering authority",
+  "resolves": [
+    "public overload result shape",
+    "admission threshold ownership",
+    "concurrency scope of the opt-in admission path"
+  ],
+  "decisions": [
+    "Do not change submit_job(). Add a separate opt-in public operation named submit_job_admitted(command, max_queued_jobs=...).",
+    "max_queued_jobs is supplied explicitly by the caller/configuration owner; this lab does not invent a global production threshold. Its contract domain is a non-negative integer; a negative value is rejected with ValueError before any job/id side effect.",
+    "The public result is machine-readable: accepted returns {accepted: true, job_id: ...}; overload returns {accepted: false, code: OVERLOADED}. Human-readable text is not the contract discriminator.",
+    "Rejected overload creates no Job and consumes no job id.",
+    "Concurrent calls through the admitted path must serialize admission-check plus job creation against each other. Legacy submit_job() intentionally bypasses admission and is outside this opt-in guarantee.",
+    "Worker claims may reduce queued work concurrently; that can make the admission decision conservative, but must not cause over-admission among admitted submissions.",
+    "The M11 SLO target and denominator are unchanged. Rejected work is reported as admission rejection, not reclassified as successful accepted work."
+  ],
+  "new_authority_grant": [
+    "implementation_agent may implement the above semantics inside the existing allowed write scope",
+    "implementation_agent may add local synchronization required only for the admitted submit operation",
+    "implementation_agent may add focused regression tests"
+  ],
+  "still_human_only": [
+    "change the SLO or denominator",
+    "change legacy submit_job semantics",
+    "merge",
+    "deploy",
+    "change credentials",
+    "expand the write scope"
+  ]
+}
