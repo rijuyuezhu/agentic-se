@@ -145,6 +145,20 @@ Editorial rewrite 默认没有权限改变技术主张。每章重写前先读�
 - 前一节最后的问题是否自然导致这一节？
 - running example 是否真的发生了新情况，而不是换皮重复？
 
+### Pass B.1 — abstraction dependency sweep
+
+如果 cold-reader review 发现某个 abstraction 在故事真正需要它之前已经被使用，不要只修改 reviewer 点名的 occurrence。先确定这个 abstraction **应该第一次被命名的位置**，然后检查从章节开头到该位置之前的整个 narrative：
+
+- 搜索 canonical term，以及中英文变体、缩写和明显同义表达；
+- 搜索会预设该 abstraction 已经存在的 API 字段、type、error reason、example 和 descriptive phrase；
+- 区分有教学目的的轻量 foreshadowing 与 accidental dependency leak；前者必须不要求读者已经理解该 abstraction，后者应改用读者此刻已有上下文中的例子，或只描述底层现象而暂不命名；
+- 修改后重新顺读“前置 narrative → problem pressure → first naming”，确认术语第一次出现时确实是在回答读者已经遇到的问题；
+- 再做一次全前置范围搜索，作为这个**具体 dependency constraint** 的验证证据。搜索次数只能证明“没有已知泄漏”，不能证明章节整体教学质量。
+
+reviewer 的 diagnosis 与 remediation 也要分开判断。一个 reviewer 可能正确发现“abstraction 出现太早”，但只指出了部分 occurrence，或者给出的搬移方案会损失另一条合理 reasoning。修复时应处理问题的完整类别，而不是机械执行 comment diff。
+
+M04 pilot 的实际案例见 [`reading-notes/m04-editorial-pilot-review.md`](reading-notes/m04-editorial-pilot-review.md) 的“PR review 后的 dependency / flow refinement”：最初只被指出 §2 提前使用 `request_id`，全章复核后又发现 §3–§5 的 `request identity` / `idempotency` / `idempotent` 同样在偷跑；最终把这些泄漏一起清理，并保留了 reviewer 原建议中不应删除的 convenience-API reasoning。
+
 ### Pass C — compression and rhythm
 
 寻找新的生成式写作习惯：
