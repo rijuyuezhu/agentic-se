@@ -45,6 +45,8 @@ implementation 只能相对于 specification 判断正确性。
 
 > **不要把“当前代码怎么做”误当成“系统应该怎么做”。**
 
+本章先从“已经需要一个 specification”开始往下推理；真实项目还要再往上游追一层：谁提出这个需求、哪些 stakeholder 的约束冲突、issue 中哪部分其实只是预选的实现方案，以及谁有权决定最终语义。这个问题单独放在旁支 [Requirements Engineering：contract 从哪里来](../extensions/requirements-and-stakeholders.md) 中，不把需求获取流程塞进本章主线。
+
 ---
 
 # 2. Specification 是什么

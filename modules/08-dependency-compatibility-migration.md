@@ -869,6 +869,8 @@ binary rollback 后能读当前 durable state 吗？
 CI 平台有没有 rollback 按钮？
 ```
 
+本章主要关心 behavior、data representation 和 mixed-version compatibility；如果一个 release 由 source、binary、schema、runtime config、generated artifact 等多部分共同决定，还需要再问“我们正在 rollback 的到底是哪一组 configuration”。旁支 [Configuration、Baseline 与 Release](../extensions/configuration-baselines-and-release.md) 专门补这层 artifact identity、baseline 和 release composition 推理。
+
 ---
 
 # 18. Data migration 的几种形态

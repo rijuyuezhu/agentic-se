@@ -196,6 +196,8 @@ Authority: may decide
 
 这三者不能偷换。
 
+这里还故意没有展开两个相邻问题：permission 为什么应该按 asset / trust boundary / least privilege 设计，以及最终 human authority 为什么同时也是责任边界。分别见旁支 [Security Engineering：从 trust boundary 到 Agent authority](../extensions/security-engineering.md) 和 [Professional Practice：责任、沟通、隐私与许可](../extensions/professional-practice-ethics-law.md)。如果问题变成“多个 Agent 怎样并行而不把 review queue 和 shared-state coordination 做爆”，则见 [Process、Feedback 与 Team Coordination](../extensions/process-feedback-and-team-coordination.md)。
+
 ---
 
 # 3. Tool Surface 就是 Authority Surface

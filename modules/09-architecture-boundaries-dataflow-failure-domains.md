@@ -1356,6 +1356,8 @@ Revisit when ...
 
 重点是 forces 和 trade-offs。
 
+当两个 architecture 都能满足功能要求时，比较往往会继续落到 uncertainty、reversibility、migration/review cost 和 future option；旁支 [Engineering Risk、Estimation 与 Economics](../extensions/engineering-risk-estimation-economics.md) 专门讨论这一层。另一方面，architecture 图也不是越完整越好：如何按问题选择 dependency、state、sequence、data-flow 或 C4-style view，见 [Models、Notation 与 UML](../extensions/models-notation-and-uml.md)。
+
 ---
 
 # 28. Architecture 与 Evolution
