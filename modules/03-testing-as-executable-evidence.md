@@ -1,270 +1,113 @@
 # M03 — Testing：测试是可执行证据，不是宗教
 
-> 这一章的目标不是把你训练成“更会写 pytest/JUnit 的人”。
->
-> 真正目标是：**面对一个软件 contract 和一组风险，你能设计一组成本可接受、语义清楚、能区分正确与错误变化的 executable evidence。**
+M02 让我们看见一个很具体的 design bug：TaskForge 的 `service.get()` 返回 authoritative mutable `Job`，caller 因而可以绕开 lifecycle owner 直接改 status。更有意思的是，仓库原来的六个 tests 全部通过。
 
----
+这给 M03 一个比“怎样写更多 pytest”更好的起点：**为什么一组真实、稳定、全绿的测试，完全没有阻止一个我们已经明确不想要的 behavior？**
 
-# 0. 从一个令人不舒服的事实开始
+答案不是“六个太少”。如果把同样六个测试复制一百遍，问题仍然存在。真正缺的是一条 executable claim：read boundary 不应把 authoritative mutation authority 交给 caller。
 
-上一章的 TaskForge baseline 有 6 个测试：
+因此这一章把 testing 放回 software engineering 的主线里。我们不会问“unit test 还是 integration test 更高级”，也不会背一个 coverage 或 pyramid 比例。我们要学的是：面对 contract 和风险，怎样选择一组成本可接受的 observations 与 oracles，使错误的未来变化更难悄悄通过，同时尽量不阻碍合法的未来变化。
 
-```text
-......
-6 passed
-```
+M03 的实验使用仓库里的 **TaskForge v0 baseline** 作为共同 negative control。它仍然保留 M02 已经分析过的 ownership defect。若你刚刚在自己的 M02 lab 分支里修过它，做 M03 的 fail-before exercise 时应从干净的 v0 revision/副本开始，而不是把个人前一章 patch 当成课程共享 baseline。这样每个 evidence claim 都能指向同一个可复现起点。
 
-它们验证了：
+## 1. 六个绿灯实际声明了什么？
 
-- job id 单调增长；
-- submit 后进入 queued；
-- worker claim 第一个 queued job；
-- finish 成功/失败记录 exit code；
-- running job 不能 cancel；
-- non-running job 不能 finish。
-
-看起来不错。
-
-但同时：
+先看最朴素的一条：
 
 ```python
-job = service.get(job_id)
-job.status = JobStatus.SUCCEEDED
+job_id = service.submit("echo hi")
+assert service.get(job_id).status == JobStatus.QUEUED
 ```
 
-caller 可以直接把系统里的 authoritative state 改掉。
+它做了四件事：建立 scenario，执行 action，观察结果，再把 observation 与一个 expected result 比较。最后这部分通常叫 **oracle**：什么结果出现时，我们认为这次 execution 符合预期？
 
-测试仍然全绿。
+这里真正被执行的 claim 是：`submit(command)` 之后，通过当前 read boundary 观察到的 status 是 `QUEUED`。
 
-这不是 pytest 的 bug。
+如果系统还有另一条 contract——“caller 读到 job 后不应自动获得修改 authoritative state 的权限”——但任何 test 都没有观察这一点，那么 suite 全绿并不奇怪。tests 不会因为文件名叫 `test_...` 就自动理解未被表达的 requirement。
 
-也不是“我们测试写得太少”这么简单。
+这也是 testing 最重要的边界：**test 是 executable evidence，不是 correctness 本身。** 两个 `abs()` example 通过，不能推出所有整数都满足 specification；同样，1000 个 TaskForge executions 通过，也不能证明你从未提出过的 property。
 
-真正发生的是：
-
-> **测试从来没有提出过“read API 不应授予 mutation authority”这条 claim。**
-
-所以它当然不会失败。
-
-这一章最核心的一句话是：
-
-> **一个 test 只会保护它真正检查的 claim。它不会因为文件名叫 `test_...` 就自动理解你的系统。**
-
----
-
-# 1. Testing 在软件工程里到底是什么
-
-一个测试可以粗略看成：
+一个更完整的 correctness argument 可能同时包含：
 
 ```text
-setup
-  ↓
-action
-  ↓
-observation
-  ↓
-oracle
-  ↓
-pass / fail
-```
-
-其中最重要、最容易被忽略的是 **oracle**。
-
-oracle 回答：
-
-> “观察到什么结果时，我们认为实现符合预期？”
-
-例如：
-
-```python
-job_id = submit("echo hi")
-assert get(job_id).status == QUEUED
-```
-
-这里 oracle 是：
-
-```text
-submit(command) 之后，该 job 的 observable status 必须是 QUEUED
-```
-
-如果你的 oracle 错了，测试越稳定，可能越危险。
-
----
-
-# 2. Test 不是 correctness proof
-
-假设一个函数：
-
-```python
-def abs(x: int) -> int:
-    ...
-```
-
-你写：
-
-```python
-assert abs(1) == 1
-assert abs(-1) == 1
-```
-
-两条测试通过，不能推出：
-
-```text
-∀x, abs(x) 满足 specification
-```
-
-它只证明：
-
-```text
-在这两个具体 execution 上，观察结果符合 oracle
-```
-
-所以 testing 的逻辑形态通常不是：
-
-```text
-proof of correctness
-```
-
-而更像：
-
-```text
-attempt to find counterexamples
-+
-regression evidence for known claims
-```
-
-一个成熟的 correctness argument 可能同时使用：
-
-```text
-specification
-+ type/static checking
+specification / protocol
++ type or static checks
 + tests
-+ code review
 + invariant reasoning
-+ production evidence
++ code review
++ runtime / production evidence
 ```
 
-不要让 tests 垄断 “correctness” 这个词。
+M03 只负责把 tests 这一类 evidence 用得更精确，而不是让它垄断“正确性”这个词。
 
----
+### Oracle 的 authority 从哪里来？
 
-# 3. Test suite 的真正问题：它能区分什么？
+expected result 不能凭空获得 authority。它可能来自 explicit specification、invariant、产品 requirement、external standard/protocol、已确认必须兼容的旧 behavior、reference implementation 或 domain expert judgment。
 
-MIT 6.102 的一个非常好的 framing 是：测试集不只是“有没有测试”，而要看它能否有效地区分合法和错误实现。
+最危险的来源是直接令 **oracle = 当前 implementation 输出**。
 
-我们把这个概念推广一下。
-
-设：
-
-```text
-L = 所有符合 contract 的实现
-B = 我们关心的一类错误实现
-T = test suite
-```
-
-好的 T 希望做到：
-
-```text
-对 L：尽量不误报
-对 B：尽量能拒绝
-```
-
-这比 coverage percentage 更接近本质。
-
-## 3.1 Correctness of tests
-
-一个合法实现不应该因为测试偷绑 implementation detail 而失败。
-
-例如 contract 只承诺：
-
-```text
-list_jobs() 返回所有 job，不承诺顺序
-```
-
-如果 test 写：
+例如 production 写成：
 
 ```python
-assert list_jobs() == [job1, job2, job3]
+def normalize_name(name):
+    return name.strip().lower()
 ```
 
-那么把内部 dict 换成 hash set 后 test 失败，未必是 production regression。
-
-可能只是 **test 自己发明了 contract**。
-
-## 3.2 Thoroughness
-
-另一个方向：错误实现是否能偷偷通过？
-
-例如：
+Agent 又在 test 里写：
 
 ```python
-def is_terminal(status):
-    return status in {SUCCEEDED, FAILED}
+expected = name.strip().lower()
+assert normalize_name(name) == expected
 ```
 
-忘了 `CANCELLED`。
+如果 `.lower()` 本来就是错误需求理解，implementation 和 test 会一起错。test 很精确，却没有独立 oracle。
 
-如果 tests 只检查 succeeded/failed，这个 bug 就活着。
+所以 review 一个 test，第一问往往不是“assert 对不对”，而是：**这个 expected behavior 的 authority 是谁？**
 
-## 3.3 Small / high-information
+## 2. 一个 test suite 的质量，更接近“它能区分什么”
 
-1000 个重复的 happy-path test 不一定比 10 个有结构的 test 更强。
+MIT 6.102 在 testing reading 里把 suite 质量拆成 correctness、thoroughness 和 size。最有价值的不是背三个词，而是把 test suite 看成一个 **discriminator**。
 
-例如：
+设想有一组符合 contract 的 legal implementations，以及很多我们想排除的 buggy implementations。好的 suite 希望：合法实现不要因为 test 偷绑了 implementation detail 而被误杀；有意义的错误实现尽量不能偷偷通过；同时不靠堆大量重复 case 获得这种区分力。
 
-```text
-x = 1
-x = 2
-x = 3
-...
-x = 1000
+TaskForge 原 tests 正好同时暴露了两种问题。
+
+### 一边是 gap：重要错误可以通过
+
+如果 `Job.terminal` 忘了 `CANCELLED`：
+
+```python
+return self.status in {SUCCEEDED, FAILED}
 ```
 
-有时不如：
+原 suite 仍可能全绿，因为它分别测试过 cancelled status，也测试过 succeeded job 会被 terminal metrics 计数，却没有连接 `CANCELLED -> terminal semantics` 这两个事实。
 
-```text
-partition:
-  x < 0
-  x = 0
-  x > 0
+这不是“代码没执行到”的同义词，而是 oracle/partition 没有提出组合 claim。
 
-boundary:
-  -1, 0, 1
+### 另一边是 overspecification：合法变化会被误杀
+
+原 test 还写：
+
+```python
+assert first == "job-1"
+assert second == "job-2"
 ```
 
-重点不是 case 少，而是每个 case 有明确理由。
+M02 lab 为了把 ownership refactor 隔离成单变量练习，曾**刻意把这个格式列入那次 change 的 Must preserve**。M03 lab 换了一个问题：它在后半段为本次 testing exercise 明确采用一份 TaskForge v0 contract，其中 ID 只要求在当前 lifetime 内 unique、stable、可作为 lookup token，并把具体格式视为 opaque。
 
----
+这意味着同一行 assertion 的合理性取决于你正在保护哪一份 contract。对 M02 的局部 behavior-preserving exercise，它是有意 preservation constraint；对 M03 lab 后半段显式采用的 exercise contract，它就过度指定了 `job-N` representation。
 
-# 4. 从 Spec 到 Test：先找 partition
+这不是课程前后自相矛盾，而是一个很重要的工程事实：**局部 migration/refactor 可以暂时保留一组更强的 observable behavior，以减少一次 change 的变量；另一个有明确 authority 的 exercise 或 contract review 又可以采用不同的 contract scope。** 这并不自动决定产品最终应该承诺什么；不能做的是在没有说明 authority 的情况下悄悄切换。
 
-一个常见的坏习惯是：
+M03 lab 因此会把 ID test 改为保护 distinct + stable lookup，而不冻结 prefix、numbering 或 serialization。相对于本 lab 采用的 contract，test 并没有变“弱”；它只是允许更多合法 implementation，同时继续拒绝 contract-breaking implementation。
 
-> “我来想几个例子。”
+## 3. 不要先想 example，先问 spec 把 state space 分成了什么
 
-更好的问题是：
+“再补几个 case”很容易变成拍脑袋。更可迁移的方法是从 specification 找 **behavior partitions**：哪些输入、系统状态或 failure condition 会改变 operation 的语义结果？
 
-> **spec 把输入/状态空间分成了哪些行为区域？**
+以 TaskForge v0 的 `finish(job_id, exit_code)` 为例，lab 给出的 contract 是：只有 `RUNNING` job 可以 finish；`exit_code == 0` 进入 `SUCCEEDED`，非零进入 `FAILED`，并保存 exact exit code。
 
-例如 TaskForge `finish(job_id, exit_code)`：
-
-假设 contract 是：
-
-```text
-precondition:
-    job exists
-    job.status == RUNNING
-
-postcondition:
-    exit_code == 0  → SUCCEEDED
-    exit_code != 0  → FAILED
-
-invariant:
-    terminal job has a final exit_code unless CANCELLED
-```
-
-那么至少可以得到这些 partition：
+于是至少有两类 dimension：
 
 ```text
 job state:
@@ -276,541 +119,144 @@ job state:
 
 exit_code:
   0
-  negative
-  positive
+  negative nonzero
+  positive nonzero
 ```
 
-注意这里的 input 已经不只是函数参数。
+这里的“input”已经不只是函数参数。它还包括 operation 之前的 system state、lifecycle history、dependency behavior，后续还会包括 concurrency interleaving、version/compatibility state 等。
 
-它包括：
+这也是 M01 state/model reasoning 对 testing 的直接影响：**如果 contract 依赖两个 state dimension，test partition 也不能偷偷只看其中一个。** 某个 artifact 若只投影 public status，就明确它没有覆盖额外 durable flag 或其他 execution/recovery state；不要靠读者猜 omitted dimension 是不存在还是没测。
 
-- 参数；
-- 之前的 system state；
-- dependency state；
-- lifecycle history。
+### Boundary value 为什么高信息量？
 
-真实软件测试必须学会在 **state space** 上 partition。
+很多 bug 聚集在行为区域的边缘：`<` 与 `<=`、empty/non-empty、0/nonzero、first/last、before/after timeout、first/last retry、old/new version、transition 前后。
 
----
-
-# 5. Boundary values：bug 喜欢边界
-
-很多实现错误不是随机分布的。
-
-它们集中在：
-
-- `<` vs `<=`；
-- empty vs non-empty；
-- zero vs non-zero；
-- first / last；
-- max size；
-- before/after timeout；
-- first retry / last retry；
-- old version / new version；
-- before/after lifecycle transition。
-
-例如：
+所以如果 rule 是：
 
 ```python
-if retries < MAX_RETRIES:
+retries < MAX_RETRIES
 ```
 
-最有价值的 case 通常不是：
+相比随便测 `retries = 2`，`MAX_RETRIES - 1 / MAX_RETRIES / MAX_RETRIES + 1` 往往更有区分力。
+
+但不要把 partition 机械做成笛卡尔积。TaskForge `5 个 states × 3 个 exit-code classes` 不意味着必须写 15 个 almost-identical tests。要问的是：哪些组合真的触发不同 contract outcome？哪些 case 能低成本排除一类 plausible bug？
+
+可以把目标叫作 **high-information suite**：case 数量不是越少越好，而是每个 case 都有理由。
+
+### Scenario、Claim、Mechanism 分开想
+
+写 test 时一个很实用的分层是：
 
 ```text
-retries = 2
+scenario  ->  现实中发生了什么？
+claim     ->  我们究竟要保护哪条语义？
+mechanism ->  用 pytest / fake / Hypothesis / fixture 怎样执行？
 ```
 
-而是：
+如果一上来先问“我要不要 mock”，通常已经跳过了最重要的两层。
 
-```text
-MAX_RETRIES - 1
-MAX_RETRIES
-MAX_RETRIES + 1
-```
+## 4. Test behavior，而不是把 production method 做成目录
 
-这也是为什么 mutation testing 常喜欢做：
+按方法名组织测试很自然：有 `submit()`，就写 `test_submit()`。问题是这个 test 很快会同时检查 ID、queue、command、metrics、persistence、logging，最后变成一个 100 行的“方法说明书”。
 
-```text
-<  ↔ <=
-== ↔ !=
-+1 ↔ -1
-```
-
-因为这些小变化高度模拟真实 boundary bugs。
-
----
-
-# 6. 一个 test 的三层结构
-
-我建议把 tests 看成三层：
-
-```text
-scenario
-claim
-mechanism
-```
-
-## 6.1 Scenario
-
-发生了什么现实情景？
-
-例如：
-
-```text
-Given 一个 queued job
-When client 请求 cancel
-Then job 进入 cancelled
-```
-
-## 6.2 Claim
-
-你真正要保护的语义是什么？
-
-```text
-queued job 可取消
-cancel 成功后 observable status 为 CANCELLED
-```
-
-## 6.3 Mechanism
-
-pytest/JUnit/Hypothesis/mock/fake/fixture 只是实现这个 claim 的 mechanism。
-
-如果你一上来先想：
-
-> “我要不要 mock？”
-
-你已经跳过最重要的两层。
-
----
-
-# 7. Test Behavior，不要机械 Test Method
-
-production code：
-
-```python
-def submit(command):
-    ...
-```
-
-最幼稚的测试组织方式：
-
-```python
-def test_submit():
-    ...
-```
-
-然后这个测试慢慢变成：
-
-```text
-100 行
-检查 id
-检查 queue
-检查 duplicate
-检查 empty command
-检查 metrics
-检查 persistence
-检查 logging
-```
-
-因为你是按 method，而不是 behavior 组织。
-
-更好的形式：
+更稳定的单位通常是 behavior：
 
 ```python
 def test_submit_queues_new_job(): ...
-def test_submit_assigns_fresh_id(): ...
-def test_submit_rejects_empty_command(): ...
-def test_submit_does_not_mutate_existing_jobs(): ...
+def test_submit_preserves_command(): ...
+def test_cancelled_job_counts_as_terminal(): ...
+def test_running_job_cannot_be_cancelled(): ...
 ```
 
-注意：
+一个 method 可以实现多个 behavior，一个 behavior 也可能跨多个 methods。`submit -> claim -> finish` 整条 lifecycle 有时才构成 meaningful scenario。
 
-```text
-method : behavior
-```
+Google 的 unit-testing materials 用“test behaviors, not methods”表达了同一方向。它的长期维护意义在于：production decomposition 可以变化，只要 stable behavior 没变，相关 test 理想上不需要跟着每次移动 helper。
 
-不是 1:1。
+### “通过 public API 测”不是 Python visibility 规则
 
-一个 behavior 也可能横跨多个 methods：
+真实问题是：**这个 unit 对它的 client 承诺的 semantic boundary 在哪里？**
 
-```text
-submit → claim → finish
-```
+如果 package 内部有 `service.py / storage.py / codec.py / helpers.py`，而真实 client 只使用 `service.submit()` 与 `service.get()`，那么大量测试 `helpers._serialize_job()` 的 exact internal string 可能在冻结 implementation。
 
-整个 lifecycle 才是一个 meaningful scenario。
+但一个 internal parser、scheduler 或 codec 如果本身就是稳定 semantic component，当然可以有直接 unit contract。是否值得直接测试，不由名字前有没有 underscore 决定，而由你是否准备长期维护那个 boundary 决定。
 
----
+这就是 M02 的 abstraction judgment 在 M03 的第一个直接用途：**test boundary 取决于 architecture boundary。**
 
-# 8. “通过 public API 测”到底是什么意思
+## 5. Interaction test 的问题不是“用了 mock”，而是你在保护什么
 
-这条规则经常被误解成：
-
-> “只能测试语言 public method。”
-
-不是。
-
-真正的问题是：
-
-> **这个 unit 对其真实 client 的 semantic boundary 在哪里？**
-
-例如一个 package 内部：
-
-```text
-service.py
-storage.py
-codec.py
-helpers.py
-```
-
-如果真实 client 只使用：
-
-```python
-service.submit()
-service.get()
-```
-
-那么测试 `helpers._serialize_job()` 的具体字符串格式，很可能是在绑定 implementation。
-
-如果未来：
-
-```text
-JSON → SQLite
-```
-
-client 行为没变，但 50 个 tests 全坏了，这些 tests 其实充当了错误的 architecture constraint。
-
-## 8.1 一个有用的问题
-
-看到一个 test 时问：
-
-> **如果这个 test 因未来 refactor 失败，真实 user 是否也应该认为系统坏了？**
-
-如果长期答案都是：
-
-```text
-No
-```
-
-它可能测错了边界。
-
----
-
-# 9. 但不要把“public API testing”机械化
-
-有些 internal component 本身就有独立 contract。
-
-例如：
-
-```text
-parser
-scheduler
-cache eviction policy
-serialization codec
-```
-
-如果它是一个稳定可复用的 semantic unit，直接测试它当然合理。
-
-所以真正的问题不是：
-
-```text
-public/private keyword
-```
-
-而是：
-
-```text
-这个 boundary 是否是我们打算长期维护的 contract？
-```
-
-M02 的 abstraction judgment 在这里直接决定 M03 的 test boundary。
-
----
-
-# 10. State testing vs Interaction testing
-
-假设：
-
-```python
-create_user("alice")
-```
-
-一个 interaction test：
+假设业务要求 `create_user("alice")` 后 user 可被读到。一个 test 写：
 
 ```python
 mock_db.put.assert_called_once_with("alice")
 ```
 
-它验证的是：
-
-```text
-实现调用了某个具体 collaborator API
-```
-
-一个 state/outcome test：
+它保护的是当前 collaborator choreography。另一个 test 从 client boundary 观察：
 
 ```python
+create_user("alice")
 assert get_user("alice") is not None
 ```
 
-它验证：
+它更直接保护 final outcome。
+
+如果 implementation 从 `db.put(...)` 改成 transaction API，真实 behavior 不变，但前一个 test 失败，那么 test 已经把“调用某个 helper exactly once”升级成 accidental contract。
+
+Google 的 unit-testing materials 因此偏向 observable state/outcome，而不是内部 interaction。但这不是“interaction testing 永远错”。如果 operation 的真实 contract 本来就是 external side effect，例如：
 
 ```text
-最终 observable outcome 成立
+向 payment gateway 发 charge request
+写一条 audit event
+向 remote worker 发 cancellation request
 ```
 
-多数业务逻辑中，后者更接近 contract。
+interaction 本身就是 observable obligation。此时需要验证的是 **external protocol semantics**：发送了什么、何时发送、允许几次、失败怎样解释，而不是 private helper 的调用顺序。
 
----
+这个 distinction 后面会和 M04 的 idempotency、M07 的 cancellation/concurrency、M11 的 runtime evidence 连接起来。
 
-# 11. 为什么 interaction test 容易 brittle
+## 6. Test double 是用 control 换 fidelity；先问你模拟掉了什么
 
-假设实现从：
+fake、stub、spy、mock 的名词差异不是 M03 的考试重点。更重要的是：把真实 dependency 换掉以后，哪些 risk 从测试世界里消失了？
+
+把 SQLite 换成 dict 可能让 test 更快、更 deterministic，也可能同时丢掉：transaction semantics、uniqueness constraint、filesystem errors、locking、schema/migration behavior、SQL type coercion。
+
+如果本次只想隔离 lifecycle business rule，这种 fidelity loss 可能完全合理；如果要验证的风险就是 transaction rollback，dict fake 恰好把最重要的东西删掉了。
+
+因此 test design 不应从“unit/integration/e2e 选哪一个”开始，而可以从一条更直接的链开始：
+
+```text
+risk
+  -> desired observable evidence
+  -> minimum sufficient fidelity
+  -> feedback / maintenance cost
+```
+
+Google 的 larger-testing materials 很有价值的一点是把 fidelity 看成连续变量。你可以有 pure in-process test、真实 SQLite temp DB、真实 process、真实 network service、production-like deployment；没有一个层级天然更高级。
+
+### Test size 与 scope 是两个维度
+
+Google 还把 **size** 和 **scope** 分开。size 更接近运行资源/成本：process、thread、disk、network、外部 service、runtime、nondeterminism；scope 则是 test 想验证多大范围的 collaborating behavior。因此 **small 不等于 unit，large 也不等于 end-to-end**。
+
+一个 narrow test 可能因为真实 device/browser 而不 small；一个 broad-scope in-process simulation 也可能很快。
+
+这也是为什么本课程不教固定 test-pyramid 比例。Google 自己给出的比例也是 rough guideline，并明确不同团队会因 architecture 和风险而调整。我们吸收的是 reasoning，不复制组织政策。
+
+### Failure injection 是 double 的高价值用途
+
+有些 failure 在真实系统里很难稳定制造，例如 disk full、permission error、timeout、partial response。一个受控 seam：
 
 ```python
-db.put(key, value)
+class FailingStore:
+    def save(self, ...):
+        raise DiskFull(...)
 ```
 
-改成：
+可以把 failure 变成 deterministic input，精确测试 error translation、rollback 或 retry policy。随后再用更高 fidelity test 检查真实 storage boundary。
 
-```python
-db.transaction(lambda tx: tx.insert(key, value))
-```
+关键是别让“模拟 failure”本身制造 flaky nondeterminism。
 
-真实行为没变。
+## 7. Coverage 只能告诉你“走过”，不能告诉你“看见了什么”
 
-但：
-
-```python
-assert_called_once_with(...)
-```
-
-会失败。
-
-这意味着 test 在宣布：
-
-```text
-“调用 db.put” 是 contract
-```
-
-可真实用户可能根本不关心。
-
-这就是 **test-induced accidental contract**。
-
----
-
-# 12. 什么时候 interaction 本身就是 contract
-
-不要反过来变成 “interaction testing 永远错”。
-
-例如：
-
-```text
-付款系统必须恰好向支付网关发一次 charge request
-```
-
-这里 external interaction 本身就是 observable side effect。
-
-又如：
-
-```text
-审计系统必须写 audit event
-```
-
-或：
-
-```text
-收到 SIGTERM 时必须向 worker 发 cancellation signal
-```
-
-此时应该测试 interaction。
-
-但要测的是：
-
-```text
-external protocol obligation
-```
-
-不是内部 helper choreography。
-
----
-
-# 13. Test Double：你模拟掉了什么风险？
-
-常见 doubles：
-
-- fake：简化但可工作的替代实现；
-- stub：预设返回；
-- spy/mock：记录/验证 interaction。
-
-名字不是重点。
-
-重点是：
-
-> **把真实 dependency 换掉后，你失去了哪些 fidelity？**
-
-例如把 SQLite 换成 dict：
-
-你可能失去：
-
-- transaction semantics；
-- uniqueness constraints；
-- filesystem errors；
-- locking；
-- schema migration behavior；
-- SQL type coercion。
-
-如果这次 test 只关心：
-
-```text
-business rule
-```
-
-可以接受。
-
-如果这次风险恰恰是：
-
-```text
-transaction rollback
-```
-
-那这个 fake 就把最重要的东西 mock 掉了。
-
----
-
-# 14. Fidelity：测试世界离真实世界多远
-
-可以把 test 环境看成：
-
-```text
-fast / controlled / cheap
-        ↑
-        │
-        │ trade-off
-        ↓
-realistic / high-fidelity / expensive
-```
-
-典型：
-
-```text
-pure unit
-  ↓
-in-process fake
-  ↓
-real SQLite in temp dir
-  ↓
-real process
-  ↓
-real network service
-  ↓
-production-like deployment
-```
-
-没有一个位置永远正确。
-
-测试设计的问题是：
-
-> **针对这条风险，最低需要多高 fidelity？**
-
----
-
-# 15. Test Size 与 Test Scope 分开
-
-这是一个非常有用的二维模型。
-
-## Size
-
-测试运行成本/资源：
-
-```text
-small → medium → large
-```
-
-可能受：
-
-- process 数量；
-- thread；
-- disk I/O；
-- network；
-- external service；
-- runtime；
-- nondeterminism
-
-影响。
-
-## Scope
-
-test 想验证多大范围：
-
-```text
-narrow component
-  ↓
-multiple collaborating components
-  ↓
-whole-system behavior
-```
-
-不要直接把：
-
-```text
-small == unit
-large == e2e
-```
-
-当定义。
-
----
-
-# 16. 为什么不教“测试金字塔答案”
-
-你可能见过：
-
-```text
-        E2E
-      Integration
-    Unit Unit Unit
-```
-
-这个 intuition 有价值：
-
-```text
-越大通常越慢、越贵、越难诊断
-```
-
-但它不能告诉你：
-
-- SQLite integration 要不要很多？
-- compiler 项目应该怎么测？
-- distributed protocol 怎么测？
-- UI 组件必须 browser 才能验证怎么办？
-- hardware driver 怎么办？
-
-所以课程不用固定比例。
-
-统一问：
-
-```text
-1. risk 是什么？
-2. 哪个 boundary 会出错？
-3. 什么 evidence 能观察它？
-4. 最低需要什么 fidelity？
-5. feedback cost 可以多高？
-```
-
----
-
-# 17. Coverage：一个被严重误用的数字
-
-Line coverage 回答：
-
-> “哪些行至少执行过？”
-
-它没有回答：
-
-> “执行后有没有 assert meaningful outcome？”
-
-例如：
+考虑：
 
 ```python
 def authorize(user):
@@ -819,780 +265,179 @@ def authorize(user):
     return False
 ```
 
-测试：
+一个 test 只是调用 admin 和 non-admin 两条路径，却没有任何 meaningful assert，line/branch coverage 仍然可能很高。把 implementation 改成恒 `True`，suite 甚至可能继续绿。
 
-```python
-def test_authorize_runs():
-    authorize(User(is_admin=True))
-    authorize(User(is_admin=False))
-```
+所以 coverage 提供的是 **execution evidence**，不是 semantic verification。一个 percentage 不会告诉你 expected result 是否正确、important state partition 是否被覆盖、interaction 是否 fake 掉了真实 risk。
 
-可以覆盖 100%。
+这不等于 coverage 没用。它很适合作为 **gap detector / question generator**：某个 error branch 从未执行，就追问这个 failure 是否不可能，还是我们根本没设计 failure test。
 
-但没有 oracle。
+更多 coverage 维度可以减少 blind spot，不能替代 contract reasoning。把 coverage 设成 KPI 以后，还可能诱导人或 Agent 为“让红行变绿”增加没有 oracle 的浅测试。
 
-你可以把实现改成：
+## 8. Mutation / negative control：反过来测试“测试有没有牙齿”
 
-```python
-return True
-```
-
-test 仍通过。
-
-所以：
-
-```text
-coverage = execution evidence
-≠ semantic verification
-```
-
----
-
-# 18. Coverage 应该怎么用
-
-好的用途：
-
-> **帮助发现你甚至没执行过的区域，然后追问为什么。**
+如果 coverage 问“有没有经过这里”，mutation testing 更接近另一个问题：**这里出现一个小而 plausible 的 bug 时，suite 会不会叫？**
 
 例如：
-
-```text
-error branch 从未覆盖
-```
-
-你应该问：
-
-```text
-这个 failure 是不可能发生？
-还是我们没有 failure test？
-```
-
-coverage 是：
-
-```text
-gap detector
-```
-
-不是：
-
-```text
-quality KPI
-```
-
----
-
-# 19. Branch coverage 也不是充分条件
-
-即使每个 branch 都走过：
-
-```python
-if x > 0:
-    ...
-else:
-    ...
-```
-
-也可能遗漏：
-
-- x = 1 边界；
-- integer overflow；
-- interaction with state；
-- two branches 的组合；
-- sequencing；
-- concurrency。
-
-更多 coverage 指标可以减少 blind spot，不能替代 semantic reasoning。
-
----
-
-# 20. Mutation Testing：反过来问测试有没有牙齿
-
-传统 coverage：
-
-```text
-test 有没有经过这段 code？
-```
-
-mutation testing：
-
-```text
-如果这里出现一个小而 plausible 的 bug，test 会失败吗？
-```
-
-例如原始：
 
 ```python
 return retries < MAX_RETRIES
 ```
 
-mutant：
+临时改成：
 
 ```python
 return retries <= MAX_RETRIES
 ```
 
-如果 tests 全绿：
+如果所有 tests 仍绿，可能说明 boundary 没测、oracle 太弱，也可能说明这个 mutant 对 observable behavior 等价。mutation result 仍然需要解释。
+
+M03 lab 不依赖完整 mutation framework，而是提供六个语义明确的人工 mutants。TaskForge v0 的原始六个 tests 实际得到：
 
 ```text
-surviving mutant
+KILLED   finish_reverses_success_rule
+KILLED   cancel_reports_success_without_transition
+KILLED   claim_uses_lifo
+SURVIVED terminal_forgets_cancelled
+SURVIVED submit_drops_command
+SURVIVED list_jobs_hides_terminal
 ```
 
-这通常说明：
+三个 survivor 分别揭示三种 gap：terminal semantics 没覆盖 cancelled；submission 没有观察 command preservation；listing 只在“全是 active”这个 state partition 下被观察，所以“all jobs”和“only active jobs”对现有 oracle observationally equivalent。
 
-- boundary case 没测；
-- oracle 太弱；
-- 这行可能根本不影响 observable behavior；
-- 或 mutant 与原实现语义等价。
+这时最差的反应是直接为每个 mutant 写一个 implementation-specific assertion，只求 score 变成 100%。更好的问题是：**这个 mutant 破坏了哪条真实 contract？最小有信息量的 scenario 是什么？应该从哪个 boundary 观察？**
 
----
+例如 command survivor 可以从 public lookup 检查 input command 被完整保留；terminal survivor 可以走 `submit -> cancel -> terminal_count`，而不是默认直接测试 `Job.terminal` implementation；listing survivor 需要构造 terminal + active 的 mixed-state scenario。
 
-# 21. 不要追 Mutation Score
+Instructor reference 实际验证过：加入三条这样的 behavior-oriented tests 后，普通 suite 从 6 变成 9 个通过，提供的 6 个 mutants 全部被 kill。
 
-mutation testing 也可以被 Goodhart 化。
+这仍然不是 completeness proof。它只说明六个 selected fault hypotheses 现在被 suite 区分。read-authority leak、unknown-ID semantics、concurrent claim、persistence、crash、retry、remote protocol 等风险仍然没有由这六个 mutants 表达。
 
-危险做法：
+### Negative control 不需要正式 mutation framework
 
-```text
-mutation score 98% → 测试很好
-```
+对于一次具体 bugfix，你也可以临时制造一个与 claim 相反的小改动，确认 test 确实失败。例如你声称 test 能保护“nonzero exit code -> FAILED”，就临时让 production 把非零 exit 也写成 `SUCCEEDED`。test 应该红。
 
-问题：
+这种 negative control 回答的是：**这条 evidence channel 的 fail path 真的存在吗？**
 
-- equivalent mutants；
-- trivial mutants；
-- 工具无法表达真正重要 failure；
-- 为 kill mutant 写出无业务意义的 brittle test。
+Agent 生成 test 的成本越低，这个问题越重要。50 个绿色 tests 的数量可以瞬间生成，但 selected mutants、fail-before、property-based counterexample search 和 independent review 能更 scalable 地检查它们是否真正有 discrimination ability。
 
-所以我们只把它用作：
+## 9. Bugfix 最有价值的证据之一，是 fail-before -> pass-after
 
-> **“你说这组 tests 很强？那我放几个具体 bug 看看。”**
-
-这是 diagnostic，不是宗教。
-
----
-
-# 22. Regression Test：先证明 bug 真的存在
-
-修 bug 的理想 workflow：
-
-```text
-1. reproduce
-2. add regression test
-3. prove test fails on old code
-4. fix
-5. prove test passes
-```
-
-这里非常重要的是：
-
-```text
-fail-before
-```
-
-因为 Agent 很容易写出一个新 test，然后告诉你：
-
-> “测试通过，说明 bug 修复了。”
-
-但它可能从来没验证过 test 能重现 bug。
-
-这类 test 是最危险的“绿灯装饰”。
-
----
-
-# 23. Agent 任务必须要求 fail-before evidence
-
-对于 bug fix，可以明确要求：
-
-```text
-Before modifying production code:
-- add or identify a regression test that fails on the current revision;
-- show the failure and explain which contract it encodes.
-
-After the fix:
-- rerun exactly that test;
-- run the relevant broader suite;
-- show both results.
-```
-
-这个约束非常有效。
-
-它让 Agent 不能只交：
-
-```text
-patch + green CI
-```
-
-而要交：
-
-```text
-counterexample + corrected behavior
-```
-
----
-
-# 24. Property-Based Testing：让工具帮你找没想到的输入
-
-Example-based：
+现在回到 M02 的 representation exposure：
 
 ```python
-assert sort([3, 1, 2]) == [1, 2, 3]
+job = service.get(job_id)
+job.status = JobStatus.SUCCEEDED
 ```
 
-Property-based：
-
-```text
-对很多生成的 list：
-  output 有序
-  output multiset == input multiset
-```
-
-工具自动搜索反例。
-
-关键变化：
-
-```text
-examples → properties
-```
-
-这直接依赖 M01 的 contract/invariant 能力。
-
----
-
-# 25. 好 property 从哪里来
-
-常见来源：
-
-## 25.1 Round trip
-
-```text
-decode(encode(x)) == x
-```
-
-## 25.2 Reference implementation
-
-```text
-optimized(x) == slow_but_obviously_correct(x)
-```
-
-## 25.3 Invariant
-
-```text
-任何合法 job history 中：
-terminal → not queued/running
-```
-
-## 25.4 Conservation
-
-```text
-输入元素 multiset == 输出元素 multiset
-```
-
-## 25.5 Idempotence
-
-```text
-normalize(normalize(x)) == normalize(x)
-```
-
-## 25.6 Metamorphic relation
-
-你不一定知道绝对答案，但知道变换前后关系：
-
-```text
-f(permutation(x)) 与 f(x) 应满足某关系
-```
-
----
-
-# 26. Property-Based Testing 也可能制造假信心
-
-如果你定义 domain：
-
-```text
-status ∈ {QUEUED, RUNNING}
-```
-
-但真实系统还有：
-
-```text
-FAILED, CANCELLED, SUCCEEDED
-```
-
-那 generator 永远找不到 terminal bug。
-
-或者 property 写：
+如果我们已经把“read 不授予 authoritative mutation authority”确定为 M03 lab contract，那么 regression test 可以写：
 
 ```python
-assert len(result) >= 0
+job_id = service.submit("echo hi")
+observed = service.get(job_id)
+observed.status = JobStatus.SUCCEEDED
+
+assert service.get(job_id).status == JobStatus.QUEUED
 ```
 
-它几乎没信息量。
+在 v0 baseline 上，这个 test **必须先失败**。这一步非常关键：它把“我们认为这里有 bug”变成可执行 counterexample。
 
-所以：
+然后才比较 fix。例如一种最小 candidate 是 read API 返回 defensive snapshots；另一种是把 internal mutable entity 与 external immutable `JobView` 分开。两种都可能满足 property，但有不同 trade-off：change size、type clarity、nested mutable fields、performance、API compatibility、future persistence。
 
-> **自动生成 input 不等于自动生成正确 oracle。**
+注意 design-decision dependency：**M03 的 testing chapter 不应该因为写 regression test，就偷偷决定 immutable `JobView` 永远是唯一 architecture。** test 保护的是 isolation property；copy、frozen projection 或别的实现都应属于 legal implementation set，只要 contract 没要求更强的 identity/type semantics。
 
-稀缺的仍然是人定义的语义。
+实现 candidate fix 后，再保存三层 evidence：focused regression 由红变绿；相关 full suite 仍绿；mutation probe 没有因为修 ownership 而失去已有 discrimination。Instructor case study 已经在临时副本实际验证 defensive snapshot candidate 的 red -> green；它仍明确记录 shallow-copy limitation，而不是把小 diff 说成永久终局。
 
----
+这也是为什么“all tests pass”通常是太弱的 bugfix summary。它没有告诉 reviewer 新 test 是否曾经能抓住旧 bug，也没有说明哪个 contract 被保护。
 
-# 27. Shrinking 为什么重要
+## 10. Property-based testing：把“想 example”进一步推成“定义 domain + property”
 
-property-based tester 找到一个复杂 failure：
+Example-based test 最大的限制之一是：你通常只测试自己想得到的输入。Property-based testing 把工作重心改成：定义 input domain，定义对整个 domain 应成立的 property，让工具搜索反例，再把失败 example shrink 成更容易理解的 case。
 
-```text
-[100, -30, 7, 7, 2, ...]
-```
+TaskForge 一个合适的 property 是：对任意非零 integer exit code，running job finish 后都应 `FAILED`，并保存 exact exit code。这里 property 的 authority 来自 completion contract，generator domain 则必须明确排除 0。
 
-如果能 shrink 到：
+Hypothesis 可以帮你覆盖大量正/负非零值，并在失败时 shrink counterexample。但它没有自动解决 oracle problem。你完全可以写错 property，也可以把 generator domain 错误限制成 `{QUEUED, RUNNING}`，于是工具永远见不到 terminal-state bug。
 
-```text
-[0, 0]
-```
+所以 property-based testing 更像 **counterexample search engine**，不是自动证明。
 
-debugging value 大幅提高。
+常见 property 来源包括 round-trip、reference implementation equivalence、invariant、conservation、idempotence、metamorphic relation。它们仍然要回到 domain semantics：为什么这个 relation 应该成立？
 
-这提醒我们：测试 evidence 不只要能失败，还要有：
+Shrinking 也提醒我们 evidence 不只要“能失败”，还要有 diagnostic value。一个巨大的 generated case 如果最终能缩成最小反例，debugging 成本会明显下降；相反，一个 whole-system test 每次只报 `E2E failed`，即使 fidelity 很高，也可能很难定位哪条 contract 被破坏。
 
-```text
-diagnostic value
-```
+## 11. Test 本身也会制造 change amplification
 
-一个 test suite 每次失败都只说：
+如果 production refactor 只改了几行，真实 observable behavior 没变，却有几十个 tests 因 private helper、exact call sequence、internal serialization 或 snapshot noise 全部失败，那么 test suite 已经成为 architecture coupling 的一部分。
 
-```text
-E2E failed
-```
+Google 的 unit-testing materials 把 maintainability 放得很重，因为 tests 也是长期资产。一个非常好用的 review question 是：
 
-与一个精确指出 contract boundary 的失败，工程价值完全不同。
+> 如果这条 test 因未来 refactor 失败，真实 user/client 也应该认为 contract 被破坏吗？
 
----
+答案不必永远是 yes——internal component 可以有自己的 contract——但如果长期总是 no，就值得怀疑 test 绑错了 boundary。
 
-# 28. Flaky Test：错误的证据通道
+### DAMP 与 DRY：测试有时宁可重复一点
 
-flaky test：
-
-```text
-代码不变
-有时 pass
-有时 fail
-```
-
-它的问题不只是烦。
-
-更深层是：
-
-```text
-fail signal 不再可信
-```
-
-工程师最终会学会：
-
-```text
-“再跑一次就行”
-```
-
-于是测试系统失去 authority。
-
-这和 distributed system 里的 unreliable signal 很像。
-
-测试基础设施本身也需要可信度。
-
----
-
-# 29. 常见 flaky 来源
-
-- wall clock；
-- sleep-based synchronization；
-- real network；
-- shared global state；
-- test order；
-- random seed；
-- filesystem race；
-- process cleanup；
-- eventual consistency；
-- resource exhaustion。
-
-解决方法不是：
-
-```text
-retry 5 次
-```
-
-而首先是：
-
-> **找出 nondeterminism 属于 SUT contract，还是 test harness 泄漏。**
-
-M07 会专门处理 concurrency/lifecycle testing。
-
----
-
-# 30. Tests 也会成为 change amplification 来源
-
-production refactor 5 行：
-
-```text
-30 个 tests 失败
-```
-
-如果 user-visible behavior 没变，这通常是信号：
-
-```text
-tests know too much
-```
-
-常见原因：
-
-- direct test of private helper；
-- exact internal call sequence；
-- huge shared fixture；
-- snapshot of irrelevant fields；
-- mock every collaborator；
-- hardcoded internal serialization；
-- constructor plumbing copied everywhere。
-
-测试不是天然“好债务”。
-
-烂测试一样是 technical debt。
-
----
-
-# 31. DAMP vs DRY：测试为什么可以重复一点
-
-production code 很强调去掉 duplicated knowledge。
-
-但 tests 的第一任务之一是让 reader 快速看到：
-
-```text
-given / when / then
-```
-
-如果为了 DRY，把 test 写成：
+production code 里 duplicated knowledge 往往危险；test code 的另一个目标却是让 reviewer 不跳六层 helper 就能看懂 scenario。
 
 ```python
 run_case(CASE_17, MODE_B, flags=DEFAULT_EXCEPT_FOO)
 ```
 
-你得跳 6 个 helper 才知道发生什么，维护成本可能更高。
+可能非常 DRY，却把 Given/When/Then 中真正重要的区别藏起来。适当 duplication 可以换来 clarity。问题不是“test 永远不 DRY”，而是 abstraction 删除的是 irrelevant setup，还是删除了 scenario 的语义线索。
 
-所以 test abstraction 要问：
+### Snapshot / golden test 的更新本质上也是 contract review
 
-> **它是在去掉 irrelevant setup，还是把 scenario 意图藏起来了？**
+compiler output、CLI report、serialization、复杂 UI tree 这类大 observable surface 很适合 snapshot/golden test。风险是形成“snapshot changed → approve new snapshot → green”的机械循环。
 
-适当 duplication 可以换 clarity。
+如果 reviewer 没理解 diff，test 只是记录了新 behavior，并没有判断它是否正确。因此 golden update 不是机械操作，而是一次对 expected behavior authority 的 review。
 
----
+当前 M03 source audit 没有选一份单一材料来建立“snapshot 必须/禁止”的规则，因此这里只保留适用场景与 brittleness limitation，不把它升级成 universal policy。
 
-# 32. Snapshot / Golden Test：什么时候有价值
+## 12. Flaky test 会破坏 evidence channel 的可信度
 
-适合：
+flaky 的深层问题不是“偶尔烦人”，而是同一 code revision 有时 pass、有时 fail，导致 fail signal 不再可信。团队最终学会“再跑一次”，测试系统就逐渐失去作为 evidence channel 的 authority。
 
-- compiler pretty-printer output；
-- generated UI tree；
-- serialization format；
-- complex textual report；
-- CLI output。
+常见来源包括 wall clock、sleep-based synchronization、real network、shared mutable global、test order、random seed、filesystem race、process cleanup、eventual consistency 和 resource exhaustion。
 
-它们可以用低成本保护 large observable surface。
+修复时先问 nondeterminism 属于哪里。如果系统 contract 本来就允许 eventual completion，test 需要观察正确的 temporal condition；如果只是 harness 用 `sleep(0.1)` 猜 timing，就应该修 harness。简单 retry 五次可能降低红灯频率，却没有恢复证据可信度。
 
-但风险：
+M07 会把 concurrency/lifecycle 的 deterministic testing 和 failure timing 展开；M03 只先建立一个原则：**signal quality 本身就是 test design 的一部分。**
 
-```text
-expected snapshot changed
-→ update snapshot
-→ test green
-```
+### Test 的寿命应该和 contract 匹配
 
-如果 reviewer 没有真正理解 diff，snapshot 只是在记录新行为，不是在验证正确行为。
+稳定 public behavior 的 test 可能活很多年；一次 migration helper 的 test 可能只需要覆盖一个 release；exploratory probe 甚至不一定应该长期保留。删除已经失去 contract 对象的 test 也是维护工作。
 
-所以 golden update 本质上是一种 **contract review**。
+因此“tests 越多越安全”并不成立。大量 brittle、过期或低信号 tests 会让工程师和 Agent 为了继续绿灯而保留坏 architecture，或在每次合法 change 时制造大量 mechanical churn。
 
-不能自动 approve。
+## 13. 把 feedback speed 与 fidelity 放进同一张成本图
 
----
+快 test 很重要。2 秒的 suite 会被频繁运行，45 分钟的 suite 会促使开发者 batch changes、少跑、甚至跳过，从而降低 feedback timeliness 和 failure localization。
 
-# 33. Testing Failure，而不只 Testing Happy Path
+但不能为了快，把 DB、filesystem、RPC、clock、serialization 全部 mock 掉，最后只剩一个 0.1 秒的虚拟世界。speed 和 fidelity 不是二选一，而是针对不同 risk 组合设计。
 
-真实系统最危险的 behaviors 常常是：
+可以用一个不需要数字化的粗模型提醒自己：test value 受 risk mitigated、detection probability、feedback timeliness、diagnostic value 提升，也会被 execution cost、maintenance cost 和 false-signal cost拉低。
 
-- dependency timeout；
-- disk full；
-- permission denied；
-- process killed；
-- duplicate request；
-- retry after partial side effect；
-- malformed input；
-- stale version；
-- network partition。
+这不是要求计算分数。它只是在阻止“更大、更真实、更多 tests”被误解成单调更好。
 
-如果你的 test portfolio 全是：
+例如未来 TaskForge 加 SQLite 后，一个合理 portfolio 可能同时有：
 
-```text
-正常输入 → 正常输出
-```
+- narrow/fast tests 保护 lifecycle 与 policy；
+- 真实 SQLite temp DB tests 保护 schema、transaction、serialization、migration；
+- process-level tests 保护 startup/shutdown、signal、crash recovery；
+- 少量 end-to-end scenarios 保护 `submit -> persist -> execute -> observe terminal result`。
 
-它只覆盖了世界最配合你的那部分。
+每一层存在的理由是它覆盖不同 risk，不是 pyramid 要求某个固定比例。
 
----
+## 14. Tests 也会逼你承认 specification 还没决定
 
-# 34. Failure injection 的设计原则
-
-不要为了制造 failure 而把测试变成 flaky。
-
-优先：
-
-```text
-controlled failure seam
-```
-
-例如：
-
-```python
-class FailingStore:
-    def save(self, ...):
-        raise DiskFull(...)
-```
-
-这能稳定验证：
-
-```text
-error translation / retry / rollback
-```
-
-然后再用高-fidelity integration test 验证真实 storage boundary。
-
----
-
-# 35. Test Oracle 从哪里来
-
-这是 testing 最深的问题之一。
-
-oracle 可能来自：
-
-1. explicit spec；
-2. invariant；
-3. previous compatible behavior；
-4. reference implementation；
-5. external standard/protocol；
-6. product requirement；
-7. domain expert judgment。
-
-最危险的是：
-
-```text
-oracle = 当前 implementation 输出
-```
-
-这会产生 tautological test。
-
----
-
-# 36. Agent 特别容易写出 tautological test
-
-例如 production：
-
-```python
-def normalize_name(name):
-    return name.strip().lower()
-```
-
-Agent 写 test：
-
-```python
-expected = name.strip().lower()
-assert normalize_name(name) == expected
-```
-
-如果 implementation 里的 `.lower()` 本来就是 bug，test 会复制同一个 bug。
-
-oracle 不独立。
-
-好的 test 应该回到 contract：
-
-```text
-“用户名是否 case-sensitive？”
-```
-
-而不是抄实现。
-
----
-
-# 37. Agent 测试的七种典型失败
-
-## 37.1 Mirror implementation
-
-把 production algorithm 在 test 里重写一遍。
-
-## 37.2 Mock everything
-
-所有真实 boundary 都被 fake 掉，最危险的 integration bug 永远不可见。
-
-## 37.3 Assert existence, not semantics
-
-例如：
-
-```python
-assert result is not None
-```
-
-但真正 contract 是复杂内容。
-
-## 37.4 Coverage chasing
-
-新增大量浅测试，只为把红色 coverage 行变绿。
-
-## 37.5 Update tests to match patch
-
-production 和 expected output 一起改，没有独立判断 contract 是否变了。
-
-## 37.6 No fail-before evidence
-
-bugfix test 从未证明能抓 bug。
-
-## 37.7 Overfit hidden implementation
-
-测试 private helper、exact calls、内部字段、日志顺序。
-
----
-
-# 38. 给 Agent 的 Testing Task 应该怎么写
-
-差的 prompt：
-
-```text
-给这个功能补充测试。
-```
-
-更好的 engineering spec：
-
-```text
-Goal:
-Protect the documented cancellation contract.
-
-Behavior partitions:
-- queued job: cancellation succeeds and becomes CANCELLED;
-- running job: cancellation is rejected and state remains RUNNING;
-- terminal job: cancellation is rejected and terminal state is unchanged;
-- unknown job id: preserve current error semantics.
-
-Boundary constraints:
-- test through service/worker public behavior;
-- do not assert internal dict layout or helper call sequence;
-- do not mock in-process TaskForge modules unless needed to inject a failure.
-
-Evidence:
-- explain why each case represents a distinct partition;
-- for any regression bug, show fail-before and pass-after;
-- identify at least one meaningful production mutant the suite should kill;
-- run the focused tests and full suite.
-```
-
-这已经不是“写 tests”。
-
-而是把 test design 本身 specification 化。
-
----
-
-# 39. Test Review：不要只看 test 有没有 assert
-
-review 一个 test PR 时问：
-
-## Contract
-
-- 这个 test 对应哪条 behavior / invariant？
-- 这个 behavior 是真实 contract，还是 implementation accident？
-
-## Oracle
-
-- expected result 从哪里来？
-- 是否独立于 production implementation？
-
-## Partition
-
-- 为什么选这些 case？
-- boundary 呢？
-- failure state 呢？
-
-## Observability
-
-- test 从 client 应该看到的 boundary 观察吗？
-- 是否偷看内部 representation？
-
-## Fidelity
-
-- mock/fake 掉了什么？
-- 被 mock 掉的东西恰好是不是风险来源？
-
-## Maintenance
-
-- harmless refactor 会不会炸一堆 tests？
-- fixture/helper 是否把 scenario 隐藏了？
-
-## Evidence
-
-- bugfix 是否 fail-before？
-- 是否有 plausible mutant 可以偷偷活下来？
-
----
-
-# 40. TaskForge：重新审视现有 6 个 tests
-
-现在看 baseline：
-
-```python
-assert first == "job-1"
-assert second == "job-2"
-```
-
-问题：
-
-> **“ID 精确使用 `job-N` 格式”是 contract 吗？还是 accidental representation？**
-
-如果 client 对 job id 只要求 opaque + unique：
-
-```text
-UUID migration
-```
-
-会让这个 test 失败，但可能完全不应该。
-
-这就是测试在悄悄定义 API。
-
----
-
-# 41. 再看一个 test
+TaskForge 里有一条原 test：
 
 ```python
 claimed = worker.claim_next()
 assert claimed.id == first
 ```
 
-它声明：
+M03 lab 明确把 FIFO 当作 v0 contract，因此这条 assertion 合理。如果产品从未承诺 scheduling order，同一行就可能只是把 dict insertion order 固化成 public promise。
 
-```text
-queue 是 FIFO
-```
-
-这可能是合理 contract。
-
-但如果产品从未承诺 scheduling order，那么它也可能是 implementation accident。
-
-你必须先决定：
-
-```text
-TaskForge scheduler semantics 是什么？
-```
-
-再决定 test。
-
-testing 强迫你暴露模糊 spec。
-
-这是好事。
-
----
-
-# 42. 测试设计经常是在做需求澄清
-
-当你不知道下面哪个 test 正确：
+再看 unknown ID：
 
 ```python
 assert cancel(unknown_id) is False
@@ -1605,561 +450,183 @@ with raises(KeyError):
     cancel(unknown_id)
 ```
 
-问题不是 pytest。
+如果我们不知道哪个正确，问题不在 pytest，而在 error contract 尚未定义。testing 的阻力经常暴露 specification gap；test 是第一个严格 client，它会逼你把一句“应该差不多这样”变成 observable decision。
 
-问题是：
+这也是为什么 characterization test 需要单独理解。在 legacy code 中，可能还不知道 current behavior 是 contract、bug 还是 compatibility quirk。先冻结一部分 observable behavior 可以帮助安全修改，但它不是宣布“现状永远正确”。M06 会专门处理如何从 characterization 继续调查 authority。
 
-```text
-error contract 尚未定义
-```
+## 15. 给 Agent 的 Testing Task，先给 claim space，不要只给“补测试”
 
-所以写 tests 的阻力经常暴露 API design 问题。
+Agent 特别容易产出看起来很完整的 test patch：每个 method 一个 test、所有 dependency 都 mock、expected 复制 implementation、参数化很多 cases、coverage 变高，最后总结 “all tests pass”。这些不一定是模型能力问题；模糊任务本来就没有告诉它什么 evidence 才有价值。
 
-这也是为什么 tests 是很好的第一个 client。
-
----
-
-# 43. 一组更完整的 TaskForge behavior table
-
-示例：
-
-| Context | Action | Expected claim |
-|---|---|---|
-| no jobs | submit | new observable queued job exists |
-| multiple queued | claim | one eligible job becomes running |
-| running + exit 0 | finish | succeeded + exit_code 0 |
-| running + nonzero | finish | failed + exact exit code |
-| queued | cancel | cancelled |
-| running | cancel | rejected, state unchanged |
-| terminal | cancel | rejected, state unchanged |
-| caller reads job | mutate returned value | **must first decide whether read result is snapshot or authority-bearing handle** |
-
-最后一行故意不直接给答案。
-
-因为 test 应该编码 design decision，而不是替你发明 decision。
-
----
-
-# 44. 什么时候应该先写 Characterization Test
-
-legacy code 里，你可能根本不知道“正确 spec”。
-
-但你需要先安全修改。
-
-这时可以写：
+一个更好的任务 artifact 可以保持结构化，因为它本来就是执行协议：
 
 ```text
-characterization test
+Goal
+- protect the documented behavior, not the current decomposition
+
+Contract / risk
+- list the behavior or invariant each test should protect
+- identify ambiguous semantics before choosing an oracle
+
+Partitions
+- normal, boundary, lifecycle, failure and repetition states that change outcomes
+- do not expand irrelevant Cartesian products
+
+Boundary
+- observe through the intended client boundary
+- do not freeze internal dict/layout/helper choreography unless that is the explicit contract
+
+Fidelity
+- explain every fake/mock and which real risks it removes
+- keep real the boundary whose failure semantics are under test
+
+Evidence strength
+- for a bugfix, show fail-before before modifying production code
+- after the fix, rerun the focused test and relevant broader suite
+- use at least one meaningful mutant/negative control when useful
+
+Limits
+- state what the tests still do not prove
 ```
 
-目标不是说：
+这个 artifact 的价值不在 prompt 更长，而在于它把 oracle authority、behavior partitions、boundary、fidelity 和 completion evidence 先变成可 review 的对象。
 
-```text
-当前行为永远正确
-```
+M03 lab 还会让你做 vague prompt 与 engineering-spec 两轮对照。评分不奖励“多生成了多少 tests”，而看 meaningful behaviors、implementation coupling、mutants、false contracts、review time 和 remaining-risk analysis。
 
-而是：
+### Agent-generated test 的独立 review
 
-```text
-先把当前 observable behavior 冻结出来，避免重构时无意改变未知语义
-```
+无论 test 是人写还是 Agent 写，reviewer 都应重新问：
 
-然后逐项调查：
+- expected 是否从 production algorithm 抄来？
+- assertion 是否只证明 result 存在，而没证明 semantics？
+- dependency 是否全被 mock，恰好吞掉真正 risk？
+- 是否为了 coverage/mutation score 加无业务意义 case？
+- production 与 expected 是否一起改，却没有独立 contract decision？
+- regression 是否真的在旧 revision 上失败过？
+- 是否测试了 private decomposition 或 accidental representation？
 
-- 哪些是 contract；
-- 哪些是 bug；
-- 哪些是 compatibility quirk。
+“Agent 写的”本身不应该成为 finding；问题必须落在具体 contract、oracle、boundary 或 evidence defect 上。M10/M12 会继续把这个 review discipline 扩展到完整 change workflow。
 
-M06 会深入。
+## 16. 一个可复用的测试设计记录
 
----
-
-# 45. Test 的寿命应该和 Contract 匹配
-
-一个 stable API behavior：
-
-```text
-测试可能活 10 年
-```
-
-一个内部 migration helper：
-
-```text
-测试可能只活一个 release
-```
-
-一个 exploratory probe：
-
-```text
-可能根本不应该长期保留
-```
-
-不是所有 test 都必须永生。
-
-删除过期 test 也是工程工作。
-
----
-
-# 46. Testing 的成本模型
-
-一个 test 的价值，不只是 bug-catching probability。
-
-粗略可以看：
-
-```text
-value
-≈ risk mitigated
-× detection probability
-× feedback timeliness
-× diagnostic value
--
-execution cost
--
-maintenance cost
--
-false-signal cost
-```
-
-不用计算数字。
-
-但这个模型提醒你：
-
-```text
-更大、更真实、更多
-```
-
-都不是单调更好。
-
----
-
-# 47. 为什么 fast feedback 是设计目标
-
-如果 test suite：
-
-```text
-2 秒
-```
-
-开发者会频繁运行。
-
-如果：
-
-```text
-45 分钟
-```
-
-他们会：
-
-- 少跑；
-- batch change；
-- failure 更难定位；
-- 偷偷跳过。
-
-测试速度不是 cosmetic performance。
-
-它改变整个 engineering feedback loop。
-
----
-
-# 48. 但不要为了快把风险 mock 掉
-
-极端：
-
-```text
-all tests = 0.1 sec
-```
-
-因为：
-
-```text
-DB mocked
-filesystem mocked
-RPC mocked
-clock mocked
-serialization mocked
-```
-
-你可能得到非常快的虚拟世界。
-
-真正 production boundary 从未一起运行。
-
-所以：
-
-```text
-speed 与 fidelity 必须组合设计
-```
-
-不是二选一。
-
----
-
-# 49. 一个 risk-based test portfolio
-
-假设 TaskForge 后续加入 SQLite。
-
-你可能设计：
-
-## Narrow + fast
-
-验证：
-
-- lifecycle rules；
-- scheduling decisions；
-- error mapping。
-
-## Storage integration
-
-真实 SQLite temp database：
-
-- schema constraints；
-- transaction behavior；
-- serialization；
-- migration。
-
-## Process-level
-
-真实 worker process：
-
-- startup/shutdown；
-- signal；
-- crash recovery。
-
-## End-to-end
-
-少量：
-
-```text
-submit → persist → execute → observe terminal result
-```
-
-这不是因为 pyramid 规定。
-
-而是每一层覆盖不同 risk。
-
----
-
-# 50. 一个非常实用的测试设计模板
-
-面对 feature/bug，写：
+面对 feature 或 bug，不需要每次写长文，但下面这张表能迫使关键 reasoning 显式化：
 
 ```text
 Behavior / invariant:
-
 Risk if broken:
-
+Oracle source / authority:
 Observable boundary:
-
-Input/state partitions:
-
+Input + state partitions:
 Boundary cases:
-
-Failure cases:
-
-Oracle source:
-
+Failure / repetition / temporal cases:
 Minimum required fidelity:
-
-What may be mocked/faked:
-
+What may be faked:
 What must remain real:
-
 Regression fail-before evidence:
-
 Meaningful mutant / negative control:
-
 Expected runtime / determinism:
+Remaining risks:
 ```
 
-这份模板远比：
+这里最后一行不能省。一个 test suite 无论多强，都只能对它表达过、观察得到的风险提供 evidence。
+
+这也给出一套更紧凑的 review 顺序：
+
+### Claim / oracle
+
+- 每个 test 保护哪条 behavior 或 invariant？
+- expected 的 authority 从哪里来？
+- 有没有 implementation mirror？
+
+### Partition / boundary
+
+- 哪些 state、boundary、failure、repetition distinction 会改变 outcome？
+- test 从真正 client boundary 观察，还是偷看 internal representation？
+- 某个 state model 若只是 projection，scope 是否明确？
+
+### Fidelity / maintainability
+
+- doubles 移除了哪些现实风险？
+- harmless refactor 会不会产生大量无意义 failure？
+- helper/fixture 是减少 noise，还是隐藏 scenario？
+
+### Strength / signal
+
+- bugfix 是否有 fail-before？
+- plausible wrong implementation 能否偷偷通过？
+- test deterministic 吗？failure 有诊断价值吗？
+
+这比“有多少 unit/integration tests、coverage 几成”更接近工程判断。
+
+## 17. TaskForge Lab：把一条证据链实际跑出来
+
+完整实验在 [`../labs/03-testing-evidence.md`](../labs/03-testing-evidence.md)。它不是让你“把 6 tests 补到 20 个”，而是让你把一条 reasoning chain 跑完整：
 
 ```text
-“unit tests + integration tests”
+明确 v0 contract
+  -> audit 当前 tests 实际 claims
+  -> 设计 behavior partitions
+  -> 运行 selected mutants
+  -> 解释 survivor 为什么 observationally equivalent
+  -> 用 behavior-oriented tests kill meaningful gaps
+  -> 审查 ID overspecification
+  -> 为 representation exposure 建立 fail-before
+  -> 比较至少两个 fix candidate
+  -> pass-after + full-suite + mutation evidence
+  -> 列 remaining risks
 ```
 
-有信息量。
+Instructor reference 在 [`../case-studies/m03/instructor-analysis.md`](../case-studies/m03/instructor-analysis.md)。它不是“标准答案 dump”，而是用真实 mutation output、red/green reproduction 和两个 ownership fix candidate 校验 lab 本身是否 grounded。
 
----
+特别注意三个边界：
 
-# 51. Negative Control：测试测试本身
+1. `6/6 supplied mutants killed` 只覆盖这六个 fault hypotheses，不是 mutation completeness proof；
+2. defensive snapshot 是当前 toy system 的一个小 candidate，必须保留 shallow-copy 等 limitation，不升级成唯一 architecture；
+3. M03 lab 后半段采用的 opaque-ID contract 是本次 testing exercise 的明确 authority，不 retroactively 声称 M02 那个单变量 refactor 当时“做错了”，也不替未来产品 contract 做最终决定。
 
-科学实验会用 control。
+## 18. 与后续章节的关系：M03 是全课的 evidence language
 
-software testing 也应该有类似思维。
+M01 训练“什么 behavior / invariant 应成立”；M02 训练“哪个 boundary 隐藏什么、谁拥有 state”；M03 则训练“怎样用 executable evidence 验证这些 contract，同时不把内部 implementation 错误升级成 contract”。三章其实是一条连续链。
 
-如果你声称 test 能保护：
+后面每一章都会复用它：
 
-```text
-nonzero exit code → FAILED
-```
+- M04 把 error、unknown outcome、idempotency 变成 behavior partitions；
+- M05 问 behavior-preserving refactor 后哪些 tests 理应保持；
+- M06 用 characterization 建立 legacy feedback；
+- M07 把 interleaving、lifecycle、cancellation、crash timing 变成 evidence；
+- M08 做 old/new version compatibility tests；
+- M11 把 pre-production tests 与 production telemetry/evidence 放在一起；
+- M12 要求 Agent 的 test/evidence 同样接受独立 review。
 
-那么临时把 production 改成：
+尤其是 temporal consistency：如果某个 contract 明确区分 acceptance、completion、recovery，tests 也必须分别验证对应 phase。不能因为 downstream completion 失败，就把此前已经按 contract 成功的 acceptance test 改写成“其实失败”；也不能用只观察最终 terminal state 的 test 冒充 acceptance durability evidence。M01 已经用 cancellation candidate 展示过这一点，后续章节会继续复用。
 
-```python
-job.status = SUCCEEDED
-```
+到这里，testing 可以压缩成一句不太像口号、但足够可操作的话：
 
-test 应该失败。
+> **测试是一组可执行的工程声明。好的测试让我们关心的错误变化更难悄悄通过，同时尽量不给合法变化制造 accidental contract。**
 
-这就是一种 manual mutation / negative control。
-
-它回答：
-
-> **这个 test 的 fail path 真的存在吗？**
-
----
-
-# 52. 为什么 Agent 时代更应该用 negative control
-
-因为生成 tests 的成本几乎降为零。
-
-Agent 可以瞬间生成：
-
-```text
-50 tests
-```
-
-人不可能逐个深读。
-
-所以需要更 scalable 的质量检查：
-
-```text
-selected mutants
-property-based search
-fail-before
-coverage gaps
-independent review
-```
-
-不是相信数量。
-
----
-
-# 53. “测试越多越安全”为什么可能是错的
-
-大量 brittle tests 会让：
-
-```text
-每次 refactor 都有大量噪声
-```
-
-结果：
-
-- 工程师不敢改；
-- Agent 为了过测试保持坏 architecture；
-- 每次真实 change 顺便 update 大量 expected values；
-- reviewer 无法区分 semantic change 与 mechanical churn。
-
-所以测试也需要设计成：
-
-> **保护 contract，而不是冻结 architecture。**
-
----
-
-# 54. M03 与前两章的关系
-
-M01：
-
-```text
-什么 behavior / invariant 应成立？
-```
-
-M02：
-
-```text
-哪个 boundary 应隐藏什么？谁拥有 state？
-```
-
-M03：
-
-```text
-怎样建立 executable evidence，验证这些 contract，又不把内部实现误升级成 contract？
-```
-
-三章其实是一件事。
-
----
-
-# 55. M03 与后续章节的关系
-
-M04 API/error：
-
-```text
-error semantics 如何变成 behavior partitions
-```
-
-M05 Refactoring：
-
-```text
-哪些 tests 应该在 behavior-preserving change 后保持不变
-```
-
-M06 Legacy：
-
-```text
-characterization tests
-```
-
-M07 Concurrency：
-
-```text
-interleaving / lifecycle / cancellation tests
-```
-
-M08 Compatibility：
-
-```text
-old-client/new-server contract tests
-```
-
-M11 Production：
-
-```text
-测试 evidence 与 runtime evidence 如何互补
-```
-
-所以 M03 不是独立的 testing chapter。
-
-它是全课的 evidence language。
-
----
-
-# 56. Review Checklist
-
-看到测试变更时，不要先数 tests。
-
-问：
-
-### Claim
-
-- 每个 test 在保护什么 behavior？
-- 这个 behavior 有来源吗？
-
-### Oracle
-
-- expected value 从哪里来？
-- 是否只是复制 implementation？
-
-### Partitions
-
-- 正常/边界/失败/状态转换是否有系统划分？
-
-### Boundary
-
-- 是否从真实 client boundary 观察？
-- 是否冻结内部 representation？
-
-### Fidelity
-
-- doubles 删除了哪些风险？
-- 是否需要更高层验证？
-
-### Maintainability
-
-- harmless refactor 是否会导致无意义 failure？
-- test 是否自解释？
-
-### Strength
-
-- regression 是否 fail-before？
-- plausible bug 是否能被发现？
-
-### Signal quality
-
-- deterministic 吗？
-- failure 能定位问题吗？
-
----
-
-# 57. Agent Review Checklist
-
-Agent 交测试时额外问：
-
-- 有没有测试只是镜像 production implementation？
-- 有没有所有 dependency 都 mock 掉？
-- 有没有 assert 过弱？
-- 有没有为了 coverage 加无语义测试？
-- 有没有 production 和 expected 一起改？
-- bugfix 有没有旧版本失败证据？
-- 有没有偷偷测试 private helper？
-- 有没有改现有 tests 来适配本应是 regression 的行为？
-- 有没有一句“all tests pass”但没说明 tests 实际证明什么？
-
----
-
-# 58. 本章 Lab
-
-完成：
-
-[`../labs/03-testing-evidence.md`](../labs/03-testing-evidence.md)
-
-你会做五件事：
-
-1. 审查现有 6 个 TaskForge tests；
-2. 从 contract 设计 behavior partitions；
-3. 用人工 mutants 检验 test suite 是否真的有牙齿；
-4. 比较 behavior-oriented test 与 brittle implementation test；
-5. 让 Agent 补测试，然后独立检查 oracle 和 fidelity。
-
-不要先看 instructor reference：
-
-[`../case-studies/m03/instructor-analysis.md`](../case-studies/m03/instructor-analysis.md)
-
----
-
-# 59. 可选原始材料
-
-本章自包含。想交叉检查来源时再读：
-
-- MIT 6.102 Testing: https://web.mit.edu/6.102/www/sp26/classes/02-testing/
-- Software Engineering at Google — Testing Overview: https://abseil.io/resources/swe-book/html/ch11.html
-- Unit Testing: https://abseil.io/resources/swe-book/html/ch12.html
-- Test Doubles: https://abseil.io/resources/swe-book/html/ch13.html
-- Larger Testing: https://abseil.io/resources/swe-book/html/ch14.html
-- Hypothesis: https://hypothesis.readthedocs.io/en/latest/tutorial/introduction.html
-- mutmut: https://mutmut.readthedocs.io/en/latest/
-
-详细来源审计：
-
-[`../reading-notes/m03-source-audit.md`](../reading-notes/m03-source-audit.md)
-
----
-
-# 60. 本章最终要记住什么
-
-不是：
-
-```text
-unit test > integration test
-```
-
-不是：
-
-```text
-coverage ≥ 80%
-```
-
-不是：
-
-```text
-TDD / mocking / property testing / mutation testing
-```
-
-而是：
-
-> **测试是一组可执行的工程声明。**
->
-> **好的测试让错误的未来变化更难悄悄通过，同时尽量不阻碍正确的未来变化。**
-
-最终你的测试设计应该能回答：
+真正完成 test design 时，你应该能回答：
 
 ```text
 What risk?
 What claim?
-What oracle?
+What oracle authority?
+What state/behavior partition?
 What boundary?
 What fidelity?
-What evidence?
+What negative control?
+What evidence phase?
 What does this still not prove?
 ```
 
-只要最后一个问题还问得出来，你就还没有把 testing 变成宗教。
+只要最后一个问题仍然问得出来，testing 就还没有被变成宗教。
+
+### 可选原始材料与来源边界
+
+本章 source mapping 与限制见 [`../reading-notes/m03-source-audit.md`](../reading-notes/m03-source-audit.md)。主干使用：
+
+- MIT 6.102 Testing：systematic partitioning、boundary values、suite correctness/thoroughness/size，以及 testing 只是 validation 方法之一；
+- *Software Engineering at Google* Testing Overview / Unit Testing / Test Doubles / Larger Testing：change enablement、behavior-oriented tests、size vs scope、coverage limitation、double fidelity 与 risk-based larger testing；
+- Hypothesis 官方文档：domain/property/counterexample search/shrinking；
+- mutmut 官方文档只校准 mutation-testing workflow 与工具 limitation，主实验仍使用课程自己挑选、语义明确的人工 mutants。
+
+这些来源都不支持把 strict TDD、固定 test-pyramid 比例、100% coverage、mock-everything/mock-nothing 或 mutation percentage 写成 universal rule。Google 的经验来自大型统一基础设施；课程采用的是 reasoning，不复制其组织 policy。Hypothesis 也被当作 property-based testing 的强力补充，而不是自动证明或所有 example tests 的 replacement。
