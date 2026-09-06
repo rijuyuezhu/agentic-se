@@ -134,7 +134,8 @@ Editorial rewrite 默认没有权限改变技术主张。每章重写前先读�
 - condition / limitation 是否仍在；
 - 原本明确的 non-goal 是否被故事吞掉；
 - 术语是否被无意改义；
-- lab contract、链接、后续模块衔接是否仍成立。
+- lab contract、链接、后续模块衔接是否仍成立；
+- 如果 rewrite 引入了新的 contract-relevant state dimension，后续 behavior table、representation example、state machine、test partition 等 artifact 是否一致携带它；若某个 artifact 只建模其中一部分，是否明确声明自己的 projection / scope，而不是让读者误以为它是完整模型。
 
 ### Pass B — cold-reader flow
 

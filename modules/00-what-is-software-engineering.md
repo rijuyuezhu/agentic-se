@@ -43,7 +43,7 @@ if job.cancelled:
 
 接着再改一个条件：`cancel` 和 worker 从 QUEUED 切到 RUNNING 可能同时发生。现在不能只问“哪条 if 先执行”，还要问系统允许哪些 transition、谁拥有决定权，以及 caller 最终应该观察到什么。
 
-沿用这个候选设计，再加入 crash/restart。client 已经收到“取消成功”，daemon 随后崩溃。如果 cancellation request 只写在内存里，重启后它消失了。那之前的 success 到底承诺了什么？
+再加入 crash/restart。client 已经收到“取消成功”，daemon 随后崩溃。如果 cancellation request 只写在内存里，重启后它消失了。那之前的 success 到底承诺了什么？
 
 再把 worker 放到另一台机器上。再允许 client 因 timeout 重试请求。再考虑旧 client 不认识这个候选设计新增的状态、数据库里已有旧 row、外部 command 已经产生不可撤销 side effect。原本的“一行功能”开始要求我们回答一组彼此关联的问题：
 
@@ -76,7 +76,7 @@ John Ousterhout 在 *A Philosophy of Software Design* 中用 change amplificatio
 
 ### 2.1 Change amplification：一个概念为什么要改这么多地方
 
-在这个候选设计下，如果每个 caller 都自己维护一份“哪些 job state 可以 cancel”的集合，那么新增 `CANCELLING` 时，你必须找到所有复制过这条规则的位置。漏掉任何一个，系统就出现语义分叉。
+如果每个 caller 都自己维护一份“哪些 job state 可以 cancel”的集合，那么新增 `CANCELLING` 时，你必须找到所有复制过这条规则的位置。漏掉任何一个，系统就出现语义分叉。
 
 相反，有些扩散是不可避免的。既然这个候选设计选择把新状态公开到 UI，就可能必须增加相应文案；既然要持久化它，也可能必须更新 schema。工程判断不在于“修改文件越少越好”，而在于区分 **essential change surface** 和 **duplicated knowledge 带来的 accidental change surface**。
 

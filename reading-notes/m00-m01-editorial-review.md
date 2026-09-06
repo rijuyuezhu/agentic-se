@@ -27,13 +27,13 @@ M00、M01 当前没有独立的 `m00-source-audit.md` / `m01-source-audit.md`。
 | chapter | diagnostic | baseline | rewrite |
 |---|---|---:|---:|
 | M00 | lines | 660 | 289 |
-| M00 | bytes | 16,007 | 20,487 |
+| M00 | bytes | 16,007 | 20,433 |
 | M00 | page-level H1 | 14 | 1 |
 | M00 | H2 / H3 | 16 / 5 | 9 / 15 |
 | M00 | `text` fences | 11 | 3 |
 | M00 | `---` | 19 | 0 |
-| M01 | lines | 950 | 381 |
-| M01 | bytes | 18,270 | 24,581 |
+| M01 | lines | 950 | 386 |
+| M01 | bytes | 18,270 | 26,138 |
 | M01 | page-level H1 | 19 | 1 |
 | M01 | H2 / H3 | 30 / 5 | 11 / 28 |
 | M01 | `text` fences | 36 | 2 |
@@ -193,6 +193,22 @@ PR review 还暴露了 **design-decision dependency**：术语即使没有偷跑
 
 这里再次说明“reviewer 对问题类别的识别”与“reviewer 给出的具体搬法”是两个独立判断对象。
 
+### 第二轮 PR review：把新 state dimension 贯穿相关 artifact
+
+第二轮 independent review 指出，前一轮虽然已经在 state-machine 图旁说明 `cancellation_requested` 是 status 之外的 state dimension，但 behavior/repetition/representation 三处还没有一致带过这个事实。这个 diagnosis 成立，而且不能只在 §3.4 补一句 retry：如果一个 durable fact 会改变 operation semantics，那么 behavior partition 本身就必须能表达它。
+
+当前修订因此做了五件彼此配套的事：
+
+1. behavior table 仍先按 public status 做第一层 partition，但 `running` 进一步按 `cancellation_requested=false/true` 细分；这样第一次 cancel 的 `false -> true` 和 response 丢失后的 replay 不再被压进同一行；
+2. §3.4 明确写出最直接的 replay window：job 仍为 `running`、request 已 durable 时再次 cancel，semantic outcome 仍为 success，且 no additional intended effect；
+3. representation example 没有机械增加 `cancellation_requested` field，因为那会无意决定它必须与 Job row 共址；正文改为明确该 dataclass 只投影 status/assignment/timestamps，`cancellation_requested` 可以同 record 或由另一 durable state 承载；
+4. §7 test partitions 同样把 `running + cancellation_requested=false/true` 作为不同 semantic partitions，避免 table 修精确了、evidence model 又退回 status-only；
+5. behavior table 的 `public result` 改为 `semantic outcome`，并在表前明确这些 outcome 尚未决定 return value / exception / error code 的 concrete encoding；§3.2 再用现有 `bool` signature 检查 encoding 是否足够。
+
+这次经验没有新增新的 review pass，而是收回 [`../EDITORIAL_GUIDE.md`](../EDITORIAL_GUIDE.md) 的 Pass A semantic preservation：新引入的 contract-relevant state dimension 必须贯穿所有声称建模相关 state 的 artifact；如果某个 artifact 只做 projection，就显式声明 scope。根目录 [`../AGENT.md`](../AGENT.md) 同步了一条操作性检查。
+
+reviewer 另外提到 M00 candidate qualifier 稍密。它不是 blocker，但独立顺读后确认其中两次重复没有新的 scope 信息，因此只压掉 crash 段与 change-amplification 开头的重复声明；跨 section 或远距离回引用处仍保留 candidate qualifier，避免为了“更自然”重新引入 design-authority leak。
+
 ## 8. Cold-reader flow 自审
 
 M00 当前主线是：
@@ -201,7 +217,7 @@ M00 当前主线是：
 
 M01 接着同一个问题：
 
-`实现能跑但 correctness 无法判断 → specification/contract → precise candidate state table → operation semantics → invariant → representation/protocol artifacts → durable invariant → enforcement → specification strength/compatibility → test oracle → Agent workflow`
+`实现能跑但 correctness 无法判断 → specification/contract → contract-relevant state partitions → operation semantics → invariant → representation/protocol artifacts → durable invariant → enforcement → specification strength/compatibility → test oracle → Agent workflow`
 
 两个模块之间的 transition 不再是“下一章开始定义新术语”，而是 M00 结尾明确留下“什么必须为真、谁保证”的问题，M01 从 reviewer 无法判断两个 implementation 谁正确开始回答。
 
@@ -217,8 +233,9 @@ bullet 主要剩在：真正 parallel 的 pressure/questions、review checklist�
 
 - M00 从 cancellation story 进入三种 complexity vocabulary 时，读者是否觉得 abstraction 是被问题逼出来，还是仍有轻微 taxonomy jump；
 - M00 四个核心对象连续出现是否已经形成过多“课程总纲”感；
-- M01 §4 现在把 representation technique、protocol state machine 和 durable invariant 收到同一个 invariant episode 后，是否信息密度过高；
-- state-machine projection 的 scope qualifier 是否帮助读者理解 artifact 边界，还是在 M01 粒度上过早；
+- 新 behavior table 把 `running` 细分成 `cancellation_requested=false/true` 后，是否真正更精确而没有让 M01 过早陷入二维状态细节；
+- representation example 明确只是 partial projection、且不决定 `cancellation_requested` 的 storage co-location，这个 qualifier 是否足够清楚而不过度防御；
+- `semantic outcome` 与 `cancel(...) -> bool` concrete encoding 的区分是否已经消除表面矛盾；
 - M01 后半的 specification strength、tests 与 Agent workflow 是否仍属于同一条 argument；
 - 是否还有 baseline 中 technically present 但 pedagogically compressed too far 的 distinction；
 - prose 是否仍有过度整齐、作者不断总结的 generated-answer rhythm。

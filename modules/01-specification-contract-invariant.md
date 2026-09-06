@@ -81,15 +81,16 @@ contract 的价值就在这里：它不是文档装饰，而是在两边之间�
 
 ## 3. Behavior table 会把一句“取消任务”里藏着的决定逼出来
 
-回到 TaskForge。先不要写代码，先把 contract 的 **state dimension** 写成一个候选 behavior table。它还不是完整 contract；time、error、concurrency 和 repetition semantics 会在接下来的小节继续补全。
+回到 TaskForge。先不要写代码，先把 contract-relevant state 写成一个候选 behavior table。这里先按 public status 做第一层 partition；如果同一个 status 下还有会改变 contract behavior 的 durable fact，就继续细分。表里的 `success` / `already_terminal` / `not_found` 是 caller 必须能够区分的 **semantic outcome**，不表示它们已经决定由 return value、exception 还是 error code 编码；当前 `bool` signature 是否足够，会在 §3.2 回答。
 
-| 当前状态 | `cancel(job_id)` 的语义 | public result | 状态/side effect |
-|---|---|---|---|
-| queued | 接受取消并持久化 transition | success | `queued -> cancelled` |
-| running | durable 地接受 cancellation request | success | `status` 保持 `running`；持久化 `cancellation_requested = true` |
-| succeeded / failed | 不改变 terminal result | already_terminal | none |
-| cancelled | 重复调用仍得到 success | success | no additional transition |
-| missing | 找不到目标 | not_found | none |
+| target / public status | relevant durable fact | `cancel(job_id)` 的语义 | semantic outcome | 状态/side effect |
+|---|---|---|---|---|
+| queued | — | 接受取消并持久化 transition | success | `queued -> cancelled` |
+| running | `cancellation_requested = false` | durable 地接受 cancellation request | success | `cancellation_requested: false -> true`；`status` 保持 `running` |
+| running | `cancellation_requested = true` | cancellation request 已 durable 接受 | success | no additional intended effect |
+| succeeded / failed | — | 不改变 terminal result | already_terminal | none |
+| cancelled | — | 重复调用仍得到 success | success | no additional transition |
+| missing | — | 找不到目标 | not_found | none |
 
 这张表不是后续 M04 lab 的唯一标准答案。M00 为了追踪 change cost，曾暂时假设用 `CANCELLING` 表示过渡状态；这里故意选择另一种 representation：public `status` 继续是 `running`，另一个 durable fact 记录 cancellation request。M04 的实验还会采用更严格的 cancel semantics。三者不是互相推翻，而是在展示同一个 product pressure 可以对应不同 contract；只有先说明 decision criterion，才能判断哪个设计适合当前系统。
 
@@ -121,7 +122,9 @@ contract 的价值就在这里：它不是文档装饰，而是在两边之间�
 
 ### 3.4 重复调用也属于 contract
 
-候选表里，已经 cancelled 的 job 再次 `cancel` 仍返回 success。这个选择的目的不是“所有 cancel API 都应该如此”，而是让 caller 在 response 丢失后重复发送时，不必把“第一次是否已经生效”变成新的分支。
+当前候选最直接的 replay window 其实发生在 job 仍然 `running` 时：第一次 `cancel` 已经把 `cancellation_requested=true` durable 写下，但 response 丢失，worker 还没有停止。caller 重试后面对的是“同样是 `running`，但 cancellation request 已经存在”的第二个 durable state。这里我们明确规定：第二次调用仍得到 `success`，并且不产生额外 intended effect。
+
+job 最终已经进入 `cancelled` 后再次调用，本候选同样选择返回 `success`。这两个选择都不是在声称“所有 cancel API 都应该如此”，而是在说明 response 丢失或重复发送时，repetition behavior 必须由 contract 明确决定，不能让 caller 根据当前实现去猜。
 
 后面的 M04 会把“同一个 logical request 重复发生时不产生额外 intended effect”精确定义为 idempotency，并讨论它为什么不能只靠 payload equality 推断。这里先记住更基础的事实：**repetition semantics 也必须被 specification 决定**，不能等到 retry 出现后再让 implementation 临时猜。
 
@@ -133,7 +136,7 @@ behavior table 描述 `cancel` 一次调用的结果，但 TaskForge 还有 subm
 
 ### 4.1 Representation invariant：一个 value 内部哪些组合合法
 
-假设 Job 的内部 representation 是：
+先只投影 Job 的一部分 local representation，讨论 `status`、worker assignment 和 timestamps 之间的约束：
 
 ```python
 @dataclass
@@ -143,6 +146,8 @@ class Job:
     started_at: datetime | None
     finished_at: datetime | None
 ```
+
+这段 dataclass **不是前面候选 contract 的完整 persistence schema**。`cancellation_requested` 是另一个 contract-relevant durable fact；它可以和 Job 存在同一 record，也可以由另一份 durable state 承载。本节此处不需要提前决定 storage layout，只需要明确下面这些 local representation invariants 针对的是当前这组被投影出来的字段。
 
 可能存在这样的 representation invariants：
 
@@ -269,7 +274,7 @@ test 与 implementation 完全一致，却可能一起违反需求。测试没�
 
 以 `cancel` 为例，候选 contract 自然产生多维 partitions：
 
-- state：queued、running、各 terminal state、missing；
+- state / durable fact：queued、`running + cancellation_requested=false`、`running + cancellation_requested=true`、各 terminal state、missing；
 - repetition：first call、response 丢失后的 repeat、多次重复；
 - concurrency：cancel 与 reserve / finish 的不同相对顺序；
 - durability：crash 发生在 durable write 前后，以及 success response 之后 restart；
