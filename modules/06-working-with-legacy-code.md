@@ -1,1387 +1,452 @@
 # M06 — Legacy Code：先建立 Feedback，再谈改进设计
 
-> 这一章不是教你“如何嫌弃旧代码”。
->
-> 真正目标是：**当你必须修改一个自己不完全理解、缺少可靠测试、又与环境强耦合的系统时，怎样把未知逐步变成可观察事实，把不可控依赖变成可控边界，然后再做最小、可验证的变化。**
+M05 结束时，我们已经有了一条相当舒服的 change discipline：先说清楚 must-preserve behavior，再把 structural change 与 behavior change 分开，用匹配的 evidence 守住每个 checkpoint。
 
----
+现在把最关键的前提拿掉。
 
-# 0. 从 M05 的舒适条件撤退
+你收到 TaskForge 的一个旧模块 `legacy_audit.py`。需求已经明确两件事：增加 `failed-only` scope；默认 scope 必须保持现有行为，而且 ordering、file naming、append 和 formatting semantics 不能被顺手改变。代码只有几十行，看起来甚至比 M05 的 dashboard 更容易改。但没有人先告诉你这些“现有 semantics”具体是什么，现有六个 core tests 也完全不覆盖这个模块。你知道 preservation obligation，却还没有足够 evidence 描述被 preservation 的对象。
 
-M05 里我们做 refactoring 时有一个很舒服的前提：
+这就是 M06 的问题：**当你需要改变一个系统，却还没有足够可信的 feedback 时，怎样先获得修改资格，再开始修改。**
 
-```text
-现有 behavior 已经比较清楚
-+
-有 baseline tests
-+
-有 behavior probe
-+
-我们知道哪些输出必须保持
-```
+## 1. 先别重构：你还不知道什么叫“没改坏”
 
-所以可以：
-
-```text
-structure change
-→ run evidence
-→ behavior unchanged
-```
-
-真实维护工作常常不是这样。
-
-你接手一个模块：
+先看当前实现的核心形状：
 
 ```python
-from datetime import datetime
-from pathlib import Path
-import os
-import socket
+def publish_daily_audit() -> str:
+    root = Path(os.environ.get("TASKFORGE_AUDIT_DIR", ".taskforge-audit"))
+    owner = os.environ.get("TASKFORGE_AUDIT_OWNER", "unknown")
+    now = datetime.now(timezone.utc)
+    hostname = socket.gethostname()
+    jobs = list(state.jobs.values())
 
-
-def publish_report():
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"audit-{now:%Y-%m-%d}.log"
     ...
+    with path.open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(block)
+
+    print(f"audit: wrote {len(jobs)} job(s) -> {path}")
+    return str(path)
 ```
 
-它可能同时：
+它同时接触 process environment、时钟、hostname、filesystem、stdout 和 TaskForge 的 global state。一个常见反应是：依赖太乱了，先抽 `Clock`、`FileSystem`、`AuditRepository`，把它“变得可测试”，然后再加 scope。
 
-- 读全局状态；
-- 读环境变量；
-- 读当前时间；
-- 读 hostname；
-- 写文件；
-- append 旧文件；
-- print 到 stdout；
-- 吞掉某些 exception；
-- 输出一个没人写过 spec 的文本格式。
+问题在于，你此刻并不知道哪些怪异细节已经被依赖。空状态会不会仍然创建文件？文件名用 local date 还是 UTC date？同一天调用两次是 overwrite 还是 append？status 是否固定宽度？`exit_code=None` 怎样表示？stdout 是否被 operator script 读取？甚至 `owner=unknown` 这个看起来很随意的默认值，也可能已经出现在外部 workflow 里。
 
-然后 issue 说：
+如果在回答这些问题前先重写结构，之后即使 tests 全绿，也很难判断你保存的是旧行为、自己猜出来的行为，还是重写以后才产生的新行为。
 
-> “加一个 failed-only 模式。”
-
-这时最危险的第一反应是：
+这让 M05 的第一步发生了变化。M05 已经有 exact dashboard text probe，所以可以直接写 `must preserve: current dashboard text bytes`。M06 的 issue 虽然告诉你要保持 ordering / file naming / append / formatting，却没有给出这些旧语义的完整 concrete value。此刻更诚实的记录是：
 
 ```text
-这代码太烂了
-→ 先重构
-→ 顺便加 feature
+must preserve: existing ordering / file naming / append / formatting semantics
+unknown: what are those existing semantics under the scenarios relevant to this change?
 ```
 
-因为你甚至不知道什么叫“保持行为”。
+preservation requirement 和 old-behavior knowledge 是两个不同维度。`UNKNOWN` 不是工作没做完的羞耻标记，而是当前 engineering model 的真实状态。
 
-M06 要训练的是另一种工作顺序。
+## 2. 第一次运行：把猜测变成观察，但别急着把观察写成 contract
 
----
+课程提供了一个 starter probe：
 
-# 1. 什么叫 Legacy Code
+```bash
+cd labs/taskforge
+PYTHONPATH=src uv run --with pytest --no-project python tools/m06_legacy_probe.py
+```
 
-“legacy”很容易被当成情绪词：
+当前 baseline 实际输出如下。工具自己的最后一行把它叫作 `characterization probe`；这里先把这个名字当工具标签，后面再解释 characterization 的认识论位置。
 
 ```text
-old
-ugly
-Java 7
-没有 type hints
-很多 globals
+[OK] empty:  file_sha256=7e90999a594bd448 stdout_sha256=d114f9f2994a6701
+[OK] mixed:  file_sha256=7821f1fa9ec08dd4 stdout_sha256=3fd157cf98872494
+[OK] append: file_sha256=4e15e48d03660f50 stdout_sha256=de715a35f8db4b21
+legacy audit characterization probe passed
 ```
 
-这些都不是本章真正关心的东西。
+三个场景马上回答了一些静态阅读不够可靠的问题。
 
-## 1.1 一个更有工程意义的定义
-
-本课程采用：
-
-> **Legacy condition = 你需要改变代码，但缺少足够快速、可信、与这次变化相关的 feedback。**
-
-因此：
+空 state 仍然产生一个 audit block：
 
 ```text
-新代码也可以立刻进入 legacy condition
+== 2026-09-06T01:02:03Z lab-host owner=course-user ==
+jobs=0
+--
 ```
 
-例如 Agent 昨天生成了 4000 行代码，只有一个 smoke test：
+mixed state 会按当前 job 顺序输出，并把 status、exit code 和 command 拼进固定格式。same-day second invocation 会把第二个 block append 到同一文件，而不是覆盖第一个。
 
-```text
-CI green
-```
+但要小心这里的认识论位置。**observed behavior 不等于 intended product contract。** 你已经有证据说“在这个受控实验里，当前实现表现为 X”；对于 issue 点名要求 preserve 的维度，这个 observation 现在帮助具体化本次 lab 的 local preservation contract，但它仍不能证明 X 是产品应永久承诺的最佳语义。
 
-但你不知道：
+这一区分会贯穿整章。可以给 behavior inventory 多加一列 authority：
 
-- retry semantics；
-- ordering contract；
-- error behavior；
-- persistent format；
-- crash recovery；
-- caller assumptions。
-
-从 change-risk 角度，它已经很 legacy。
-
-## 1.2 Legacy 的核心不是“坏”，而是“不安全地未知”
-
-最重要的变量不是美观度，而是：
-
-```text
-unknown behavior
-+
-slow / noisy feedback
-+
-hard-to-control dependencies
-```
-
-所以 M06 的目标不是先降低 code smell，而是先降低 **epistemic uncertainty**。
-
----
-
-# 2. Legacy change 的真正困难：你不知道什么不能变
-
-假设看到：
-
-```python
-line = f"{job.id}|{job.status.value}|{job.command}\n"
-```
-
-你可能觉得：
-
-```text
-pipe 分隔太难看了，改成 JSON 吧
-```
-
-但你不知道：
-
-```text
-有没有 shell script grep 第 2 列？
-有没有 cron job diff 这个文件？
-有没有用户依赖 newline？
-有没有 downstream parser 把 insertion order 当 contract？
-```
-
-这就是 legacy maintenance 的核心：
-
-> **declared contract 与 actual dependency surface 可能严重不一致。**
-
-M08 会专门讨论 compatibility；M06 先教你如何在不知道全部 consumer 的情况下获取局部证据。
-
----
-
-# 3. 先区分四类东西：Spec、Observed Behavior、Quirk、Bug
-
-接手旧系统时，千万不要把当前行为和正确行为混成一个集合。
-
-可以建立一个表：
-
-| 行为 | 当前观察 | 是否有明确 spec | 判断 |
+| Behavior | Current observation | Existing authority | 当前处理 |
 |---|---|---|---|
-| job 顺序 | insertion order | 无 | unknown / possible dependency |
-| unknown ID | KeyError | M04 想改 | implementation leakage |
-| report 末尾 newline | 有 | 无 | unknown quirk |
-| FAILED exit code | 显示数字 | 有测试 | protected behavior |
-| 空 command | 被接受 | 新 contract 说不应接受 | known bug / old behavior |
+| empty state 仍写 block | yes | general `default scope must preserve existing behavior` clause | 本次 change 的 must-preserve observation |
+| same-day second run append | yes | issue 明确要求 preserve existing append semantics | 本次 change 的 must-preserve |
+| job order follows current state order | yes | issue 明确要求 preserve existing ordering | 本次 change 的 must-preserve |
+| `exit=None` renders `-` | yes | issue 明确要求 preserve existing formatting | 本次 change 的 must-preserve formatting observation |
+| failed-only selects only `FAILED` | starter 不支持 | **新需求** | new specification |
 
-这里最重要的是：
+因此 old observation 和 new requirement 不是简单二分。**requirement 提供“默认行为必须保持”的 normative authority，probe 提供“现状具体是什么”的 empirical evidence**；ordering/append/formatting 还被 requirement 特别点名，因而更容易定位 review surface。这个 local preservation obligation 仍然不等于证明所有 observed details 都应成为永久 product contract。
 
-```text
-observed
-!=
-correct
-```
+这也解释了 **characterization test** 与 specification-oriented test 的区别。Michael Feathers 用 characterization test 记录软件当前实际行为，使后续修改不会无意改变它。它首先是观测工具，不是价值判断工具。
 
-但：
+如果你后来确认某个旧行为是 bug，正确流程不是让 characterization 永久把 bug 神圣化，而是显式进入 behavior change：写新的 specification，让新 test 在修复前失败，再有意识地更新或替换旧 characterization。它的价值在于让变化可见，而不是冻结历史。
 
-```text
-observed
-也不能随便改
-```
+## 3. “Legacy”在这里不是年龄，而是一种 change condition
 
-因为它可能已成为 compatibility surface。
+到这里再给本章的术语会更有意义。
 
----
+Feathers 常用 “code without tests” 作为 legacy code 的强 operational framing。本课程吸收它想强调的风险，但不把它当完整字典定义。一个二十年旧、关键 contract 有强测试且反馈很快的模块，未必是你今天最危险的 change target；昨天由 Agent 生成的四千行新代码，如果只有一个 happy-path smoke test，也可能已经非常难安全修改。
 
-# 4. Characterization Test：先记录事实，不急着判断
+因此本课程使用一个更面向 change 的说法：
 
-Michael Feathers 对 characterization test 的定义非常实用：
+> **Legacy condition = 你需要改变代码，但缺少足够快速、可信、与当前变化相关的 feedback。**
 
-> 用测试记录当前软件行为，并在修改代码时保持它。
+年龄、语言、有没有 type hints、代码看起来“老不老”都不是核心变量。真正让风险升高的是 unknown behavior、slow/noisy feedback 和 hard-to-control dependencies。
 
-M03 的 specification-oriented test 是：
+这个定义也防止我们把 “legacy” 当侮辱词。`legacy_audit.py` 的价值判断此刻并不重要；重要的是：我们要改 `job selection by scope`，而当前对 surrounding effects 的认识还不足以支持一个 behavior-preserving claim。
 
-```text
-根据 contract，结果应该是 X
-```
+## 4. 不要先追 coverage：围绕当前 change 画 effect sketch
 
-M06 的 characterization test 首先是：
+面对陌生模块，一个看似稳妥的任务是“先把覆盖率补到 90%”。它的问题是没有告诉你 90% 的哪些 execution 与当前风险有关，也没有告诉你 oracle 是否有用。
+
+failed-only 的真正 change point 很窄：**job selection policy**。从这里向外追 observable effects，可以画出：
 
 ```text
-我运行以后，结果实际是 X
-```
-
-## 4.1 它像一次受控实验
-
-典型过程：
-
-```text
-1. 构造一个输入/环境
-2. 运行旧代码
-3. 观察输出
-4. 把观察到的结果写成 assertion
-5. 故意改坏一点代码，确认 test 真能红
-6. 恢复代码
-```
-
-这里第 5 步非常重要。
-
-否则你可能写出：
-
-```python
-assert output is not None
-```
-
-然后以为建立了 safety net。
-
-## 4.2 Characterization test 不等于给 bug 发许可证
-
-假设当前系统：
-
-```text
-cancelled job 被错误算成 active
-```
-
-characterization test 记录它：
-
-```python
-assert active_count == 1
-```
-
-之后你确认它是 bug。
-
-正确做法不是永远保持：
-
-```text
-active_count == 1
-```
-
-而是明确进入 behavioral change：
-
-```text
-old characterization
-↓
-known bug confirmed
-↓
-new specification
-↓
-red test for desired behavior
-↓
-fix
-↓
-remove/update old characterization
-```
-
-Characterization 的作用是让变化**有意识**，不是让现状神圣化。
-
----
-
-# 5. 不要先追 Coverage；先画 Change Cone
-
-一个 100k LOC repo，你只需要改：
-
-```text
-legacy_audit failed-only mode
-```
-
-最差的任务定义之一是：
-
-```text
-先把 legacy_audit 附近覆盖率补到 90%
-```
-
-更好的问题是：
-
-```text
-这次变化可能影响哪些 observable effects？
-```
-
-可以画一个简化 effect sketch：
-
-```text
-scope flag
-   │
-   ▼
+scope
+  |
+  v
 selected jobs
-   │
-   ├── count
-   ├── ordering
-   ├── line formatting
-   ├── output file
-   └── stdout summary
+  |-- count in file
+  |-- numbering
+  |-- relative ordering
+  |-- status / exit / command lines
+  |-- written file bytes
+  `-- stdout count/path
 ```
 
-然后问：
+这张图不是完整 system model。它只投影这次 change 的 effect region；没画出的 state、error 或 lifecycle dimension不代表不存在。它的用途是帮助我们问：为了证明“默认行为没被意外改，failed-only 只改变 selection”，哪些 observation 最有信息量？
 
-```text
-哪些节点最便宜、最可信地可观察？
-```
+这就是 **targeted feedback** 的思路。与其广泛给 private helpers 补低信息量 tests，不如优先观察 file bytes、append effect、stdout 和 selection 后的 count/order——因为这些正处在 change cone 上。
 
-这叫 **targeted feedback**。
+这里可以顺便区分三个位置：
 
----
+- **change point**：真正准备改变行为的位置，例如 job selection；
+- **test/control point**：可以控制输入或依赖的位置，例如 environment、module binding、temp directory；
+- **observation point**：可以判断行为的地方，例如 written file、stdout、return value 或 post-state。
 
-# 6. Change Point、Test Point、Observation Point
+它们不必在同一个函数里。一个高价值位置甚至可能汇聚很多 upstream path：例如二十个入口最终都经过同一个 serializer，那么 serializer 附近可能成为 Feathers 所说的高-leverage **pinch point**，少量 observation 就能覆盖更大的 effect region。术语本身不用背，重点是学会寻找这种杠杆。
 
-## 6.1 Change Point
+## 5. 为什么这个模块难测？先区分“看不见”和“控制不了”
 
-你实际需要改行为的位置。
+假设你直接调用 `publish_daily_audit()`。它其实能跑，但结果同时散落在 file、stdout 和 return path；与此同时，真实时钟和 hostname 会让相同 setup 在不同运行里产生不同输出。
 
-例如：
+这两类困难不一样。Feathers 把它们区分为 **sensing** 与 **separation**。
 
-```text
-job selection policy
-```
+**Sensing problem** 是：代码能运行，但你看不见或难以判断你关心的 effect。比如 audit 已经成功写盘，可 test 只拿到一个 path string；你还需要读取 file bytes，或者 capture stdout，才能知道 selection/count/formatting 到底发生了什么。
 
-不要一开始把整个 `legacy_audit.py` 都当 change point。
+**Separation problem** 是：你无法在受控实验里运行目标代码，因为它会拖入你不想真实使用的 dependency。真实时间会变，真实 hostname 因机器而异，默认 output root 可能写进用户工作目录；一个更重的系统也许构造对象就会连接 production database。
 
-## 6.2 Test Point
+这个 distinction 很实用，因为 remediation 不同。stdout 主要是 sensing：`redirect_stdout` 已经能观察它，没有必要因此设计一个 `Logger` interface。真实 database 连接则主要是 separation：再多 logging 也不能阻止 test 连 production。
 
-你能注入输入或控制依赖的位置。
+Filesystem 在这里同时涉及两边：我们既不想写真实用户目录，又确实需要读取写出的 bytes。一个 temp directory 同时提供 isolation 和 observation，所以往往比“mock 所有 filesystem call”更简单、更真实。
 
-例如：
+## 6. 现有结构已经给了控制点：现在才需要认识 seam
 
-```text
-env var
-function argument
-module binding
-filesystem root
-```
-
-## 6.3 Observation Point
-
-你能判断行为的地方。
-
-例如：
-
-```text
-written file bytes
-stdout
-return value
-state change
-```
-
-这三个点不一定在同一个函数。
-
----
-
-# 7. Sensing Problem 与 Separation Problem
-
-这是 WELC 中非常值得保留的区分。
-
-## 7.1 Sensing Problem
-
-代码能运行，但你看不到你关心的结果。
-
-例如：
+看 starter probe 怎样让实验变得 deterministic：
 
 ```python
-def reconcile():
-    repo.update(...)
-    metrics.increment(...)
-    notifier.send(...)
+os.environ["TASKFORGE_AUDIT_DIR"] = str(root)
+os.environ["TASKFORGE_AUDIT_OWNER"] = "course-user"
+legacy_audit.datetime = FrozenDateTime
+legacy_audit.socket.gethostname = lambda: "lab-host"
 ```
 
-你想知道：
+加上 `tempfile.TemporaryDirectory()` 和 `redirect_stdout`，我们已经可以控制 output root、owner、clock、hostname，并观察 file 与 stdout。注意：**为了得到这些 feedback，production code 一行都还没改。**
+
+这时再引入 **seam** 才有实际对象可指。按照 Feathers 的 seam model，一个 seam 是程序中允许你在不直接修改目标位置的情况下，让这里采用另一种行为的结构机会；真正选择 alternate behavior 的地方叫 **enabling point**。
+
+在这个 Python 例子里，`legacy_audit.datetime` 和 `legacy_audit.socket.gethostname` 的 module binding 就形成了现成 seam。测试把它们替换为 controlled behavior，那个替换动作就是 test harness 中的 enabling point。环境变量提供另一个 control surface；process boundary、function parameter、filesystem root、factory 或语言/链接机制也都可能形成 seam。
+
+这解释了为什么 **seam 不是 interface 的同义词**。你完全可以有 seam 而没有 `ClockProtocol`；也可以拥有很多漂亮 interfaces，却没有一个便宜、可信的反馈路径。
+
+现成 module-binding seam 也不是无条件“好设计”。它依赖 import/binding shape：如果实现从 `from datetime import datetime` 改成另一种 import 方式，monkeypatch target 可能失效。大量 tests 都 patch internal names，也会形成 brittle implementation coupling。因此这里的判断只是：**它目前是否以最低成本提供了足够 feedback？** 不是“以后所有时间依赖都应该 monkeypatch”。
+
+## 7. Characterization 也要验证自己有牙齿
+
+把一个 probe 叫作 characterization，并不会自动让它可信。
+
+当前 `m06_legacy_probe.py` 会检查一些高信息量 fragments 和 stdout write count，并打印 file/stdout fingerprints。这里有一个容易误读的细节：**打印 hash 不等于断言 hash。** 现有 starter probe 并没有把三组 SHA 固化成 exact-byte golden；它的 programmed oracle 比“整个文件必须 byte-for-byte 等于某个 snapshot”更窄。
+
+这反而是很好的阅读练习。你必须区分：
 
 ```text
-哪些 job 被 reconcile？
+probe printed evidence
+!=
+probe asserted contract
 ```
 
-但唯一可见结果只是：
+如果 lab 需要更强的 safety net，可以把确认过的 empty/mixed/append/default-owner/stdout observations 提炼成 deterministic characterization tests。但仍然应该围绕 change cone 选择 assertion，不需要为了“覆盖更多” snapshot 整个环境或巨大数据库。
+
+接着做 M03 已经训练过的 negative control：临时把 append 变成 overwrite，或者反转 job order，确认对应 characterization 会失败，然后恢复 production code。若 test 对一个明显违反目标 observation 的 mutant 仍然绿，safety net 只是看起来存在。
+
+测试工具自己也可能带 nondeterminism。Instructor case study 记录过一个很具体的修正：最初直接 hash stdout，但 stdout 含随机 temp path，所以每次 hash 都不同；后来先把 scenario root normalize 成 `<ROOT>` 再 fingerprint。**Golden/hash 本身不是稳定性的来源；你仍然要控制它包含的变量。**
+
+## 8. 找到 seam 以后，最重要的决定可能是：什么都不抽
+
+现在我们终于可以问最容易被“testability”口号遮住的问题：需要把这些 seam 正式变成 production abstractions 吗？
+
+一种 candidate 是增加：
 
 ```text
-三个外部副作用
-```
-
-这是 sensing 问题。
-
-可能解决办法：
-
-```text
-observable result
-recording fake
-probe
-capture output
-query post-state
-```
-
-## 7.2 Separation Problem
-
-代码根本无法在可控环境中运行。
-
-例如：
-
-```python
-def report():
-    db = ProductionDatabase()
-    db.connect()
-    ...
-```
-
-测试一调用就尝试真实数据库。
-
-这是 separation 问题。
-
-可能解决办法：
-
-```text
-parameter seam
-factory seam
-module substitution
-filesystem temp root
-process boundary
-fake collaborator
-```
-
-## 7.3 为什么区分有价值
-
-如果你把 sensing 问题误判成 separation 问题，可能会：
-
-```text
-创造 8 个 interfaces
-```
-
-但其实只需要：
-
-```text
-让函数返回一个 summary
-```
-
-反之，如果你只有 separation 问题，却加了大量 logging，也无法让测试隔离真实 DB。
-
----
-
-# 8. Seam：不是“接口”，而是可以改变行为的机会
-
-一个 seam 可以表示：
-
-> 在不直接改目标位置的情况下，让程序在那里采用另一种行为。
-
-## 8.1 Function parameter seam
-
-```python
-def build_report(now_fn=datetime.now):
-    now = now_fn()
-```
-
-测试：
-
-```python
-build_report(now_fn=lambda: fixed_time)
-```
-
-## 8.2 Module binding seam
-
-Python 里：
-
-```python
-from taskforge import filesystem
-```
-
-测试可以替换：
-
-```text
-taskforge.legacy_audit.filesystem
-```
-
-这也是 seam。
-
-## 8.3 Filesystem seam
-
-如果代码接受 output root：
-
-```python
-write_report(root)
-```
-
-测试使用 `tmp_path`。
-
-无需定义：
-
-```text
-IFileSystemFactoryProvider
-```
-
-## 8.4 Process seam
-
-某些 legacy CLI 最便宜的 characterization 方法就是：
-
-```text
-spawn subprocess
-control env/cwd/input files
-capture stdout/stderr/files
-```
-
-这可能比把 30 年旧程序拆成 unit-testable objects 更安全。
-
----
-
-# 9. Enabling Point：seam 真正被选择的地方
-
-如果定义：
-
-```python
-def export(clock):
-    ...
-```
-
-seam 本身在 `clock` dependency。
-
-但 enabling point 是：
-
-```python
-export(real_clock)
-```
-
-或：
-
-```python
-export(fake_clock)
-```
-
-这个概念非常适合 code review。
-
-因为 reviewer 可以问：
-
-> alternate behavior 到底在哪里被选择？
-
-如果答案散落在全 repo：
-
-```text
-if testing:
-if env == test:
-if mock_mode:
-```
-
-那么 seam 可能反而制造了新的 complexity。
-
----
-
-# 10. “最小 Seam”原则
-
-面对 legacy module：
-
-```text
-time
-hostname
-env
-filesystem
-network
-random
-state
-```
-
-Agent 很容易一次性抽象成：
-
-```text
-Clock
+AuditRuntime
+ClockProtocol
 HostProvider
-Environment
-Filesystem
-NetworkClient
-RandomSource
-StateRepository
+FileSystem
+EnvironmentReader
+JobRepository
 ```
 
-然后所有函数 constructor injection。
+这样每个 dependency 都能显式注入，unit tests 看起来也很整齐。
 
-这不是 M06 的目标。
+另一种 candidate 是承认当前 control surfaces 已经够用：time/host 由 module binding 控制，filesystem root 由 env + temp directory 控制，stdout 可 capture，TaskForge state 可以通过已有 service/worker setup 构造。然后 **不做任何 production structural patch**，直接在已有 feedback 下实现最小 behavior delta。
 
-更合理的是：
+Instructor reference 选择的是第二条路。这不是因为 production dependency abstraction 永远没价值，而是当前 change 只需要改变 job selection；新 object graph 没有解决一个尚未被现有 seam 解决的 current risk。
 
-> **只打开当前 change 所需的最小控制点。**
+这正好把 M05 的 evolutionary design 与 M06 接起来：发现一个潜在 abstraction point，不等于已经拥有引入 abstraction 的 design authority。真实 pressure 应该决定它的深度。
 
-例如这次变化只要求：
+当然，也存在第三种合理路径：如果现有 module patching 在真实 repo 中太脆、测试数量开始增长，或者需要在 production 中插入 probe/route old-new implementations，那么把 clock/host 封装成一个很小的 private runtime context 可能值得。Fowler 对 legacy seam 的现代讨论也提醒我们，seam 不只用于 unit test；它还可以服务 observability 或渐进 migration。
+
+但那是**条件性的未来用途**，不能倒推成“既然以后可能迁移，现在就把每个 dependency 抽象一遍”。
+
+### 什么时候不值得新增 seam
+
+三个简单反例足以校正直觉。一个 pure、deterministic dependency 本来就便宜，不需要为了“可测试”套 provider；如果 seam abstraction 比被替换的一行逻辑更复杂，收益很可疑；如果新增 boundary 的唯一价值是让 test 可以断言 `mock.foo.called_once_with(...)`，却不再检查 caller-visible effect，那通常是在把 implementation choreography 当 contract。
+
+所以 M06 的原则不是 “always add seams”，而是：**只有现有结构阻止你获得当前 change 所需的可信 feedback 时，才打开最小控制点。**
+
+## 9. 有了 feedback，才进入新 behavior contract
+
+现在回到真正需求：`failed-only`。
+
+到这个阶段，我们已经把两类东西分开：一类是旧系统在受控实验里表现出来、目前应保守保护的 behavior；另一类是产品现在明确要求新增的 semantics。于是可以第一次写出新 contract：
 
 ```text
-稳定测试 daily audit output
+scope="all"
+→ preserve the characterized default behavior relevant to this change
+
+scope="failed"
+→ include only jobs whose status is FAILED
+→ jobs count equals selected jobs
+→ numbering restarts at 01 over selected jobs
+→ relative ordering among selected jobs follows existing job order
+→ path/date/owner/header/block terminator remain unchanged
+→ stdout count equals selected jobs
+
+invalid scope
+→ fail before filesystem mutation
 ```
 
-可能只需要控制：
+这里有两个 qualifier 不能丢。
 
-```text
-now
-output root
-hostname
-```
+第一，`scope="all"` 的“保持”建立在我们实际 characterized 的 evidence surface 上，不是假装已经证明所有 hidden consumers 和所有可能输入。对于没有调查到的外部 parser、operator script 或异常路径，remaining risk 仍然存在。
 
-global state 暂时可以通过现有 `service.reset_for_tests()` 和 submit API 构造。
+第二，invalid scope 的 no-effect guarantee 是**新 contract 明确要求的 boundary semantics**。它复用了 M04 的 reasoning：如果我们要告诉 caller“这个 input 在 effect 之前被拒绝”，validation 就必须发生在 `mkdir/open/write` 之前。不能因为错误最终抛出来了，就自动宣称没有 side effect。
 
-不要借一次小变化强迫整个系统接受你理想中的 architecture。
+接下来才是普通 red-before / green-after：先写 mixed jobs + `scope="failed"` 的 focused test，确认 starter 因不支持参数而失败；再实现最小 selection logic；同时保留 old characterization，确保 default path 没 drift。
 
----
-
-# 11. Pinch Point：一个测试覆盖更大的 Effect Region
-
-有时你发现：
-
-```text
-20 个旧函数
-最终都会经过一个 report serialization function
-```
-
-那个位置可能是高价值 test point。
-
-因为少量 tests 可以覆盖多个 change path。
-
-你可以把它理解成：
-
-```text
-many upstream paths
-        │
-        ▼
-     pinch point
-        │
-        ▼
-observable effect
-```
-
-M06 不要求背 Feathers 的术语，但要学会找这种**高 leverage feedback point**。
-
----
-
-# 12. Legacy Takeover 的第一阶段：Read-Only Reconnaissance
-
-在任何生产修改前，写一个 takeover note。
-
-至少回答：
-
-```text
-Entry points:
-谁会调用它？
-
-State:
-读什么？写什么？
-
-External effects:
-文件、网络、stdout、database、process？
-
-Nondeterminism:
-time/random/hostname/env/concurrency？
-
-Error behavior:
-抛什么？吞什么？打印什么？
-
-Known tests:
-哪些是真正相关的？
-
-Unknowns:
-哪些行为看起来奇怪但没证据说明可以改？
-```
-
-注意最后一项。
-
-好的工程记录里应该允许出现：
-
-```text
-UNKNOWN
-```
-
-而不是为了显得理解充分而瞎猜。
-
----
-
-# 13. 第二阶段：Build a Behavior Inventory
-
-运行旧系统，记录真实行为。
-
-例如：
-
-```text
-Scenario A: no jobs
-output file still created
-stdout says 0 jobs
-file ends with newline
-
-Scenario B: mixed jobs
-jobs use insertion order
-SUCCEEDED renders exit code
-QUEUED renders '-'
-
-Scenario C: second invocation same day
-appends another block
-rather than overwriting
-```
-
-每一项标：
-
-```text
-OBSERVED
-SPECIFIED
-UNKNOWN
-SUSPECTED BUG
-```
-
-不要直接写：
-
-```text
-MUST
-```
-
-除非你有依据。
-
----
-
-# 14. 第三阶段：Characterization Tests
-
-Characterization test 要尽可能：
-
-```text
-controlled
-repeatable
-high signal
-```
-
-## 14.1 Freeze nondeterminism
-
-如果输出包含：
-
-```text
-current date
-hostname
-```
-
-你不能接受：
-
-```text
-每次 test update golden
-```
-
-需要：
-
-```text
-control clock
-control host
-```
-
-## 14.2 优先保护 boundary behavior
-
-如果唯一 consumer 是一个 text file，characterization test 直接检查：
-
-```text
-file bytes
-```
-
-往往比检查十个 private helper 更稳。
-
-## 14.3 Characterization test 也要有选择
-
-不要 snapshot：
-
-```text
-整个 50MB database dump
-```
-
-只因为“这样全覆盖”。
-
-要围绕 change cone 选高信息量 scenario。
-
----
-
-# 15. 第四阶段：证明 Safety Net 有牙齿
-
-这是 M03 的思想在 legacy 场景中的复用。
-
-例如你写了：
+Reference 最小实现甚至不需要 `_select_jobs()` helper：
 
 ```python
-assert report == EXPECTED
-```
+def publish_daily_audit(scope: str = "all") -> str:
+    if scope not in {"all", "failed"}:
+        raise ValueError(...)
 
-临时把：
-
-```python
-status.value
-```
-
-改成：
-
-```python
-"broken"
-```
-
-test 应该失败。
-
-再恢复。
-
-如果没有失败，你的 characterization 根本没覆盖当前风险。
-
----
-
-# 16. 第五阶段：只为当前 Change 打 Seam
-
-现在才允许改 production structure。
-
-一个好 seam patch 应该很无聊：
-
-```text
-production behavior unchanged
-public API unchanged
-no feature yet
-```
-
-例如：
-
-```python
-# before
-now = datetime.now(timezone.utc)
-host = socket.gethostname()
-
-# after
-def _runtime_context(now_fn=..., host_fn=...):
+    ...
+    jobs = list(state.jobs.values())
+    if scope == "failed":
+        jobs = [job for job in jobs if job.status == JobStatus.FAILED]
     ...
 ```
 
-关键验收：
+把两行 selection 抽成 pure helper 当然也可以，但“更容易单测”本身还不足以证明新 abstraction 必要。等 scope 真正扩展到 terminal/active/time range/owner 等多个 policy 时，新的 selection abstraction 可能才更有压力支撑。
+
+## 10. Test fixture 也必须服从已有 state authority
+
+Legacy takeover 很容易让人产生一种错觉：production code 需要谨慎，但 test setup 为了方便可以随便改 state。
+
+Instructor reference 曾经构造两个 failed jobs 时遇到一个真实 fixture 错误。它先留下一个 queued job，再想 `claim_next()` 后直接 finish 后面那个 target；但 TaskForge 的 claim 是 FIFO，实际被 claim 的是前面的 queued job，target 仍处于 `QUEUED`，所以合法地得到：
 
 ```text
-old characterization still identical
+ValueError: cannot finish job-4 from queued
 ```
 
-而不是：
-
-```text
-architecture 更优雅了
-```
-
----
-
-# 17. 第六阶段：再做 Requested Behavior Change
-
-现在 issue 是：
-
-> audit 支持 `failed-only`。
-
-这时先写新 specification：
-
-```text
-scope=all
-→ existing behavior unchanged
-
-scope=failed
-→ only FAILED jobs included
-→ header count matches selected jobs
-→ ordering among selected jobs follows existing order
-→ append/path semantics unchanged
-```
-
-然后：
-
-```text
-red test
-→ minimal implementation
-→ focused pass
-→ full characterization
-```
-
-现在这是 M05 的 Two Hats，只不过 M06 多了一个前置阶段：
-
-```text
-first obtain feedback
-```
-
----
-
-# 18. Legacy Code 中的 Tests 不一定从 Unit Test 开始
-
-这是非常重要的一点。
-
-如果现有程序天然是：
-
-```text
-CLI
-→ env
-→ filesystem
-→ file output
-```
-
-最安全的第一条 characterization 可能是：
-
-```text
-process-level black-box test
-```
-
-而不是先 refactor 出 12 个 injectable classes。
-
-## 18.1 High-level characterization 的优点
-
-- 改 production code 少；
-- fidelity 高；
-- 能记录真实 formatting / file behavior；
-- 对第一次 takeover 很安全。
-
-## 18.2 缺点
-
-- 慢；
-- failure localization 差；
-- setup 可能重；
-- 很难穷举 edge cases。
-
-因此之后再逐步增加 focused seam-based tests。
-
----
-
-# 19. Hermeticity 与 Fidelity 的 Trade-off
-
-你可以有：
-
-```text
-A. 完全 fake 的 unit test
-fast / deterministic / low fidelity
-
-B. tmpdir + real serializer
-medium cost / medium-high fidelity
-
-C. real service integration
-slow / high fidelity / noisy
-```
-
-M06 的目标不是选一个“最专业”的层级。
-
-而是构造：
-
-```text
-fast feedback loop
-+
-足够真实的 compatibility probe
-```
-
-这是一种 portfolio thinking。
-
----
-
-# 20. 什么时候不应该打 Seam
-
-## 20.1 Dependency 已经便宜且 deterministic
-
-例如 pure function：
+最快的“修复”当然是：
 
 ```python
-normalize_status(x)
+state.jobs[target].status = JobStatus.RUNNING
 ```
 
-不需要为了“可测试性”加 interface。
+但这会绕过 M01/M02 已经建立的 lifecycle/ownership semantics。测试如果通过作弊 setup 产生一个 production path 无法产生的 pre-state，它的 fidelity 会下降，甚至可能保护错误的 mental model。
 
-## 20.2 seam 比 dependency 本身更复杂
+Reference 最后调整的是 setup 顺序，让真实 `submit → claim_next → finish` path 产生需要的 states。这个例子很值得保留，因为它提醒我们：**characterization 的可信度不仅取决于 assertion，也取决于输入状态是否通过合法 authority 构造。**
 
-如果为了替换一行：
+同样，audit 文件本身只是 TaskForge state 的一个 reporting projection：它记录 id、status、exit code、command 等当前需要展示的字段，不因为写进文件就成为 job lifecycle 的第二 authority；没投影的 state dimension 也不能被解释为“不存在”。
 
-```python
-len(items)
-```
+## 11. 为什么第一批 legacy tests 不一定应该是 unit tests
 
-引入 provider abstraction，就是负收益。
+`legacy_audit.py` 天然就是一个 integration-shaped function：env + clock + hostname + state 输入，filesystem + stdout 输出。为了第一次 takeover，直接在 tempdir 中运行它并检查 boundary effects，可能比先拆十二个 injectable classes 更安全。
 
-## 20.3 你只是想测试 implementation interaction
+这种较高层 characterization 有明显优点：production diff 可以保持为零；真实 serializer、newline、append 和 ordering 都参与实验；它对第一次理解 unknown behavior 很有 fidelity。
 
-如果测试唯一价值是：
+代价也真实存在：它通常更慢，failure localization 较差，setup 更重，也不适合穷举所有 edge cases。等 system model 稳定以后，再增加更 focused 的 tests 可能有价值。
 
-```text
-assert mock.foo called_once_with(...)
-```
+这就是 hermeticity 与 fidelity 的 trade-off。Google testing material 强调 hermetic test 的 determinism/isolation，同时 Larger Testing 也提醒我们 fidelity 是另一个维度。全 mock 的 unit test 可以非常 deterministic，却只验证自己复制出来的 call choreography；tempdir + real formatter 稍重，却可能更接近这次 compatibility risk。
 
-先问：
+因此不要寻找“最专业的测试层级”。更实用的是一个 evidence portfolio：便宜、稳定的本地 feedback，加上足够真实的 boundary/regression probe。具体比例随系统和风险变化，不是固定 test pyramid 宗教。
 
-> caller-visible behavior 到底是什么？
+## 12. Static reading、history 和 runtime probe 要互相校正
 
----
+第一次接手陌生代码，只把 repo 从头读到尾并不等于理解完成。更有效的一种工作方式是 hypothesis-driven exploration。
 
-# 21. Legacy Code 中的 Refactoring 顺序
+例如你先猜：“daily audit 会 overwrite 当天文件。”然后在同一天受控运行两次，观察到第二个 block 出现在第一个后面，于是更新 model：append 是 observed behavior。
 
-M05 的 refactoring workflow 在 legacy 条件下必须变成：
+再例如你猜：“job rows 按 id 排序。”构造一个能区分排序与 insertion order 的 scenario，实际观察 current state order，于是承认原 hypothesis 错了。
 
-```text
-unknown system
-↓
-characterize
-↓
-minimal seam
-↓
-characterize more precisely
-↓
-small structural improvement
-↓
-new feature/fix
-```
+这种 `hypothesis → probe → observation → model update` 的循环比“读完以后写 architecture summary”更能暴露误解。Agent 尤其需要这个约束：读得多并不等于知道 production runtime、hidden consumer 或 historical quirk。
 
-而不是：
+Repository history、issue、old PR 和 comments 也很有价值。它们可能解释某个奇怪格式为什么存在、某个 workaround 为什么不能删。但 history 可能过时，也可能记录了一个当时就错误的 assumption，更不保证覆盖 unknown consumers。
 
-```text
-unknown system
-↓
-large cleanup
-↓
-write tests for cleaned-up structure
-```
+所以 history 是 evidence，不是 oracle。高质量 takeover 会把 code reading、history、current tests 和 runtime characterization 交叉使用，并允许 unresolved items 继续标 `UNKNOWN`。
 
-后者很容易把你自己的误解固化成新 architecture。
+## 13. Agent 接管 legacy repo：控制它什么时候有资格写代码
 
----
-
-# 22. “我看不懂这段代码”时怎么做
-
-不要只做静态阅读。
-
-建立 hypothesis-driven exploration：
-
-```text
-Hypothesis:
-report appends rather than overwrites.
-
-Probe:
-run twice with same day/output root.
-
-Observation:
-second block appended.
-
-Update model:
-append semantics are observed behavior.
-```
-
-然后继续：
-
-```text
-Hypothesis:
-job order is sorted by id.
-
-Probe:
-construct nontrivial lifecycle/order case.
-
-Observation:
-order follows insertion order.
-
-Update model:
-my hypothesis was wrong.
-```
-
-这比“把所有文件读一遍再总结”更接近科学方法。
-
----
-
-# 23. Repository History 是 Evidence，不是 Oracle
-
-Git history、issue、old PR、comments 都很重要。
-
-它们可以帮助判断：
-
-```text
-这个奇怪行为是 intentional 吗？
-为什么这里有 workaround？
-以前有人试过改吗？
-```
-
-但历史也可能：
-
-- 过时；
-- 错误；
-- 没覆盖 hidden consumer。
-
-所以：
-
-```text
-history evidence
-+
-runtime characterization
-+
-current tests
-```
-
-要交叉使用。
-
----
-
-# 24. Legacy Takeover 的 Agent Workflow
-
-## Phase 1 — Reconnaissance only
-
-给 Agent：
-
-```text
-Do not edit.
-Map entry points, dependencies, side effects, nondeterminism,
-and current tests related to <change>.
-Mark unknowns explicitly.
-```
-
-输出必须包含证据位置。
-
-## Phase 2 — Behavior probes
-
-```text
-Design the smallest runtime probes that answer these unknowns.
-Do not refactor production code yet.
-```
-
-## Phase 3 — Characterization
-
-```text
-Turn confirmed observations around the change cone
-into deterministic characterization tests.
-```
-
-## Phase 4 — Minimal seam
-
-```text
-Open only the seam required to control the remaining nondeterminism.
-No feature change.
-Existing characterization must remain unchanged.
-```
-
-## Phase 5 — Behavior change
-
-```text
-Implement the requested behavior under an explicit new contract.
-Show red-before / green-after evidence.
-```
-
-## Phase 6 — Independent review
-
-另一个 Agent 只看：
-
-```text
-Did the patch preserve characterized behavior outside the requested delta?
-Did it broaden the seam unnecessarily?
-Did tests assert behavior or new implementation details?
-What unknowns remain?
-```
-
----
-
-# 25. 一个坏 Agent Prompt
+最危险的 prompt 之一是：
 
 ```text
 Clean up legacy_audit.py, make it testable, and add failed-only mode.
 ```
 
-为什么危险？
+它把三个不同任务压成一句话：理解 current behavior、改变 structure、改变 behavior。一个 Agent 很容易一次生成新的 interfaces、dependency container、DTO、tests 和 feature；最终 tree 甚至可能很漂亮，但 reviewer 很难知道哪些旧 behavior 被无意改掉。
 
-因为把三个不同目标混在一起：
+更可靠的 Agent workflow 可以围绕 epistemic state 分阶段。
 
-```text
-understand current behavior
-change structure
-change behavior
-```
+第一阶段只做 read-only reconnaissance：定位 entry points、state reads/writes、side effects、nondeterminism、relevant tests 和 unknowns，并给证据位置。
 
-Agent 可以轻松生成一个漂亮但无法审计的大 diff。
+第二阶段只设计最小 runtime probes，回答 change cone 上最重要的 unknowns；仍然不改 production code。
 
----
+第三阶段把确认过的 observations 变成 deterministic characterization，并用 negative control 证明 safety net 有牙齿。
 
-# 26. 一个更好的 Agent Task Contract
+第四阶段才问：现有 seam 是否已经足够？如果不够，只打开当前 change 需要的最小 control point，并把这个 structural patch 与 feature 分开；如果已经够，就允许 **no production seam change** 这个答案。
+
+第五阶段在显式新 contract 下实现 requested behavior，展示 fail-before / pass-after，并重跑旧 characterization。
+
+最后让独立 reviewer 不依赖作者总结，检查：requested delta 之外的 characterized behavior 是否保持？seam 是否被无理由扩大？tests 是否保护 effect 而非新 helper choreography？哪些 unknown 仍未闭合？
+
+一个具体 task contract 可以是：
 
 ```text
 Goal:
-Add failed-only audit scope.
+- add failed-only audit scope
 
 Before implementation:
-1. do not edit;
-2. characterize current default output for empty, mixed, repeated-write cases;
-3. record path, ordering, append, newline, stdout behavior;
-4. mark observed-but-unspecified quirks.
+- do not edit production code
+- characterize empty, mixed, repeated-write, default-owner and stdout behavior
+- record observed vs specified vs unknown separately
+- map the effect region around job selection
 
-Structural phase:
-open only the smallest seam required to control time/hostname/output root;
-do not alter default output bytes.
+Feedback:
+- control clock/host/output root using the cheapest trustworthy mechanism
+- verify characterization can fail under at least one relevant negative control
+- do not introduce a production dependency framework unless existing control points are insufficient
 
-Behavior phase:
-scope=failed selects only FAILED jobs;
-scope=all remains byte-compatible with the characterized baseline.
+Behavior change:
+- scope=failed includes only FAILED jobs
+- scope=all preserves characterized default behavior
+- invalid scope fails before filesystem mutation
 
 Non-goals:
-no audit format redesign;
-no global state architecture rewrite;
-no new persistence layer;
-no broad dependency-injection framework.
+- no audit format redesign
+- no TaskForge state-ownership rewrite
+- no dashboard/public-API cleanup
+- no broad DI framework
 
 Evidence:
-- characterization pass before feature;
-- seam-only phase preserves fingerprints;
-- failed-only test fails before feature and passes after;
-- full existing suite passes.
+- show observations before implementation
+- show negative-control failure
+- show feature red -> green
+- re-run old characterization and core tests
 ```
 
-这就是 Agent 时代 software engineering 的价值：
+这个 prompt 的重点不是更长，而是让 Agent 的 write authority 依赖于它已经获得什么 evidence。Agent 可以替你做大量机械探索和实现，但不能靠一句“我已理解现有行为”自行授予修改权限。
 
-> **不是告诉 Agent 每一行怎么写，而是控制它在哪些 epistemic assumptions 下允许开始写。**
+## 14. Review legacy change 时，先审 epistemic chain
 
----
+一个 legacy patch 的 code style 可能很好，tests 也可能全绿，但 reviewer 仍然应该先追一条更基本的链：作者原来不知道什么？用什么 observation 把 unknown 变成 evidence？哪些 observation 被有意识地保护？哪里开始进入新 specification？有没有把自己的新设计误写成历史事实？
 
-# 27. 如何 Review Legacy Change
+围绕这条链，可以压缩成几组 review questions：
 
-不要先看 style。
+**Change understanding**：change point 和 effect region 是否明确？unknown 是否被诚实保留，还是被作者猜成了 contract？
 
-先问：
+**Feedback**：characterization 是否真的对应当前风险？oracle 是 current observation、written spec 还是新 requirement？有没有验证 test 会 red？
 
-## 27.1 Change understanding
+**Control / seam**：当前困难是 sensing、separation 还是两者？已有 control point 是否已经够用？若新增 seam，enabling point 在哪里，scope 是否超过 current change？
 
-- change point 是否明确？
-- effect cone 是否合理？
-- unknown 是否被诚实记录？
+**Behavior**：structural preparation 与 requested delta 是否分开？默认 append/order/format 等 characterized behavior 是否被无意识“clean up”？invalid input 的 no-effect claim 是否真的发生在 mutation 前？
 
-## 27.2 Feedback
+**Remaining risk**：哪些 behavior 仍然 unknown？哪些 consumer 没调查？哪些高-fidelity scenario 没跑？是否需要后续 compatibility work 或 production observation？
 
-- 新增 characterization 是否真的对应风险？
-- 是否验证过 test 能 red？
-- 是否过度 snapshot 无关行为？
+尤其不要把 “characterized” 自动翻译成 “forever public contract”。M08 会专门处理 unknown consumers、compatibility 和 migration。M06 只要求你在证据不足时不要无意识破坏现状，并在决定改变时明确宣布 delta。
 
-## 27.3 Seam
+## 15. Legacy system 不会因为一次“现代化”突然毕业
 
-- seam 是解决 sensing 还是 separation？
-- enabling point 在哪里？
-- scope 是否比当前 change 更大？
-- 有没有引入新的 production concepts 只为测试服务？
+M06 的目标也不是把一个系统从 `legacy` 一次性改造成 `modern`。
 
-## 27.4 Behavior
+更现实的变化是累积式的：change A 让你建立一组 characterization；change B 迫使你打开一个小 seam；change C 让某个过去模糊的 boundary 得到明确 contract。几轮以后，系统的 unknowns 变少、feedback 变快、boundaries 更清楚。
 
-- requested delta 是否与 structural change 分开？
-- default behavior 是否保持？
-- known quirks 是否被无意“修复”？
+这也是为什么三行 control point 加两条高信息量 tests，有时比一次 architecture rewrite 更有工程价值。一次 change 没必要顺便建立新 domain layer、repository layer、adapter layer 和 event bus；除非当前 pressure 真正需要它们。
 
-## 27.5 Remaining risk
+当某个 seam 在多次变化中反复显示稳定价值，它可能逐渐上升成更正式的 architectural boundary；当一个 observed quirk 被证明没有 consumer 或已完成 migration，它也可以被显式删除。**渐进式“去 legacy 化”是持续减少 change uncertainty，不是追求某一种现代代码外形。**
 
-- 哪些 behavior 仍然 unknown？
-- 哪些高-fidelity scenario 没跑？
-- 是否需要 post-merge observation？
+## 16. 来源边界与本章不能推出的结论
 
----
+本章主干来自 Michael Feathers 的 *Working Effectively with Legacy Code*：working with feedback、sensing/separation、seam/enabling point、characterization 和 targeted testing。课程采用这些 decision models，而不是照搬 2004 年 Java/C++/C# 背景下的 dependency-breaking technique catalog。
 
-# 28. Legacy Code 与 Architecture 的关系
+Martin Fowler 的 `Legacy Seam` 用现代语言补充 seam：它不只可用于 unit-test dependency substitution，也可能支持 probe、observability 或渐进 displacement。Google testing material用来校正另一个方向的误区：hermeticity 很重要，但 isolation 与 fidelity 是不同维度，test doubles 过度绑定 implementation 会产生维护成本。
 
-不要以为：
+有几项表述明确属于课程 synthesis：`Legacy condition = change without enough trustworthy change-relevant feedback` 是对 Feathers framing 的扩展，不是他的字典定义；effect sketch、Agent staged takeover/task contract 和“write authority 依赖 evidence”的表达也是本课程把这些来源与前置模块组合后的工作模型。
+
+因此本章不能推出这些规则：旧代码就是坏代码；没有 tests 的代码都必须先全面补 coverage；characterization 证明当前 behavior 正确；所有 observed behavior 都要永久保留；seam 必须是 interface/DI；发现 seam 就应该 formalize；unit test 永远比 process/integration probe 好；Agent 读完整个 repo 就可以直接重构。
+
+真正要带走的是一条更窄的 reasoning chain：
 
 ```text
-legacy code
-→ architecture rewrite
+requested change
+→ admit what is unknown
+→ read and form hypotheses
+→ run targeted probes
+→ separate observed behavior from intended contract
+→ build characterization with a real oracle
+→ distinguish sensing from separation
+→ reuse or open the smallest sufficient control point
+→ make the requested behavior change explicitly
+→ preserve evidence outside the intended delta
+→ record remaining uncertainty
 ```
 
-M06 更关心的是**建立局部可控性**。
+下一章 M07 会再拿走一个舒适条件：即使你已有测试、control points 和清楚的 single-thread behavior，并发、cancellation、retry、crash 与 restart 仍会让 temporal/lifecycle reasoning 变得困难。
 
-有时三行 seam 加两个 characterization tests，就足以让一个危险 change 变成安全 change。
+## 可选原始资料
 
-这比花两周设计：
+本章自包含；希望核对原始观点时可看：
 
-```text
-new domain layer
-new repository layer
-new adapter layer
-new event bus
-```
+- Michael Feathers, *Working Effectively with Legacy Code* public samples / TOC: https://www.informit.com/store/working-effectively-with-legacy-code-9780132931779
+- Feathers, *Testing Effectively With Legacy Code*: https://www.informit.com/articles/article.aspx?p=359417
+- Feathers, *Changing Software and Legacy Code*: https://www.informit.com/articles/article.aspx?p=359418
+- Martin Fowler, `Legacy Seam`: https://martinfowler.com/bliki/LegacySeam.html
+- *Software Engineering at Google*, Testing Overview: https://abseil.io/resources/swe-book/html/ch11.html
+- *Software Engineering at Google*, Test Doubles: https://abseil.io/resources/swe-book/html/ch13.html
+- *Software Engineering at Google*, Larger Testing: https://abseil.io/resources/swe-book/html/ch14.html
 
-更有工程价值。
-
----
-
-# 29. Legacy Code 的渐进式“去 Legacy 化”
-
-一个系统不是某天从：
-
-```text
-legacy
-```
-
-瞬间变成：
-
-```text
-modern
-```
-
-更现实的是：
-
-```text
-change A
-→ 打开 seam A
-→ characterization A
-
-change B
-→ characterization B
-→ 清理一个 dependency
-
-change C
-→ 明确一个 API contract
-
-...
-```
-
-逐渐形成：
-
-```text
-更清晰的 boundaries
-更快的 feedback
-更明确的 contracts
-更少的 unknowns
-```
-
-软件工程的很多改善都发生在**修改功能时顺手建立未来的可修改性**。
-
----
-
-# 30. 这一章真正想让你形成的直觉
-
-面对陌生旧系统，不要问：
-
-> “怎么重构得更漂亮？”
-
-先问：
-
-> “我需要改变什么？”
->
-> “我现在凭什么知道没改坏？”
->
-> “哪一个最小 seam 可以让我得到这个 feedback？”
-
-这三问，是 M06 的核心。
-
----
-
-# 31. 与前五章连接
-
-```text
-M00
-复杂度最危险的形式之一是 unknown unknowns
-
-M01
-没有 spec 时，要明确区分 observed behavior 与 intended contract
-
-M02
-seam 本质上是在重新安排 boundary / knowledge / authority
-
-M03
-characterization test 仍然只是 evidence，必须验证 oracle 有牙齿
-
-M04
-error/output/file semantics 都可能成为 boundary contract
-
-M05
-refactoring 需要 behavior-preserving；M06 先解决“behavior 到底是什么”
-
-M06
-在不确定系统里先建立 feedback
-```
-
-下一章 M07 会进一步破坏我们的假设：
-
-```text
-即使你已经有测试和 seam，
-并发、lifecycle、retry、crash 仍会让单线程 mental model 失效。
-```
-
----
-
-# 32. 本章最小记忆集
-
-如果只记住八句话：
-
-1. **Legacy 的核心风险不是旧，而是 change without trustworthy feedback。**
-2. **Observed behavior 不等于 correct behavior，但不能无意识改变。**
-3. **Characterization test 首先记录事实，不是宣判事实合理。**
-4. **先围绕当前 change 建 targeted feedback，不要先追全局 coverage。**
-5. **Sensing 与 separation 是两个不同问题。**
-6. **Seam 是可替换行为的机会，不是 interface 的同义词。**
-7. **只打开当前 change 所需的最小 seam。**
-8. **Agent 接管 legacy repo 时：read → hypothesize → probe → characterize → seam → change，而不是 read → rewrite。**
-
-这八条足够支撑你开始真正维护陌生系统。
+具体来源审计与取舍见 [`../reading-notes/m06-source-audit.md`](../reading-notes/m06-source-audit.md)。
