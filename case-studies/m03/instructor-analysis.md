@@ -408,24 +408,32 @@ M03 contract 明确禁止。
 
 ## Regression test
 
+这里 oracle 只保护 authority isolation。它不能额外要求 observation 必须 writable，因为后面的 immutable `JobView` 也是合法 candidate：
+
 ```python
 def test_get_does_not_expose_authoritative_mutable_job() -> None:
     job_id = service.submit("echo hi")
 
     observed = service.get(job_id)
-    observed.status = JobStatus.SUCCEEDED
+    try:
+        observed.status = JobStatus.SUCCEEDED
+    except Exception:
+        # read-only observation 拒绝 mutation 也是合法结果。
+        pass
 
     assert service.get(job_id).status == JobStatus.QUEUED
 ```
 
-在 baseline 上应该失败：
+这里故意只在 mutation attempt 周围接受普通 exception；M03 contract 没有规定 rejection mechanism，因此不应把 `FrozenInstanceError` 等具体实现细节写进 oracle。其他 tests 仍负责验证 observation 本身可正常读取。
+
+在 baseline 上 assignment 成功并直接写穿 authoritative object，所以最后的 assertion 应该失败：
 
 ```text
 expected QUEUED
 actual SUCCEEDED
 ```
 
-这就是必须保留的 fail-before evidence。
+对 defensive snapshot，同一 assignment 只改本地副本；对 frozen `JobView`，assignment 被拒绝。两者最终都保持 authoritative `QUEUED`，因此同一条 regression test 都应通过。这才是必须保留的 fail-before / pass-after evidence。
 
 同样还应该思考：
 
@@ -576,7 +584,23 @@ baseline + 2 个 authority-leak regression tests:
     8 passed
 ```
 
-因此这里的 red→green 是实际执行过的 reference，不是仅凭代码阅读推测。
+因此这里的 red→green 是实际执行过的 reference，不是仅凭代码阅读推测。这个历史记录只验证了 snapshot candidate，不应被改写成“当时也运行过 immutable view”。
+
+针对 regression oracle 是否误杀另一种 legal implementation，本轮又在独立临时 process 中对 `get()` 与 `list_jobs()` 各跑了同一个 authority-isolation probe，没有修改仓库 production/test code：
+
+```text
+get():
+  baseline authoritative alias -> FAIL
+  defensive snapshot           -> PASS
+  frozen JobView               -> PASS (mutation rejected)
+
+list_jobs():
+  baseline authoritative alias -> FAIL
+  defensive snapshots          -> PASS
+  frozen JobView list          -> PASS (mutation rejected)
+```
+
+这个追加 probe 只证明当前 oracle 能区分“authority 泄漏”而不要求 observation 可写；它不是 `JobView` architecture 的完整 implementation test，也不替代 compatibility / type-surface review。
 
 ---
 

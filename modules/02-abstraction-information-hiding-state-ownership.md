@@ -1,305 +1,67 @@
 # M02 — Abstraction、Information Hiding 与 State Ownership
 
-> 本章目标：从“把代码分成几个类/文件”提升到“让变化、知识和状态都有明确归属”。
+M01 最后留下了一个没有被 specification 本身回答的问题：我们已经知道哪些状态必须合法、哪些 transition 应被拒绝，也开始寻找 invariant 的 enforcement point；但**谁有资格改变这些事实，谁只能观察或请求变化？**
 
-上一章讨论了 specification、contract 与 invariant。现在我们进入一个更困难的问题：
+这一章不从 `encapsulation`、`repository pattern` 或 `dependency inversion` 的定义开始。先看一个更难受的现象：TaskForge 的功能测试全部通过，但一个普通 caller 仍然可以绕开所有 lifecycle rule，把 authoritative state 直接改掉。
 
-> **这些 contract 和 invariant 应该由谁负责？**
+为了隔离本章变量，实验仓库里的 TaskForge 仍然是一个刻意简单的 v0：只有 `QUEUED / RUNNING / SUCCEEDED / FAILED / CANCELLED`，没有把 M00/M01 用来推理的 `CANCELLING` 或 `cancellation_requested` 候选设计写进 production baseline。前两章讨论的是可选 contract；这一章先拿更小的现有系统练习 boundary 和 ownership。不要把教学候选和当前 repo state 混成同一张模型。
 
-这是软件设计真正开始的地方。
+## 1. 六个测试都绿，为什么 caller 仍然能改掉系统事实？
 
-很多代码库表面上已经“模块化”了：有很多文件、class、interface，字段甚至都是 `private`。但一旦加一个需求，你仍然可能需要同时修改十几个地方；一旦某个状态出错，你也不知道哪个模块说了算。
-
-这说明：
-
-> **语法上的封装不等于工程上的信息隐藏；代码里只有一份变量，也不等于系统里只有一个 authority。**
-
-本章建立三层模型：
-
-1. **Abstraction**：使用者应该依赖什么概念，而不是依赖什么表示；
-2. **Information Hiding**：哪些设计知识必须被局部化；
-3. **State Ownership**：哪个组件有权决定某个事实是什么、怎样变化。
-
-这三层共同决定一个系统是否真的“ready for change”。
-
----
-
-## 1. 从一个很普通的坏设计开始
-
-假设我们有一个后台任务系统 TaskForge。
-
-最初代码只有几个模块：
-
-```text
-api.py
-worker.py
-metrics.py
-state.py
-```
-
-`state.py` 里有：
+TaskForge v0 的共享状态非常直接：
 
 ```python
-jobs = {}
-next_job_id = 1
+# state.py
+jobs: dict[str, Job] = {}
+next_job_number: int = 1
 ```
 
-然后：
+`service.submit()` 负责分配 ID 并插入 `Job`，`service.cancel()` 会改 status；`worker.claim_next()` 和 `worker.finish()` 也直接遍历或修改同一个 dict。`metrics.py` 虽然只读，却同样知道 collection 的具体 representation。
 
-- `api.py` 创建 job，直接写 `jobs`；
-- `worker.py` claim job，直接改 `jobs[job_id].status`；
-- `api.py` cancel job，也直接改 `status`；
-- `metrics.py` 遍历 `jobs` 计算 queued count；
-- 测试为了清空环境，也直接 `jobs.clear()`。
-
-功能完全可以跑。
-
-甚至代码还很短。
-
-但现在加几个需求：
-
-1. `RUNNING` 的 job 不能直接 cancel，只能先发 cancellation request；
-2. job ID 以后需要从 SQLite 恢复，重启不能重复；
-3. worker claim 时必须原子地从 `QUEUED -> RUNNING`；
-4. API 查询到的 job 不能让调用方直接修改内部状态；
-5. 以后可能有 remote worker。
-
-突然你发现每个需求都需要知道：
-
-```text
-谁在写 jobs？
-谁在生成 ID？
-谁在解释 status？
-谁保证状态转移合法？
-谁把内存状态和持久化状态保持一致？
-```
-
-如果答案是“很多地方都知道一点”，那真正的问题不是某个函数写得不好。
-
-真正的问题是：
-
-> **设计知识和修改权限没有清晰的 owner。**
-
----
-
-# 2. Abstraction 到底是什么
-
-“抽象”这个词非常容易被讲空。
-
-一个实用定义是：
-
-> **Abstraction 是一组允许调用者依赖的概念与行为，同时故意省略实现这些行为所不需要知道的细节。**
-
-比如一个 `JobQueue` 的抽象可能是：
-
-```text
-submit(command) -> JobId
-claim() -> Job | None
-cancel(job_id) -> outcome
-get(job_id) -> JobView
-```
-
-调用者应该依赖的是：
-
-- job 有 identity；
-- job 有 lifecycle；
-- claim 会取一个可运行 job；
-- cancel 有明确结果。
-
-调用者不应该必须知道：
-
-- job 放在 list、dict 还是 SQLite；
-- ID 是整数、UUID 还是数据库 sequence；
-- queue 是按数组扫描还是 heap；
-- 内存里是否有 cache；
-- 一次 transition 实际写几张表。
-
-MIT 6.102 对 ADT 的一个关键表述就是：**抽象类型由它的 operations 及其 specification 定义，而不是由内部 representation 定义。** 课程进一步用 representation independence 检查：替换内部 representation 时，client 是否需要变化。
-
-这个检查极有用：
-
-> **如果我把内部表示完全换掉，哪些外部代码必须跟着改？为什么？**
-
-如果答案是“大量 client 都必须知道”，说明 abstraction 没有真正成立。
-
----
-
-# 3. Interface 不只是函数签名
-
-很多人把 interface 理解成：
+真正危险的地方还不止这些显式 writer。`service.get()` 当前直接返回 dict 里那一个 `Job`：
 
 ```python
-def submit(command: str) -> str:
-    ...
+job_id = service.submit("echo hi")
+job = service.get(job_id)
+job.status = JobStatus.SUCCEEDED
+
+assert service.get(job_id).status == JobStatus.SUCCEEDED
 ```
 
-但真正的 interface 远比签名大。
+这段修改没有经过 `cancel()`、`claim_next()` 或 `finish()`，也没有检查任何 lifecycle rule，却真的改变了 TaskForge 后续看到的状态。于是“有哪些 writer？”这个问题不能只靠搜索 `.status =` 回答。严格地说，**每一个拿到 authoritative mutable `Job` reference 的 caller 都获得了潜在 write authority**。
 
-调用者可能还必须知道：
+现在想象你要增加一种新的 lifecycle 语义，或者只是把内存 dict 换成 SQLite。你会马上碰到几类压力：
 
-- `submit()` 是否立即持久化；
-- 是否可能返回重复 ID；
-- callback 会不会同步调用；
-- 返回对象能不能修改；
-- 调用 `close()` 以后还能不能 `submit()`；
-- error 是否代表“确定失败”还是“结果未知”；
-- 两个并发调用之间有什么 ordering；
-- 某个方法必须在另一个方法之后调用。
+- `service.py`、`worker.py`、`metrics.py` 都知道 collection 是 `dict[str, Job]`；
+- lifecycle rule 分散在 cancel、claim、finish 等路径；
+- ID allocator 与 collection 是两个 module-level mutable globals；
+- `get()` / `list_jobs()` 把内部 mutable object 直接交给 caller；
+- claim 的 FIFO 行为实际上依赖 dict insertion order；
+- 测试 fixture 也能直接 reset 共享状态。
 
-这些全是 interface 的一部分。
+这时再问“应该加哪个 class？”还太早。更有价值的是先问：**哪些知识本来应该只存在一个地方？哪些事实本来应该只有一个 authoritative mutation path？**
 
-Stanford CS190 的 modular design notes 特别强调：interface 包含 formal aspects，也包含 informal aspects；后者包括 side effect、调用者必须理解的行为和设计决定。
+这两个问题分别把我们带向 abstraction / information hiding 和 state ownership。
 
-所以：
+## 2. 先让 representation 变化一次，Abstraction 才不再是空话
 
-> **`private` 只隐藏语法可见性；它不能自动隐藏语义依赖。**
-
-例如：
-
-```python
-class Queue:
-    def __init__(self):
-        self._jobs = []
-
-    def first(self):
-        return self._jobs[0]
-```
-
-虽然 `_jobs` 是 private，但如果所有调用者都知道：
-
-```text
-index 0 一定是 oldest queued job
-```
-
-并且业务逻辑依赖这个事实，那么这个 representation decision 已经泄漏了。
-
----
-
-# 4. Information Hiding：隐藏的是“设计知识”
-
-Parnas 式 modularity 和 Ousterhout 的 information hiding 都指向同一个非常重要的直觉：
-
-> **模块应该围绕容易变化、代价高、调用者不应知道的设计决定建立边界。**
-
-这里的“information”不是“数据不能被别人看到”。
-
-它更接近：
-
-```text
-为了正确修改这个系统，你必须知道的设计知识。
-```
-
-例如 TaskForge 中这些都是应该考虑隐藏的知识：
-
-- job ID 如何分配；
-- 哪些 status transition 合法；
-- claim 怎样选择 job；
-- terminal state 怎样定义；
-- cancel 对 running job 的语义；
-- persistence transaction 怎么组织；
-- restart 时怎样恢复 incomplete work。
-
-如果这些规则散落在多个模块：
-
-```text
-api.py       知道一点
-worker.py    知道一点
-storage.py   知道一点
-metrics.py   又复制一点
-```
-
-那么添加新状态 `CANCELLING` 时，你就必须进行全仓同步修改。
-
-这叫 **information leakage**。
-
----
-
-# 5. 一个非常实用的判断：变化是否被局部化
-
-设计质量很难直接测量，但 change amplification 是一个很好用的 proxy。
-
-假设我们把状态从：
-
-```text
-QUEUED -> RUNNING -> SUCCEEDED | FAILED
-```
-
-扩展成：
-
-```text
-QUEUED
-  ↓
-RUNNING -> CANCELLING -> CANCELLED
-  ↓
-SUCCEEDED | FAILED
-```
-
-设计 A：
-
-```text
-api.py       自己判断 transition
-worker.py    自己判断 transition
-cli.py       自己判断 terminal
-metrics.py   自己复制 status 集合
-storage.py   自己知道哪些状态需要 persist
-```
-
-设计 B：
-
-```text
-JobRegistry / JobLifecycle
-    ├── transition rules
-    ├── state mutation
-    └── query semantics
-
-api / worker / cli / metrics
-    只通过明确操作访问
-```
-
-两个设计当前都能跑。
-
-但增加 `CANCELLING` 时：
-
-- A 要同步修改多个地方，而且你必须先找到所有 hidden assumptions；
-- B 的核心规则更可能集中在一个 owner 附近，其他模块只在确实需要新行为时变化。
-
-这不是“文件越少越好”。
-
-而是：
-
-> **同一种设计知识应该尽可能只有一个 authoritative home。**
-
----
-
-# 6. Representation Independence：一个很强的设计测试
-
-考虑下面两个 API。
-
-### API A
+假设我们希望把 job storage 从当前 dict 换成 SQLite。最直接的接口如果是：
 
 ```python
 def all_jobs() -> dict[str, Job]:
     return jobs
 ```
 
-调用者可以：
+client 依赖的不只是“可以读取 jobs”。它还知道：
 
-```python
-jobs = all_jobs()
-jobs["j-7"].status = Status.SUCCEEDED
-```
+- collection 是 dict；
+- value 是当前 authoritative mutable `Job`；
+- 遍历顺序来自 dict；
+- 修改 value 会修改系统事实。
 
-这意味着调用者不仅知道 representation 是 dict，还获得了修改 authority。
+于是 storage 一变，很多 client 都必须跟着变；更糟的是，即使 storage 不变，client 也可以绕过 lifecycle policy。
 
-以后你想换成 SQLite：
-
-```text
-内存 dict 不再是完整事实
-```
-
-大量调用者就会失效。
-
-### API B
+一种候选边界可以不再交出 collection，而只暴露语义操作和 read projection：
 
 ```python
 def get(job_id: JobId) -> JobView:
@@ -308,153 +70,86 @@ def get(job_id: JobId) -> JobView:
 def list_jobs() -> tuple[JobView, ...]:
     ...
 
-def complete(job_id: JobId, exit_code: int) -> CompleteResult:
+def claim_next() -> JobView | None:
+    ...
+
+def finish(job_id: JobId, exit_code: int) -> None:
     ...
 ```
 
-client 只依赖操作和结果。
+caller 现在依赖的是 lookup、listing、claim、finish 这些行为，而不是“内部有一个 dict 可以拿来改”。内部以后仍然可能是 dict，也可能变成 SQLite，甚至再往后变成远端 service；只要这组对外语义不变，client 就不应该因为 concrete representation 改变而被迫同步重写。
 
-内部可以从：
+到这里再给概念命名比较有意义。MIT 6.102 用 Abstract Data Type 说明：抽象由 operations 及其 specification 定义，abstract value 对 client 是 opaque 的，concrete representation 属于 implementation。它还用 **representation independence** 提供了一个非常实用的压力测试：
 
-```text
-dict
-```
+> 如果内部 representation 改变，而 contract 没变，哪些 client 仍然必须改？它们为什么知道了这么多？
 
-换到：
+这不是要求“所有实现都可以随便替换 storage”。有时性能、transaction、ordering 或 durability 本来就是 public contract 的一部分，换 representation 确实会改变可观察语义。要找的是 **accidental dependency**：client 只是因为 implementation 泄漏才被迫知道的东西。
 
-```text
-SQLite
-```
+### Interface 比函数签名更大
 
-甚至：
+`claim_next() -> Job | None` 看起来只是一个很短的 signature，但真实 interface 还可能包括：
 
-```text
-remote service
-```
+- 选择哪个 eligible job；
+- 返回对象是不是 snapshot；
+- claim 成功时 transition 是否已经 authoritative；
+- concurrent caller 是否可能 claim 到同一个 job；
+- failure 以后 caller 能否判断 transition 是否发生；
+- 是否必须先调用另一个 operation；
+- 返回对象未来是否仍然有效，还是只是某一时刻的 observation。
 
-只要 contract 不变。
+Stanford CS190 的 modular-design materials 明确强调，module interface 同时包含 formal 和 informal aspects。`private` 能改变语言层可见性，却不能自动消除这些语义依赖。
 
-这就是 representation independence 的工程价值。
-
-一个非常值得反复问的问题：
-
-> **这个 client 依赖的是业务语义，还是偶然的内部表示？**
-
----
-
-# 7. Encapsulation ≠ Information Hiding
-
-考虑：
+例如一个 class 把 `_jobs` 标成 private，却提供：
 
 ```python
-class Scheduler:
-    def __init__(self):
-        self._jobs = {}
-
-    def jobs(self):
-        return self._jobs
+def raw_status(job_id):
+    return self._jobs[job_id].status_code
 ```
 
-字段虽然是 private，但返回了原对象。
-
-这叫 representation exposure。
-
-再看一个更隐蔽的例子：
-
-```python
-class Scheduler:
-    def raw_status(self, job_id):
-        return self._jobs[job_id].status_code
-```
-
-假设 `status_code` 是：
-
-```text
-0 = queued
-1 = running
-2 = done
-3 = failed
-```
-
-client 到处写：
+而所有 client 都写：
 
 ```python
 if scheduler.raw_status(job_id) >= 2:
     ...
 ```
 
-即使没有任何 mutable object 泄漏，representation knowledge 仍然泄漏了。
+即使没有 mutable reference 泄漏，`0/1/2/3` 的 encoding knowledge 已经扩散出去。以后内部增加状态或重排编码，外部代码都会被拖进来。
 
-所以真正的问题不是：
+所以 abstraction 的工程问题不是“有没有 class/interface”，而是：**client 被允许依赖哪些概念，又被迫知道了哪些本不该知道的实现决定？**
 
-> 字段有没有 private？
+## 3. Information Hiding 隐藏的是设计知识，不只是数据
 
-而是：
+回到当前 TaskForge，先看哪些 knowledge 已经局部化、哪些还没有。`Job.terminal` 是一个小但重要的正例：`SUCCEEDED / FAILED / CANCELLED` 这组 terminal knowledge 已经集中在 model 里，`metrics.terminal_count()` 只问 `job.terminal`，没有再复制一份 status 集合。将来 terminal 定义改变时，这至少减少了一类同步修改。
 
-> **修改内部设计时，外部到底需要知道多少？**
-
----
-
-# 8. Deep Module：有用，但不要把它变成公式
-
-Ousterhout 用 deep module 描述一种理想：
+但 transition knowledge 仍分散着：
 
 ```text
-提供很多有价值的功能
--------------------
-暴露相对简单的 interface
+service.cancel()     知道 queued 才能 cancel
+worker.claim_next()  知道 queued 才能 claim
+worker.finish()      知道 running 才能 finish，并解释 exit code
 ```
 
-相反 shallow module：
+collection representation 又同时被 service、worker、metrics 知道。`Job.terminal` 这个局部正例并不足以形成完整 lifecycle owner；下一次 transition 语义变化时，修改者仍要跨模块恢复整套规则。
 
-```text
-功能很少
--------------------
-但 interface / dependency / lifecycle 成本不少
-```
+这里真正需要局部化的不是几行 syntax，而是 **design knowledge**：哪些 transition 合法、哪些 state 是 terminal、claim 怎样选择 job、ID 怎样分配、哪些事实必须 durable、restart 后怎样恢复 incomplete work。
 
-这个概念特别适合反驳一种机械规则：
+这就是 information hiding 比 “fields are private” 更强的地方。Stanford CS190 的材料把 information leakage 描述为 implementation detail 或 design knowledge 跨模块传播；课程把同一 reasoning 从 class-oriented 场景推广到 module、component、service、process 和 persistent state。这个推广是课程综合，不是声称 CS190 已经给出了后面整套 state-ownership taxonomy。
 
-> “类越小越好，函数越小越好。”
+### Change amplification 是 symptom，不是文件计数器
 
-每增加一个 module，都可能增加：
+假设未来确实增加一个新状态。某些改动本来就不可避免：如果 public API 要暴露新状态，serializer、UI 或 compatibility layer 可能都要理解它。真正值得追问的是：**哪些变化来自需求本身，哪些只是同一份知识被复制了很多次？**
 
-- 一个名字；
-- 一组 API；
-- 一条 dependency edge；
-- 一个 lifecycle；
-- 一个 failure boundary；
-- 一个需要维护的 mental model 节点。
+如果每个 caller 都维护一份 terminal set，那么新增状态时的多点修改就是 duplicated knowledge 带来的 accidental change surface。如果只有 lifecycle owner 需要更新 transition rule，而 UI 只是因为产品确实要展示新语义才变化，这两类扩散不能混为一谈。
 
-所以拆分不是免费的。
+### `private` 仍然可能发生 representation exposure
 
-但是也不能反过来变成：
+TaskForge 当前的 `get()` 是最直接的例子：字段可以都藏在 `Job` 里面，但 caller 拿到的是同一份 mutable instance，于是 owner 再也无法证明“所有 transition 都经过我”。MIT 6.102 的 abstraction-function / representation-invariant materials 对这个问题给了很强的局部标准：如果 client 可以修改 representation，producer/mutator 就无法独立维护 representation invariant。
 
-> “大类更好。”
+更稳妥的 read boundary 可以返回 defensive copy、frozen view 或其他 immutable projection。这里先不要把某一种 mechanism 升级成唯一答案。我们要保护的是一个性质：**read 不应无意授予 authoritative mutation authority。**
 
-真正要问：
+### Temporal decomposition 也会泄漏知识
 
-> **这个 module 是否隐藏了足够重要的复杂度？**
-
-如果一个 1500 行 module 隐藏了一个稳定、清晰、单一的复杂机制，可能是 deep。
-
-如果它只是把五种无关职责塞在一起，仍然是坏设计。
-
-因此不要计算：
-
-```text
-implementation LOC / API method count
-```
-
-然后得出“depth score”。
-
-deep module 是 reasoning tool，不是 metric。
-
----
-
-# 9. Temporal Decomposition：按执行顺序切代码，常常泄漏知识
-
-一个常见拆法是：
+另一种常见结构看起来非常“单一职责”：
 
 ```text
 LoadJob
@@ -463,235 +158,84 @@ PersistJob
 PublishJob
 ```
 
-因为运行时就是按这个顺序发生。
+运行时确实按这个顺序发生。但如果四个模块都必须理解同一套 schema、transaction boundary、durable fields、ID visibility 和 persist-after/publish-before failure semantics，那么只是按时间把一份 cohesive design knowledge 切成了四段。
 
-这看上去“单一职责”。
+CS190 把这种风险称为 temporal decomposition。问题不是“按阶段拆分永远错”，而是 decomposition 的理由不能只剩“程序先做 A 再做 B”。如果正确修改任一阶段都必须同时理解其他阶段的同一设计决定，boundary 可能切错了。
 
-但如果四个模块都必须共同知道：
+## 4. Deep Module 是一个压力测试，不是 depth score
 
-```text
-Job schema
-transaction boundary
-which fields are durable
-when an ID becomes externally visible
-what failure means after persist but before publish
-```
+Ousterhout/CS190 的 deep-module vocabulary 对这里很有用。一个 module 如果能用相对简单的 interface 隐藏大量重要 complexity，client 就能少承担很多 knowledge；相反，一个 shallow wrapper 即使代码很短，也可能新增名字、dependency edge 和调用顺序，却没有真正隐藏什么。
 
-那么你只是按照时间把一个 cohesive design decision 切碎了。
-
-Ousterhout 的课程把这种情况叫 temporal decomposition，并把它视为 information leakage 的常见来源。
-
-一个更好的切法可能是：
+因此把：
 
 ```text
-JobRepository
-    负责 durable representation + transaction rules
-
-JobService
-    负责 externally visible lifecycle semantics
+service -> service_impl -> repository -> adapter -> gateway
 ```
 
-这里模块边界由“知识归属”决定，而不是由“先做 A 再做 B”的时间顺序决定。
+排成很长一条链，并不会自动让系统 modular。每层如果只是原样转发参数，修改一个概念反而可能需要同步五份 interface。
 
----
+但不要把这个 heuristic 反过来变成“大类更好”。一个 1500 行 module 如果把五个无关职责混在一起，依然很难理解；一个很小的 parser 如果隐藏了一套稳定 grammar，也可能非常有价值。更不能用 `implementation LOC / API method count` 算“depth score”。
 
-# 10. State Ownership：比“single source of truth”更精确
+真正的问题仍然是：**这个 boundary 隐藏了什么有价值、会变化、会产生认知负担的知识？**
 
-工程讨论里经常说：
+这也解释了为什么“更通用”不是 abstraction 的同义词。为了未来 SQLite 就提前造 `GenericRepository[T, K, Query, Transaction, ...]`，再配 `UnitOfWork`、`EventBus`、`CommandBus`，可能只是把尚未出现的未来猜测编码进今天的 mental model。只有当一个 general mechanism 真正消除了多个 client 重复理解的复杂度，它才值得存在。
 
-> single source of truth
+同理，DRY 也不等于 information hiding。两段代码都写：
 
-这个词有帮助，但太模糊。
-
-例如：
-
-- SQLite 是 source of truth 吗？
-- 内存 state machine 是 source of truth 吗？
-- remote controller 是 source of truth 吗？
-- worker 本地执行状态是 source of truth 吗？
-
-更精确的问题是：
-
-> **对于一个事实，谁有 authority 接受它的合法变化？**
-
-我们把几个角色区分开。
-
-## 10.1 Authority / Owner
-
-有权决定某个逻辑事实如何变化的组件。
-
-例如：
-
-```text
-JobRegistry owns logical job lifecycle.
+```python
+status in {SUCCEEDED, FAILED, CANCELLED}
 ```
 
-它决定：
+如果它们表达的是同一条“哪些状态是 terminal”的业务知识，那么值得局部化。两段碰巧都有 `for item in items: validate(item)`，却属于会独立演化的 domain，就未必应该抽成 generic helper。优先消除的是 **duplicated knowledge**，不是视觉上重复的 syntax。
 
-```text
-QUEUED -> RUNNING 是否合法
-RUNNING -> SUCCEEDED 是否合法
-FAILED -> RUNNING 是否允许 retry
-```
+## 5. 从“知识应该放哪里”走到“谁有权改变事实”
 
-## 10.2 Storage
+Information hiding 仍然没有完全回答 TaskForge 的问题。即使 lifecycle rules 都写进一个 helper，`service.py` 和 `worker.py` 如果仍能直接改同一份 `Job`，authority 还是分散的。
 
-负责让事实 survive process lifetime 的机制。
+工程讨论里常说 “single source of truth”，但它容易把几个不同角色混在一起。更精确地看一个事实，可以区分：
 
-例如：
+**Authority / owner** 决定这个逻辑事实是否可以合法变化。比如某个 lifecycle owner 有权接受 `QUEUED -> RUNNING`，也有权拒绝 `FAILED -> RUNNING`。
 
-```text
-SQLite stores job state durably.
-```
+**Storage** 负责让事实跨 process lifetime 保存。SQLite 可以 durable 地存一个 status，却不自动成为所有业务 transition 的 semantic decision maker。应用层、database constraint、stored procedure 都可能承担不同部分的 invariant enforcement；关键是责任要明确。
 
-storage 不一定等于 semantic owner。
+**Replica / cache** 保存 derived copy 以改善 locality 或性能。它可以过期。如果它和 authority 冲突，系统需要明确哪一侧有最终权威、怎样判断副本是否已经过期，以及发生分歧后怎样重新收敛，而不是让两份 mutable copy 都“差不多算真的”。
 
-SQL 表里可以允许写入任何字符串，但应用层仍可能规定：
+**View / projection** 为 UI、metrics、search 等用途派生出部分 representation。它应该明确自己只投影哪些事实，并通常能够从 authoritative facts 重新构建。
 
-```text
-status 必须满足 lifecycle transition rules
-```
+这个区分尤其重要，因为 **state/model projection 不是第二份 authority**。例如前面候选边界里的 `JobView` 可以只承载 `id / command / status / exit_code` 这组 v0 observable fields；它并不因此声称自己是未来所有 durable state 的完整 schema。若后续模块加入其他 execution / cancellation / recovery state，旧 projection 要么扩展，要么继续明确只表达其中一部分。不能因为画了一张 view，就让读者猜没画出来的 state 是不存在还是只是 out of scope。
 
-## 10.3 Replica / Cache
+### “谁存数据”与“谁拥有状态”不是同一个问题
 
-为了性能或 locality 保存的 derived copy。
-
-它不是 authority。
-
-如果 cache 与 owner 冲突：
-
-```text
-owner wins
-```
-
-或者系统必须有明确 reconciliation protocol。
-
-## 10.4 View / Projection
-
-为了 UI、metrics、search 等用途派生出的 representation。
-
-例如：
-
-```text
-queued_job_count
-recent_failed_jobs
-```
-
-这些应该可以从 authoritative facts 重新构建。
-
----
-
-# 11. “谁存数据”与“谁拥有状态”不是同一个问题
-
-假设：
+假设未来有：
 
 ```text
 Controller
-   ↓
+    ↓
 SQLite
 ```
 
-Controller 每次 transition 都写数据库。
-
-有人会说：
-
-> “那 SQLite 才是 owner，因为数据在那里。”
-
-不一定。
-
-如果只有 Controller 有权决定：
+Controller 计算合法 transition，并在 transaction 中写入 SQLite。可以合理地说：
 
 ```text
-RUNNING -> SUCCEEDED
+semantic authority: Controller 的 transition policy
+persistence mechanism: SQLite transaction
 ```
 
-而 SQLite 只是事务性保存结果，那么：
+也可以把部分 invariant 下沉成 database constraint，使数据库对那部分合法性拥有直接 enforcement。两种都可能成立。错误的是只因为 bytes 存在 SQLite，就停止追问“谁决定这个 transition 应该被接受”。
 
-```text
-semantic authority = Controller
-persistence authority = SQLite transaction
-```
+因此每遇到一类重要 state，都至少问五个问题：
 
-当然，也可以设计成数据库 constraint / stored procedure 本身拥有部分 invariant。
+1. 谁创建第一份合法状态？
+2. 谁可以请求 mutation，谁真正接受 authoritative transition？
+3. 谁验证 invariant？
+4. 谁负责 durable commit？
+5. crash/restart 或副本分歧以后，谁重建或 reconcile？
 
-关键不是哪一种永远正确。
+这里尤其要区分 **request a transition** 和 **perform/accept the authoritative transition**。前者可以来自很多 participant，后者必须服从 owner 的 invariant 与当前 authoritative state。
 
-关键是：
+remote worker 将来可以报告“job 42 已执行完”，但 controller/store 是否接受这个结果，还可能取决于当时的 authoritative execution/recovery state。这些具体机制留到 M07–M09；M02 只先把 authority 边界说清楚。
 
-> **authority 必须明确，而且 invariant 的 enforcement point 必须与 authority 对齐。**
-
----
-
-# 12. State Ownership 需要回答的五个问题
-
-对系统中每一类重要 state，都问：
-
-### 1. Who creates it?
-
-谁创建第一份合法状态？
-
-### 2. Who may mutate it?
-
-哪些组件有权触发 transition？
-
-注意：
-
-```text
-request a transition
-```
-
-和：
-
-```text
-perform the authoritative transition
-```
-
-是不同的。
-
-worker 可以请求：
-
-```text
-complete job 42
-```
-
-但最终是否接受这个 transition，可以由 controller 决定。
-
-### 3. Who validates it?
-
-谁保证 invariant？
-
-如果每个调用者都写：
-
-```python
-if status == RUNNING:
-    status = SUCCEEDED
-```
-
-那 invariant enforcement 已经分散。
-
-### 4. Who persists it?
-
-谁负责 durable commit？
-
-特别要问：
-
-```text
-side effect 和 state transition 之间的 crash window 怎么办？
-```
-
-### 5. Who reconstructs/reconciles it after failure?
-
-process restart 后：
-
-```text
-RUNNING job 到底是什么？
-```
-
-owner 必须有恢复语义。
-
----
-
-# 13. Split Authority：最危险的设计味道之一
+## 6. Split Authority 往往先伪装成“需要同步一下”
 
 假设 API server 有：
 
@@ -705,768 +249,213 @@ worker manager 又有：
 running_jobs: dict[str, Job]
 ```
 
-两者都能改 status。
-
-你现在有两份 authority。
-
-典型 failure：
+而两边都能改 status。很快就会出现：
 
 ```text
-API: job 7 = CANCELLED
+API:            job 7 = CANCELLED
 Worker manager: job 7 = RUNNING
 ```
 
-接下来所有代码都开始问：
+于是下一步通常是加 `sync()`、`refresh()`、`reconcile()`。在真正的 distributed system 里，副本同步和 reconciliation 当然可能不可避免；但在一个单进程 toy system 里，这种“分布式问题”很可能只是第二份 write authority 人工制造出来的。
 
-```text
-“哪个才是真的？”
-```
+所以看到第二份 mutable copy 时，第一反应不要是“怎样同步得更快”，而是：**它为什么需要成为 writer？它能否只是 replica 或 projection？**
 
-于是工程师加：
+当前 TaskForge 的问题更隐蔽：表面只有一个 `state.jobs` dict，但 `service`、`worker` 和任意拿到 `Job` reference 的 caller 都能改变它。物理上只有一份 object，不等于语义上只有一个 owner。
 
-```text
-sync()
-refresh()
-reconcile()
-```
+### Ambient global state 让 dependency 变成不可见
 
-有时这是分布式系统不可避免的 protocol；但很多单进程系统里，它其实只是设计错误制造出的伪分布式问题。
-
-所以看到第二份 mutable copy 时不要只问：
-
-> 怎么同步？
-
-先问：
-
-> **为什么它需要成为第二个 writer？它能不能只是 replica/view？**
-
----
-
-# 14. Ambient Global State：为什么特别伤 mental model
-
-例如：
-
-```python
-settings = load_settings()
-registry = {}
-current_workspace = None
-```
-
-然后任何模块都：
-
-```python
-from state import registry
-```
-
-这种设计的问题不只是“不好测试”。
-
-它让 dependency 变成 invisible。
-
-函数签名：
+假设函数只有：
 
 ```python
 def run_job(job_id):
     ...
 ```
 
-看上去只依赖 `job_id`。
+看起来只依赖 `job_id`。但实现里却从 module global 读取 registry、settings、current workspace、cwd 和环境变量，那么 signature 隐藏了真实 dependency。
 
-实际上它依赖：
-
-```text
-global registry
-global settings
-current process cwd
-environment variables
-```
-
-这会制造大量 unknown unknowns。
-
-显式 dependency：
+把依赖显式写出来：
 
 ```python
 def run_job(job_id, registry, executor):
     ...
 ```
 
-虽然参数更多，却更容易推理。
+参数变多了，却可能更容易 reasoning 和 test。目标不是“禁止所有 global”：immutable constant 没有这类问题，process-wide registry 也可能有合理场景。危险的是**可变的、携带业务语义、又可被环境中任意位置使用的 ambient authority**。
 
-目标不是“任何 global 都禁止”。
+### 发现 failure 的地方不一定拥有处理 authority
 
-immutable constant 没问题；process-wide registry 也可能有合理场景。
+CS190 的 Raft review material 里有一个很有启发性的具体问题：某个 message 层能发现 socket EOF/error，却不拥有 socket lifecycle，因此 cleanup 还必须把信息继续传给真正 owner。这里最值得迁移的不是 C++ 细节，而是区分 **observes a failure** 与 **owns the affected resource/lifecycle**。
 
-真正危险的是：
+如果 boundary 让“发现问题”和“有权完成恢复”长期错位，系统就会产生额外 information flow、ordering requirement 和 callback plumbing。不要因为一个 component 最先看见 error，就自动把 resource authority 也交给它。
 
-> **可变的、拥有业务语义的 ambient authority。**
+## 7. Owner 的 API 应表达 semantic operation，而不是交出数据结构
 
----
-
-# 15. State Owner 的 interface 应该表达 semantic operation
-
-坏接口：
+TaskForge 当前 worker 想 claim 一个 job，最短写法是：
 
 ```python
-def jobs() -> dict[str, Job]:
-    ...
+for job in state.jobs.values():
+    if job.status == JobStatus.QUEUED:
+        job.status = JobStatus.RUNNING
+        return job
 ```
 
-调用者自己实现：
+这几行同时让 worker 知道 collection representation、eligible state、selection policy 和 transition mutation。
 
-```python
-jobs()[id].status = RUNNING
-```
-
-好一些：
+如果 owner 提供：
 
 ```python
 def claim_next() -> JobView | None:
     ...
 ```
 
-为什么？
+调用方只请求一个 domain operation。owner 内部可以统一处理：哪些 job eligible、选择策略是什么、transition 是否合法、mutation 怎么做，以及以后是否需要 transaction。
 
-因为 `claim_next()` 隐藏了：
+可以把这个差别概括成两种请求：一种是“把你的 state 给我，我自己改”，另一种是“请在你的 invariant 下执行这个 semantic operation”。后者把 mutation authority 留在 owner 一侧。
 
-- 哪些状态可 claim；
-- claim selection policy；
-- transition rule；
-- mutation；
-- 将来可能需要的 transaction。
+Agent 时代这个差别更重要。coding agent 很擅长发现一个可写 dict 后走最短路径；如果 repo 同时存在 `registry.transition(...)` 和 `state.jobs[id].status = ...` 两条路，后者很容易被复制。**好的 boundary 不只是教育修改者“应该怎么做”，还尽量让正确 path 成为唯一、显式、容易找到的 path。**
 
-这里有一个核心设计原则：
+### Query 和 Command 可以不对称
 
-> **把“需要共享的数据结构”尽量升级成“拥有语义的操作”。**
+收敛 write authority 不代表所有读取必须经过同一条昂贵路径。commands 如 `submit / claim / cancel / finish` 若改变 invariant，通常应经过 owner；但 `queued_count`、recent failures 或 search result 可以从 read model、cache、index 读取，只要它们明确是 derived view，而不是第二份 write authority。
 
-也就是从：
+这也是为什么“只有一份数据”不是 ownership 的目标。可以有很多副本和 projection，真正需要清楚的是：**谁能定义事实，谁只是在复制、缓存或观察事实。**
 
-```text
-Give me your state, I will manipulate it.
+如果某个 projection 有自己独立的 freshness contract，例如 metrics 允许延迟 30 秒，那是它自己的 observable contract；不能一边允许 staleness，一边又把这个 projection 当成 authoritative decision input 而不说明 reconciliation 规则。
+
+## 8. Design it twice：Job 自己拥有 transition，还是 Registry 拥有？
+
+有了上面的标准，仍然不应该跳到“所以一定要建 `JobRegistry`”。M02 lab 刻意要求至少比较两个真实设计，因为 ownership placement 本身就是 engineering decision。
+
+一种方案是让 `Job` 管理单对象 transition：
+
+```python
+job.claim()
+job.cancel()
+job.finish(exit_code)
 ```
 
-变成：
+优点是 local lifecycle rule 靠近 data，单对象 invariant 清楚。问题是 ID allocation、collection、`claim_next` selection policy 仍然需要别的 owner；如果 future persistence 要求 transition 与 storage transaction 原子提交，纯 object-local mutation 可能还要重新设计。最关键的是：即使 `Job` 有好方法，也不能再把 authoritative mutable instance 发给所有 caller。
+
+另一种方案是让 `JobRegistry` 或同等 component 管理 collection + transitions：
 
 ```text
-Please perform this domain operation under your invariant.
+submit
+get/list read-only views
+claim_next
+cancel
+finish
 ```
 
-这对 Agent 特别重要。
+这会让 collection representation、ID allocation 和 lifecycle enforcement 更容易收敛，也让 dict -> SQLite 的 change surface 更局部。但它同样有风险：Registry 可能逐步变成 god object；process execution、network transport、observability、所有 persistence policy 都不应该因为“ownership”三个字就被塞进去。
 
-Agent 很擅长看到一个 dict 然后直接改。
+对当前极小的 TaskForge，第二种通常是很直接的教学实现；这不是因为 “Registry pattern 更高级”。未来 M05/M08/M09 加入 persistence、compatibility 和 process boundary 后，今天合理的 responsibility placement 还可能重新分解。
 
-如果 boundary 没表达语义，它会自然选择最短 implementation path，而不是长期正确的 authority path。
+第三种“worker 直接拥有 status”写起来最短，却需要非常强的理由。worker 的核心责任如果只是执行 work，它却能绕过 controller policy 改 lifecycle，remote worker 出现后就很容易形成 split authority。可以据此形成一个比 pattern name 更稳定的排除标准：
 
----
+> 如果一个 component 不负责某个 invariant，却能绕过 owner 直接改变它，那么它拥有了过多 authority。
 
-# 16. Query 与 Command 可以不对称
+### Dependency direction 只有在隐藏真实变化时才值得增加
 
-一个常见误区是：
-
-> 所有读取和写入都必须走完全相同的 abstraction。
-
-不一定。
-
-例如：
-
-```text
-commands:
-  submit
-  claim
-  cancel
-  complete
-```
-
-必须经过 owner，因为会改变 invariant。
-
-但是 query：
-
-```text
-list_recent_jobs
-queued_count
-```
-
-可以从 read model、cache、index 读取。
-
-只要它们明确是：
-
-```text
-projection / replica
-```
-
-而不是第二份 write authority。
-
-所以 ownership 不是要求：
-
-```text
-所有数据只能存在一份
-```
-
-而是要求：
-
-```text
-谁能定义事实，谁只是复制/观察事实，必须清楚。
-```
-
----
-
-# 17. Dependency Direction：让 policy 不依赖 accident
-
-考虑：
-
-```text
-JobService -> SQLiteJobRepository
-```
-
-如果 `JobService` 到处写 SQLite SQL：
+以后如果 `JobService` 直接散落 SQL：
 
 ```python
 conn.execute("update jobs set ...")
 ```
 
-那么 lifecycle policy 与 storage representation 耦合。
+lifecycle policy 与 storage mechanism 就会耦合。此时引入一个窄的 `JobRepository` boundary，可能让 policy 不依赖 SQLite 的 concrete accident。
 
-另一种设计：
+但不要把这一点机械升级成“所有依赖都必须倒置成 interface”。只有当 storage 确实是重要 variation、policy 与 mechanism 值得独立 reasoning/test，或者 concrete dependency 正在传播不应传播的 knowledge，额外 boundary 才有收益。否则 interface 本身只是一个新的 shallow abstraction。
 
-```text
-JobService -> JobRepository protocol
-                    ↑
-             SQLiteJobRepository
-```
+## 9. 把 M02 变成一次真正的 read-only design review
 
-这不意味着“任何地方都要 dependency inversion”。
-
-只有当：
-
-- storage 确实可能变化；
-- policy 与 mechanism 值得独立测试；
-- concrete dependency 让重要知识泄漏；
-
-这种边界才值得建立。
-
-不要因为教材说“依赖接口”就给每个小函数造一个 interface。
-
-否则你会制造 shallow abstractions。
-
----
-
-# 18. 好的 abstraction 不是“更通用”，而是“隐藏正确的东西”
-
-假设你需要 job storage。
-
-有人马上设计：
-
-```python
-class GenericRepository[T, K, Query, Transaction, ...]:
-    ...
-```
-
-看上去非常 reusable。
-
-但课程不鼓励这种 reflex。
-
-我们更关心：
-
-```text
-TaskForge 当前最需要隐藏的变化是什么？
-```
-
-可能只是：
-
-```text
-Job lifecycle state + durable representation
-```
-
-那么一个针对 Job 语义的 repository 可能更好。
-
-所谓 general-purpose module 只有在它真的消除了多个调用者必须重复理解的复杂机制时才有价值。
-
-否则它只是把未来猜测编码成 abstraction。
-
----
-
-# 19. Information Hiding 与 DRY 不是同一件事
-
-两段代码看起来重复：
-
-```python
-if status in (SUCCEEDED, FAILED, CANCELLED):
-    ...
-```
-
-真正重复的是：
-
-```text
-“哪些状态是 terminal”这个知识。
-```
-
-所以应该抽象为：
-
-```python
-def is_terminal(status):
-    ...
-```
-
-或者更深地让 lifecycle owner 提供：
-
-```python
-job.is_terminal
-```
-
-但另外两段碰巧都是：
-
-```python
-for item in items:
-    validate(item)
-```
-
-它们可能属于不同 domain，未来独立演化。
-
-把它们抽成一个 generic helper 不一定隐藏任何有价值的知识。
-
-因此：
-
-> **优先消除 duplicated knowledge，而不是机械消除 duplicated syntax。**
-
----
-
-# 20. 一个设计练习：谁应该拥有 Job status？
-
-候选方案：
-
-### A. Job object 自己
-
-```python
-job.complete(exit_code)
-```
-
-优点：
-
-- transition rules 可以靠近 data；
-- 单对象 invariant 清晰。
-
-问题：
-
-- 如果 transition 必须和 persistence transaction 原子提交怎么办？
-- 多 job policy 怎么办？
-
-### B. JobRegistry
-
-```python
-registry.complete(job_id, exit_code)
-```
-
-优点：
-
-- 可以统一控制 collection + lifecycle；
-- 更容易接 persistence；
-- ID allocation 也可以统一。
-
-问题：
-
-- Registry 可能膨胀成 god object。
-
-### C. Worker
-
-```python
-worker.jobs[id].status = SUCCEEDED
-```
-
-优点：
-
-- implementation 最短。
-
-问题：
-
-- worker 获得了不必要的 lifecycle authority；
-- controller/API 与 worker 很容易 split-brain；
-- remote worker 时更难演化。
-
-不存在只看类图就能确定的唯一答案。
-
-你要根据 invariant 和未来变化判断。
-
-但通常可以明确淘汰一些设计：
-
-> **如果一个组件不负责某个 invariant，却能绕过 owner 直接改变该 invariant，它拥有了过多 authority。**
-
----
-
-# 21. Review 一个 abstraction 时，不要先问“用了什么 pattern”
-
-先问这几个问题。
-
-## 21.1 这个模块隐藏什么？
-
-如果答案只是：
-
-```text
-“它把三个 helper function 放在一起。”
-```
-
-可能没有真正 abstraction。
-
-更好的回答类似：
-
-```text
-它隐藏 job ID allocation、legal lifecycle transitions 和 internal storage representation。
-```
-
-## 21.2 哪些知识仍然泄漏给 client？
-
-例如：
-
-```text
-client 必须知道 status 数字编码
-client 必须先 call load 再 call mutate
-client 必须手动 acquire lock
-```
-
-这些都是 leakage candidate。
-
-## 21.3 representation 能换吗？
-
-把：
-
-```text
-dict -> SQLite
-```
-
-或者：
-
-```text
-local executor -> remote executor
-```
-
-思想实验一遍。
-
-如果大量 client 必须改，找出具体泄漏。
-
-## 21.4 谁拥有 mutable state？
-
-把所有 writer 列出来。
-
-如果列表长成：
-
-```text
-api.py
-worker.py
-scheduler.py
-cleanup.py
-tests fixture
-```
-
-需要高度警惕。
-
-## 21.5 invariant enforcement 在哪里？
-
-如果回答：
-
-> “每个调用方都自己检查。”
-
-通常意味着 authority 没有收敛。
-
----
-
-# 22. Agent 时代为什么这个问题更严重
-
-人类工程师看到：
-
-```python
-state.jobs[job_id].status = Status.RUNNING
-```
-
-可能会停下来问：
-
-> “这样写是不是绕过了 lifecycle owner？”
-
-coding agent 的默认倾向往往是：
-
-> 找到最短的能让测试通过的修改路径。
-
-如果当前 repo 已经有两种访问方式：
-
-```text
-registry.transition(...)
-```
-
-和：
-
-```text
-state.jobs[id].status = ...
-```
-
-Agent 很可能复制更直接的第二种。
-
-于是局部 technical debt 会被生成速度放大。
-
-因此，在 Agent 时代，好的 boundary 有一个额外价值：
-
-> **它不仅降低人类误用概率，也缩小 Agent 的可行错误空间。**
-
-如果正确路径是唯一、显式、容易发现的，Agent 更容易做对。
-
----
-
-# 23. 如何给 Agent 一个 State Ownership 任务
-
-差的 prompt：
-
-```text
-重构一下 job state 管理，让代码更优雅。
-```
-
-它没有告诉 Agent：
-
-- 什么不能改变；
-- 什么问题要解决；
-- authority 应该在哪里；
-- 哪些行为是 contract；
-- 什么叫完成。
-
-更好的 engineering spec：
-
-```text
-目标：收敛 TaskForge 的 job lifecycle authority。
-
-现状：
-- api.py、worker.py 都会直接修改 module-level jobs dict；
-- get/list 返回内部可变 Job 对象；
-- job ID allocator 也是 module global。
-
-必须保持：
-- submit 返回格式仍为 job-N；
-- claim 仍按 insertion order 选择第一个 QUEUED job；
-- 现有 cancel/finish observable behavior 不变，除非下面明确要求。
-
-设计约束：
-- mutable job collection 与 ID allocator 只能有一个 authoritative owner；
-- lifecycle transition 只能通过 owner 的 semantic operations 完成；
-- read API 不得把 authoritative mutable Job object 暴露给 caller；
-- worker 只能 request claim/complete，不直接拿内部 collection；
-- 不引入 persistence、async、HTTP；这些是 non-goals。
-
-验证：
-- 现有 tests 必须通过；
-- 新增 tests 证明 caller 修改 query result 不会修改内部 state；
-- 用 repo search 证明生产代码没有绕过 owner 的直接 writes；
-- 解释未来 dict -> SQLite 时哪些 client 不需要变化。
-```
-
-这才是在“指挥 Agent 做工程”。
-
----
-
-# 24. 但不要把 architecture 在 prompt 里写死
-
-上一节看起来已经指定了 owner。
-
-真实任务中还要注意另一种失败：
-
-> 人提前猜了一个错误 architecture，然后要求 Agent 精确执行。
-
-更成熟的方式是分两阶段。
-
-### Phase 1 — Read-only design reconnaissance
-
-要求 Agent：
-
-```text
-列出所有 state writers
-列出所有 read paths
-找出 lifecycle invariants
-找出当前 tests actually protect 的 behavior
-提出至少两个 ownership design
-比较 trade-off
-```
-
-### Phase 2 — implementation contract
-
-人确认 design 后再实施。
-
-也就是说：
-
-> **Agent 不是只能做机械实现；它可以参与 design search，但 engineering authority 不能因为它能提出方案就被默认交出去。**
-
----
-
-# 25. TaskForge M02 Lab
-
-本章实验位于：
-
-```text
-labs/taskforge/
-```
-
-当前 v0 故意保留一个“功能正确但 ownership 很差”的实现。
-
-先不要直接重构。
-
-第一步只读回答：
-
-1. 所有 job state 的 writer 在哪里？
-2. 所有 ID allocator 的 writer 在哪里？
-3. 哪些函数返回了 authoritative mutable object？
-4. 哪些 lifecycle knowledge 被复制？
-5. 当前 tests 保护的是 contract，还是 implementation accident？
-6. 如果下一章把内存 dict 换成 SQLite，哪些调用者会被迫改？
-
-然后完成 `labs/02-state-ownership.md` 中的设计与实现任务。
-
----
-
-# 26. 本章应该形成的 mental checklist
-
-面对陌生 repo，遇到一个 mutable concept：
-
-```text
-session
-job
-config
-cache
-workspace
-connection
-request
-model registry
-scheduler state
-```
-
-不要只搜变量名。
-
-你要建立一张 authority map：
+这一章最值得带进陌生 repo 的不是一个类图，而是一张 **authority map**。面对 `session`、`job`、`config`、`cache`、`workspace`、`connection` 或 scheduler state，不要只搜变量名。对每个重要 fact 记录：
 
 ```text
 Fact
- ├── owner / authority
- ├── writers
- ├── readers
- ├── invariant
- ├── persistence
- ├── replicas/views
- └── recovery rule
+├── semantic owner / authority
+├── current writers
+├── readers
+├── invariant
+├── persistence mechanism
+├── replicas / projections
+└── recovery / reconciliation rule
 ```
 
-然后问：
+如果某项不存在，就写 `none` 或 `unknown`，不要把未来设计猜成当前事实。
+
+然后再做 representation-change thought experiment：`dict -> SQLite`、local executor -> remote executor、in-memory config -> durable config。哪个 client 被迫变化？这些变化来自真实 contract，还是来自 representation leakage？
+
+再做 future-change pressure test：新增 lifecycle state、增加 persistence、增加 remote worker。哪些规则会被复制修改？是否出现新的 writer？当前 abstraction 是在局部化 change，还是只是增加一层名字？
+
+### 给 Agent 的任务先分成 reconnaissance 与 implementation
+
+“重构 TaskForge 的状态管理，让代码更干净、更可维护”几乎没有 engineering constraint。更稳妥的第一阶段应当是只读：
 
 ```text
-writer 是否都经过 owner？
-owner 是否真的能 enforce invariant？
-client 是否依赖 representation？
-derived copy 是否偷偷变成第二 authority？
-failure/restart 后谁重新建立事实？
+Read-only reconnaissance
+
+- locate all authoritative job-state and ID-allocation writers;
+- identify every path that exposes a mutable Job or collection;
+- reconstruct the current lifecycle and its enforcement points;
+- separate current observable contract from representation accidents;
+- compare at least two ownership designs;
+- explain the expected dict -> SQLite change surface for each design;
+- do not modify production code yet.
 ```
 
-如果能稳定回答这些问题，你已经不再只是“读代码”。
+人 review 这个 model 后，第二阶段再形成 implementation contract。对 M02 lab，必须保持的行为和 non-goals 已经写在 [`../labs/02-state-ownership.md`](../labs/02-state-ownership.md)：本次练习要收敛 mutable authority，但**禁止**顺便引入 SQLite、async/thread lock、HTTP、remote worker、retry、新 status 或 dependency-injection framework。
 
-你在建立一个可用于安全修改的 system model。
+这里有一个容易跨章混淆的细节：M02 lab 为了让“ownership refactor”成为单变量实验，明确把 `job-N` 格式、单调 ID 和 insertion-order claim 列为本次 **Must preserve**。这不等于课程宣称这些 behavior 永远应该成为 TaskForge 的 public contract；M03 lab 后半段会为自己的 testing exercise 显式采用另一份 contract scope，并据此重新审查哪些 tests 属于 overspecification。不同 exercise/change 可以有不同的局部 preservation contract，关键是把 authority 和 scope 写清楚，而不是悄悄切换。
 
----
+实现完成以后，evidence 也不能只有“tests green”。至少要能证明：caller 修改 query result 不会改变 authoritative state；非法 transition 确实由 owner 拒绝；production code 没有明显绕过 owner 的直接 writes；并解释 repository search 为什么只能提供 syntactic evidence，不能单独证明完整 correctness。
 
-# 27. Design Questions
+这正是 [`../case-studies/m02/baseline-analysis.md`](../case-studies/m02/baseline-analysis.md) 用 runtime exploit、static search 和 baseline tests 三种证据检查的内容。
 
-完成本章后，你应该能对任何 module 提出以下问题：
+## 10. Review 一个 abstraction，最后问的是 knowledge 和 authority
 
-- 它隐藏了什么 design knowledge？
-- interface 暴露了哪些 formal 与 informal dependency？
-- 哪些细节只是 representation？
-- representation 能否独立变化？
-- 是否存在 representation exposure？
-- 是否因为 temporal decomposition 把共同知识拆散？
-- 这个 module 是否足够 deep，还是只是增加了一层名字？
-- mutable state 的 authority 在哪里？
-- storage、owner、cache、view 是否被混为一谈？
-- 有多少 writer？
-- invariant enforcement point 在哪里？
-- 出错/重启以后谁负责恢复？
-- Agent 是否可以绕过 intended boundary 找到更短的直接修改路径？
+到这里可以把很多常见“设计原则”收回同一套判断，而不需要先猜 pattern：
 
----
+### Abstraction / representation
 
-# 28. 外部材料：本章实际采用什么
+- client 真正需要依赖哪些行为？
+- 哪些 concrete representation 已经泄漏？
+- 如果 representation 改变，哪些 client 会被迫改，为什么？
+- read result 是 snapshot/projection，还是 authority-bearing handle？
 
-本章是 self-contained 的；外部材料用于交叉验证和扩展。
+### Information hiding / module depth
 
-## MIT 6.102 — Abstract Data Types
+- 这个 module 隐藏了哪一份重要 design knowledge？
+- 哪些知识仍被多个 caller 重复解释？
+- decomposition 是按 cohesive knowledge 切，还是只按运行时间顺序切？
+- 新增一层 abstraction 后，caller 真正少知道了什么？
 
-https://web.mit.edu/6.102/www/sp25/classes/06-abstract-data-types/
+### State ownership
 
-采用：
+- 谁创建、接受 mutation、validate、persist、recover/reconcile 这个 fact？
+- request transition 与 authoritative transition 是否被区分？
+- 是否存在第二份 writer 或可写 alias？
+- storage、cache、replica、projection 是否被误当成 semantic owner？
+- 某个 artifact 如果只投影一部分 state，scope 是否明确？
 
-- ADT 由 operations + specs 定义；
-- representation independence；
-- client 不应依赖 concrete representation；
-- good ADT 应 simple/coherent/adequate。
+### Change / Agent
 
-不直接照搬：
+- 增加一个新状态或换 representation 时，change surface 为什么是现在这样？
+- 正确 mutation path 是否显式、容易找到，还是旁边还有更短的 bypass？
+- Agent 是否先恢复 authority map，再开始修改？
+- tests/search/diff 能证明什么，又不能证明什么？
 
-- 课程主要在单进程、对象/ADT 层讨论；
-- 本章把同一思想扩展到 service、process、persistent state ownership。
+如果这些问题能被准确回答，你得到的就不只是“代码被封装了”，而是一份可以支撑后续修改的 system model。
 
-## MIT 6.102 — Abstraction Functions & Rep Invariants
+下一章会立刻使用这份模型。M02 告诉我们：`get()` 不应该把 authoritative mutable object 随手交给 caller，lifecycle mutation 应该有明确 owner。M03 不会把这些结论当作“写过文档所以已证明”；它会问另一件事：**怎样设计 tests，使错误的 ownership change 会被发现，同时又不把 `dict`、`job-N` 之类当前 implementation accident 永久冻结成 contract？**
 
-https://web.mit.edu/6.102/www/sp26/classes/07-abstraction-functions-rep-invariants/
+### 可选原始材料与来源边界
 
-采用：
+本章的 technical provenance 以 [`../reading-notes/m02-source-audit.md`](../reading-notes/m02-source-audit.md) 为准。主要采用：
 
-- representation exposure 会破坏 invariant 与 representation independence；
-- invariant 必须由 creator/mutator 等操作系统性建立和保持。
+- MIT 6.102 — Abstract Data Types：operations/specifications、opaque abstract values、representation independence；
+- MIT 6.102 — Abstraction Functions & Rep Invariants：AF/RI、representation exposure 与 invariant maintenance；
+- Stanford CS190 — Modular Design / code review materials：formal + informal interface、information hiding/leakage、temporal decomposition、design-it-twice 与具体 review pressure。
 
-## Stanford CS190 — Modular Design
+本章把这些 reasoning 扩展成 `semantic authority / storage / replica-cache / view-projection / writer map / recovery rule` 的长期系统分析框架；**这部分是课程综合模型**，不是 MIT 或 Stanford 原文术语。
 
-https://web.stanford.edu/~ouster/cgi-bin/cs190-spring16/lecture.php?topic=modularDesign
-
-以及：
-
-https://web.stanford.edu/~ouster/cgi-bin/cs190-winter18/lecture.php?topic=modularDesign
-
-采用：
-
-- interface 不只包含函数签名，还包括调用者必须知道的行为知识；
-- information hiding / information leakage；
-- private variable 不自动等于 information hiding；
-- temporal decomposition 是常见 leakage；
-- module/class 的价值应看它隐藏了什么。
-
-保留意见：
-
-- “thick/deep class”是经验性设计 heuristic，不是数学定律；
-- 本课程不把 class 当成唯一 module unit，也不鼓励为了追求 depth 制造 god object。
-
-## Stanford CS190 — Raft Project Review
-
-https://web.stanford.edu/~ouster/cgi-bin/cs190-winter19/lecture.php?topic=raftReview1-2019
-
-这份 review notes 的价值在于它展示了概念如何落到真实学生设计：通信层、persistent state、message representation 等位置的信息泄漏会被直接讨论，而不是只背定义。
-
----
-
-# 29. 小结
-
-本章最重要的几句话：
-
-> **Abstraction 决定 client 可以依赖什么。**
-
-> **Information hiding 决定哪些设计知识应该只在局部存在。**
-
-> **State ownership 决定谁有权改变事实并维护 invariant。**
-
-一个系统真正容易演化，不是因为：
-
-```text
-文件很多
-class 很小
-interface 很多
-字段都是 private
-```
-
-而是因为：
-
-```text
-变化有局部边界
-知识有明确归属
-状态有明确 authority
-invariant 有明确 enforcement point
-client 依赖语义而不是 representation
-```
-
-这也是 Agent 时代最值得保护的东西：
-
-> **让正确的修改路径成为最自然、最显式、最容易验证的路径。**
+Ousterhout/CS190 的 deep-module、change/cognitive-cost 等 vocabulary 在这里都只作为 design heuristic，不是“class 越大越好”或可计算的 metric。Stanford notes 会把 Parnas 的经典模块化论文作为历史来源，但当前 source audit **没有完成该论文的一手逐段审计**，因此本章不把它单独当作已经核验的 technical evidence。

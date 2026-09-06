@@ -498,14 +498,16 @@ job.status = JobStatus.SUCCEEDED
 ```text
 submit job
 get observable job
-mutate returned value locally
+尝试把 returned observation 的 status 改成 SUCCEEDED
+  - mutation 被拒绝：允许
+  - mutation 成功：也允许，但只能影响 detached/local observation
 再次 get
 authoritative status 仍是 QUEUED
 ```
 
-先运行，保留失败证据。
+也就是说，oracle 保护的是 **authority isolation**，不是“返回值必须可写”。不要写一条只有 defensive snapshot 能通过、但 immutable view 会因为拒绝 assignment 而失败的 test。反过来，也不要把某个具体异常类型写成要求；本 lab contract 没承诺 read-only view 必须用哪种 exception 表达拒绝。
 
-这一步必须在 production fix 之前完成。
+先运行，保留失败证据。旧 baseline 的 mutation attempt 会成功并穿透到 authoritative object，因此最后的 authoritative-state assertion 应该失败。这一步必须在 production fix 之前完成。
 
 ## Step B — 设计至少两个 fix
 
@@ -513,13 +515,13 @@ authoritative status 仍是 QUEUED
 
 ### Design A
 
-read API 返回 defensive copy/snapshot。
+read API 返回 defensive copy/snapshot。mutation attempt 可以成功，但只修改 detached observation。
 
 ### Design B
 
-内部 mutable entity 与外部 immutable view 分离。
+内部 mutable entity 与外部 immutable view 分离。mutation attempt 可以直接被 read-only boundary 拒绝。
 
-不要默认 A 一定最好。
+不要默认 A 一定最好，也不要为了保住 Step A 的 test 而把“observation 必须 writable”偷偷升级成新 contract。
 
 比较：
 
