@@ -807,9 +807,9 @@ https://www.omg.org/spec/UML/2.5.1/PDF
 
 ### Engineering Risk / Estimation / Economics
 
-**Source-backed frame：** 正文 §2、§4–§11 的 sunk cost、opportunity cost、TCO、multiple-attribute decision、uncertain estimates、information value 主要来自 SWEBOK Chapter 15；architecture future option 来自 SEI real-options；technical debt 的 future change/evolution cost 来自 SEI technical-debt research。
+**Source-backed frame：** 正文 §4–§11 的 sunk cost、opportunity cost、TCO、multiple-attribute decision、uncertain estimates、information value 主要来自 SWEBOK Chapter 15；architecture future option 来自 SEI real-options；technical debt 的 future change/evolution cost 来自 SEI technical-debt research。
 
-**Course synthesis：** 正文 §3 的 reversible-change option-value heuristic、§7 的 probe-as-information-buying operationalization、§12 的 Agent estimation/attention boundary、§13 的 lightweight decision-record shape，以及 review/product/security attention 可能成为 bottleneck，已在本 audit §4 分开标注。
+**Course synthesis：** 正文 §2 的 detectability / reversibility / blast radius / unknown-unknowns / evidence-latency 五维 risk heuristic，以及“让错误更早、更局部、更容易撤销”的结论，是把 M05/M08/M09/M11 的 change、failure-domain 与 evidence reasoning 汇总成 risk lens；§3 的 reversible-change option-value heuristic、§7 的 probe-as-information-buying operationalization、§12 的 Agent estimation/attention boundary、§13 的 lightweight decision-record shape，以及 review/product/security attention 可能成为 bottleneck，也都是课程 synthesis / adaptation，并已在本 audit §4 分开标注。
 
 ### Process / Feedback / Team Coordination
 
@@ -825,9 +825,9 @@ https://www.omg.org/spec/UML/2.5.1/PDF
 
 ### Security Engineering
 
-**Source-backed frame：** 正文 §1–§5 的 security-through-lifecycle、asset/trust-boundary/threat-model frame 来自 SWEBOK Security、NIST SSDF 与 OWASP Threat Modeling；§6–§11 的 least privilege/AuthN/AuthZ/secrets/prompt injection/Agent tool security 来自本 audit §11 的 NIST/OWASP sources。
+**Source-backed frame：** 正文 §1–§5 的 security-through-lifecycle、asset/trust-boundary/threat-model frame 来自 SWEBOK Security、NIST SSDF 与 OWASP Threat Modeling；§6 的 least privilege、§7 的 authentication/authorization 部分、§10 的 secrets，以及 §11 的 prompt-injection / Agent-tool-security frame 来自本 audit §11 的 NIST/OWASP sources；§9 的 dependency/supply-chain/provenance frame 则来自前面的 NIST SSDF，而不是 audit §11。
 
-**Course synthesis：** 正文 §7 中 engineering authority 作为 authentication/authorization 之外的第三层、§11 的 `data != authority-bearing instruction` 解释，以及 §12–§14 将 threat-aligned evidence/trade-off/review 接回 M11/M12 Agent harness，是课程自己的组合；这些不会伪装成 OWASP/NIST taxonomy。
+**Course synthesis：** 正文 §7 中 engineering authority 作为 authentication/authorization 之外的第三层；§8 把 M07/M11 的 fail-open/fail-closed 与 failure-semantics reasoning 转移到 security consequence 上；§11 的 `data != authority-bearing instruction` 解释；以及 §12–§14 将 threat-aligned evidence/trade-off/review 接回 M11/M12 Agent harness，都是课程自己的组合/transfer。这些不会伪装成 OWASP/NIST taxonomy。
 
 ### Professional Practice
 
