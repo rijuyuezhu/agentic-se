@@ -272,9 +272,7 @@ removal criterion explicit
 
 可能只是永久增加了一条 warning。
 
-这直接对应 expand-contract 的最后一步：
-
-> **contract 阶段必须真的发生。**
+这对应 expand-contract 的最后一步，但需要一个 durable-data qualifier：**transitional compatibility burden 必须有明确的 contract/removal decision。** 如果产品明确承诺永久导入历史格式，old reader 可以成为长期 compatibility feature；此时需要结束的是未被 policy 授权的过渡路径，而不是为了套 pattern 把所有 old-format support 删除。
 
 ---
 
@@ -288,44 +286,30 @@ removal criterion explicit
 
 ## 实际检查内容
 
-正文明确给出三阶段：
+正文明确把 backward-incompatible interface change 拆成三阶段：
 
 ```text
-Expand
-Migrate
-Contract
+Expand: supplier/interface 同时支持 old + new form
+Migrate: 把 clients/usages 从 old 逐步迁到 new
+Contract: 所有 usages 迁完后删除 old form
 ```
 
-其核心是：先让 provider 同时支持 old/new form，再逐步迁移 consumers，最后删除 old form。
-
-文章明确讨论：
-
-- Published Interface；
-- external clients；
-- database refactoring；
-- remote API evolution；
-- continuous delivery；
-- migrate phase 长期保留两种形式的成本；
-- 如果一直不 contract，系统可能比开始更复杂。
+文章还明确讨论 Published Interface、external clients、database refactoring、remote API evolution、continuous delivery，以及 migrate period 同时维护两种形式的成本。这里的 **Migrate 主体是 clients/usages**；原文没有把“durable producer 开始默认写新格式”重新命名成 Migrate。原文还明确写到：在 migrate phase，可以用 **Feature Flag** 控制使用 old/new interface；这是 activation/decoupling mechanism，不等于 compatibility proof。
 
 ## 本课程采用什么
 
-M08 不会只把它用于 function rename。
+M08 不会只把它用于 function rename。API field、config、database column、serialized file、RPC/worker rollout 都可以借它思考 old/new coexistence；但不同 surface 的 concrete mechanism 不同，课程不会机械规定 dual-read 或 dual-write。
 
-它可以描述：
+对于 TaskForge durable snapshot，本课程**额外**把 producer writer cutover 单独列成 operational event：
 
 ```text
-API field rename
-config rename
-database column migration
-serialized file format
-RPC protocol
-worker rollout
+Expand capability
+-> Migrate readers/consumers
+-> Writer cutover
+-> Contract/cleanup
 ```
 
-但不同 surface 的具体 dual-read / dual-write 策略不同。
-
-课程不会机械规定所有 migration 都要 dual-write。
+这不是把 Fowler 的三阶段改成四阶段 source taxonomy。TaskForge 的 E/M/W/C 是受 Parallel Change 启发的 durable-data adaptation：第一步实际扩大的是 **reader/consumer capability**，因此 source 中 supplier/client 的角色与 TaskForge producer/reader deployment roles **不要求一一同构**；课程保留原文 `Migrate clients` 的含义，同时把 durable producer 开始生成 W2 这一不同 rollback boundary 单独显式化。
 
 ---
 
@@ -385,12 +369,12 @@ Proto 只作为一个高质量反例：serialization semantics 是协议本身�
 
 ## 实际检查内容
 
-Kubernetes 对 API version 演化有几个特别适合 M08 的要求：
+Kubernetes 对 API version 演化有几个特别适合 M08 的要求，而且这几条已直接对照现行 policy 原文核过：
 
 - API element 不能在同一 version 内随意删除或显著改变；
-- persisted storage 中出现过的 API representation 不能因为 serving endpoint 下线就变得无法 decode；
-- preferred/storage version 向前推进前，应有 release 同时支持 old/new version；
-- upgrade 后应保留 rollback 能力，而不是一升级就把 storage 写成旧版本无法理解的形式。
+- persisted storage 中出现过的 API representation 不能因为 serving endpoint 下线就变得无法 decode/convert；
+- preferred/storage version 向前推进前，应先有 release 同时支持 new 与 previous version；
+- policy 明确要求用户能够 upgrade 到新 release 后再 rollback，而不需要先把数据转换成 new API version（显式使用 newer-only feature 的情况除外）。
 
 ## 本课程采用什么
 
@@ -457,7 +441,7 @@ rollback after new writes?
 semantic behavior preserved?
 ```
 
-这套矩阵是本课程综合，不是某个 source 的原始 taxonomy。
+这套矩阵是本课程综合，不是某个 source 的原始 taxonomy。TaskForge 的四个 operational events（capability expansion、reader/consumer migration、writer cutover、contract/cleanup）也属于课程综合；其中只有 `Expand → Migrate clients → Contract` 三阶段 interface pattern 直接来自 Parallel Change。
 
 ---
 
@@ -469,7 +453,7 @@ semantic behavior preserved?
 - SemVer 2.0.0：版本声明 contract，但不作为证明；
 - SE at Google Dependency Management：dependency network、time、visibility；
 - SE at Google Deprecation：owner/milestone/backsliding；
-- Parallel Change：expand → migrate → contract；
+- Parallel Change：supplier Expand → migrate clients/usages → contract old interface，并明确提到 migrate phase 可用 Feature Flag 控制 old/new interface；TaskForge 的 reader-capability expansion / reader migration / writer cutover / cleanup 是课程适配，角色不要求一一同构；
 - Protocol Buffers：具体 wire representation 规则；
 - Kubernetes Deprecation Policy：old/new overlap、storage decode、rollback reasoning。
 
