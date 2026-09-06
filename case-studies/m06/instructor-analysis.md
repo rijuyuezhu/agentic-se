@@ -12,7 +12,7 @@
 
 > **当前 change 并不要求先把 clock / host / filesystem 全部抽成 production dependency interfaces。**
 
-Python module binding、环境变量和 `tmp_path` 已经足够把 legacy behavior 放进稳定 test harness。
+现有 Python substitution points（local name rebinding + shared-module attribute patch）、环境变量和 `tmp_path` 已经足够把 legacy behavior 放进稳定 test harness。
 
 因此一个成熟的 reference path 可以是：
 
@@ -108,21 +108,26 @@ legacy_audit.datetime = FrozenDateTime
 legacy_audit.socket.gethostname = lambda: "lab-host"
 ```
 
-这是一种 Python module-binding seam。
+这两行都利用了可替换 behavior 的 seam，但 Python mechanism 不同。
 
-它的优点：
+第一行是 **module-local name rebinding**：`legacy_audit.py` 用 `from datetime import datetime`，所以 test 只重新绑定 `legacy_audit` namespace 里的 `datetime` name。
+
+第二行不是 local rebinding。`legacy_audit.py` 用 `import socket`，因此 `legacy_audit.socket` 和普通 `import socket` 得到的是同一个 module object。给 `legacy_audit.socket.gethostname` 赋值会修改共享 module attribute；patch 生效期间，进程里其他使用该 object 的代码也会看到 `"lab-host"`。Starter probe 在 `finally` 里恢复原 function，而且串行执行，所以这里把这种 process-wide mutation 当成一个有明确 isolation cost 的临时 test-harness seam，而不是推荐的通用测试 API。
+
+它们的共同优点：
 
 - 0 production diff；
 - 快速把时间/hostname deterministic 化；
 - 很适合第一次 takeover；
 - 可以先确认 behavior 再决定 architecture。
 
-它的缺点：
+它们的风险并不完全相同：
 
-- 依赖 import/binding shape；
-- `from datetime import datetime` 改成 `import datetime` 会让 test seam 失效；
-- 不应该被误认为稳定 public API；
-- 如果大量测试都这样 patch internal names，会变 brittle。
+- local `datetime` rebinding 依赖 `legacy_audit` 的 import/binding shape；
+- shared `socket.gethostname` patch 还带 process-wide interference/blast-radius 风险；
+- `os.environ` 同样是 process-scoped state；
+- 不应该把这些 harness control points 误认为稳定 public API；
+- 如果大量/并行测试依赖 shared mutations，会更 brittle，也更难隔离。
 
 所以课程的判断不是：
 
@@ -604,14 +609,15 @@ freeze history forever
 一个高质量 Agent review 应该类似：
 
 ```text
-Observed default behavior is protected by three characterization scenarios.
-The requested delta is limited to job selection.
-Existing module/env/tempdir seams are sufficient for deterministic tests,
+Contract: default scope has no intended behavior change;
+existing default behavior remains the exercise-local preservation obligation.
+Evidence: the characterized empty/mixed/append scenarios still match their baseline,
+and the requested delta is limited to job selection.
+Existing harness control points are sufficient for deterministic tests,
 so the patch does not introduce a new dependency framework.
 Invalid scope is rejected before mkdir/open.
-Default scope still produces the same characterized file bytes.
-Remaining risk: no evidence yet about consumers of stdout or external parsers
-beyond the characterized format; compatibility should remain conservative.
+Remaining risk: uncharacterized inputs, error paths, stdout consumers, and external parsers
+mean the broad preservation obligation is not fully proved; they are not out of contract.
 ```
 
 而不是：

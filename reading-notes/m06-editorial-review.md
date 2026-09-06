@@ -135,7 +135,7 @@ Technique catalog 被压成 transfer examples，符合 source audit：课程吸�
 
 旧版和 instructor case 的重要 design judgment：
 
-- Python module binding + env + tempdir + stdout capture 已足够建立 current feedback；
+- 现有 Python substitution points（local name rebinding + shared-module attribute patch）+ env + tempdir + stdout capture 已足够建立 current feedback；
 - reference 不需要 `AuditRuntime/ClockProtocol/...`；
 - `_select_jobs()` 也可接受但非必要；
 - formalized seam / helper 只能由 current pressure 支撑。
@@ -252,7 +252,7 @@ Starter tool 的真实输出包含 `legacy audit characterization probe passed`�
 
 ### Seam / enabling point
 
-第一次 canonical teaching naming 在 §6。此前 narrative 只说 control point / controlled environment，不出现 canonical seam decision。§6 先展示 starter probe 真实使用 module/env/tempdir，再命名 seam/enabling point。
+第一次 canonical teaching naming 在 §6。此前 narrative 只说 control point / controlled environment，不出现 canonical seam decision。§6 先展示 starter probe 真实使用 local-name rebinding、shared-module attribute patch、env 和 tempdir，再命名 seam/enabling point。
 
 ### M07 temporal vocabulary
 
@@ -323,16 +323,23 @@ Append 是跨 invocation 的 observed/preserve surface，但不被重新解释�
 
 相比旧版三十多个顶层节，reader 应更容易感觉每个 abstraction 是前一个 unresolved problem 的回答。
 
-## 9. 本轮 self-sweep 实际修正的问题
+## 9. 初始 self-sweep 与 PR review follow-up
 
-1. **Contract authority regression — 初稿先把 ordering/append/formatting 当成纯 observed quirks，第一次修正后又把 general default-preserve clause 看窄了。** Lab 不仅点名 preserve existing ordering/file naming/append/formatting semantics，还先规定 `default scope must preserve existing behavior`。最终改成“broad local preservation obligation + probe 提供 concrete old value；named dimensions 是重点 review surface”，同时避免把 exercise-local preservation 升级成永久 product contract。
+初始 self-sweep 实际修正：
+
+1. **Contract authority regression — 初稿先把 ordering/append/formatting 当成纯 observed quirks，第一次修正后又把 general default-preserve clause 看窄了。** Lab 不仅点名 preserve existing ordering/file naming/append/formatting semantics，还先规定 `default scope must preserve existing behavior`。前半章改成“broad local preservation obligation + probe 提供 concrete old value；named dimensions 是重点 review surface”，同时避免把 exercise-local preservation 升级成永久 product contract。
 2. **Probe evidence strength — 初稿容易让 fingerprint 看起来像 exact golden。** 实际 `m06_legacy_probe.py` assert fragments 与 stdout write count，只打印 SHA。新版显式区分 printed evidence 与 asserted oracle。
 3. **Abstraction dependency — starter output 提前出现 `characterization` 字符串。** 不能改真实 output；正文明确其先只是工具标签，再在 observation pressure 后正式解释。
 4. **Design authority — seam 容易被教学本身 naturalize 成必须新增 production interface。** 新版把 instructor 的 `no production seam change` 作为关键合法答案，并公平保留 small runtime-context candidate。
 5. **M02 state authority 容易在 legacy fixture 中丢失。** 新版恢复合法 lifecycle fixture 与 audit projection 的 authority/scope reasoning。
 6. **M07 dependency — 不把 concurrency/retry/crash 在本章展开成提前的 temporal model。** 只在结尾作为下一章 pressure。
 
-这些修正来自 merge-base/source/lab/case-study 对照，而不是格式统计。
+PR review 后没有照搬 comment，而是重新从 Lab authority、真实 Python object identity 和完整 occurrence sweep 独立复核。确认又有两处需要闭环：
+
+7. **后半章 authority narrowing — 前半章修对了，但 §9 / Agent contract / final review 又把 obligation 收窄成 characterized surface。** 这是实质 rewrite regression。最终统一为：`scope="all"` 没有 intended behavior change；existing default behavior 是 broad exercise-local obligation；characterization 只决定当前证明覆盖和 confidence。未 characterize behavior 是 `unproved / remaining risk`，不是 `out of contract`。同时发现 Lab 自己 Agent-B prompt 的 `Preserve: all characterized default behavior` 也有同类歧义，因此 module、lab、instructor case 一起同步。
+8. **Python seam mechanism precision — `datetime` 与 `socket.gethostname` 不是同一种 module-local rebinding。** 实际验证 `legacy_audit.socket is socket == True`；给 `legacy_audit.socket.gethostname` 赋值后，普通 `socket.gethostname()` 同样返回替代值。最终保留真实 probe，不为教材纯度改 harness：正文/lab/case 明确 local `datetime` name rebinding 与 shared-module attribute mutation 的区别，以及后者 process-wide blast radius、`finally` restore 和 parallel/interference risk。这不改变 instructor 的 `no production seam change` judgment。
+
+前六项来自 merge-base/source/lab/case-study 对照；后两项由 reviewer 触发但经过独立复核。reviewer diagnosis 在这里是输入，不是 authority。
 
 ## 10. 仍需独立 reviewer 判断
 
@@ -341,8 +348,10 @@ Append 是跨 invocation 的 observed/preserve surface，但不被重新解释�
 - §1–§3 是否把“preservation obligation 已知但 concrete old behavior 未知”讲得足够自然，而不是过度认识论化；
 - formal Legacy condition 放在 §3 是否比开场定义更顺；
 - §4–§6 从 effect sketch 到 sensing/separation 再到 seam 的 dependency order 是否真的自然；
+- §6 区分 local `datetime` rebinding 与 shared `socket.gethostname` attribute patch 后，是否既技术准确又没有把读者拖入无关 Python 细节；process-wide isolation limitation 是否表达清楚；
 - §7 对 starter probe “hash 只是 printed evidence” 的精度是否帮助读者理解 oracle，而没有陷入实现细节；
 - §8 的 no-production-seam reference 是否保持为 case-specific judgment，而非新的 universal anti-DI rule；
+- §9、Agent task contract 与 final review 是否真正保持 `obligation > current evidence coverage`，没有再次把 uncharacterized behavior 偷偷变成 out-of-contract；
 - §9–§11 是否保留足够具体的 failed-only behavior/evidence，而不是后半章又退化成概念综述；
 - 约 450 行的新版是否把 WELC 中有用的 transfer judgment 压得过薄。
 
@@ -364,13 +373,25 @@ mixed:  file=7821f1fa9ec08dd4 stdout=3fd157cf98872494
 append: file=4e15e48d03660f50 stdout=de715a35f8db4b21
 ```
 
+PR-review follow-up 还实际执行了一个 Python binding probe：
+
+```text
+legacy_audit.socket is socket: True
+local datetime rebound: True
+legacy_audit.socket.gethostname(): lab-host
+socket.gethostname(): lab-host
+```
+
+它确认 `datetime` assignment 是 module-local name rebinding，而 hostname assignment 会修改共享 `socket` module object 的 attribute。
+
 同时实际检查：
 
 - `git diff --check`：通过；
-- M06 module + review record relative links：通过；
-- 两个 Markdown 文件 fence balance / one page H1：通过；
-- 两个目标文件 secret-pattern scan：无 finding；
+- module / lab / instructor case / review record 四个 Markdown 的 relative links 与 fence balance：通过；module/review 保持单 page-H1，lab/case 的既有 H1 count 未变化；
+- 四个目标文件 secret-pattern scan：无 finding；
 - 无 `uv.lock`；
+- authority occurrence sweep：`scope=all preserves characterized default behavior`、`all characterized default behavior`、`preserve the characterized default behavior`、`preserve evidence outside the intended delta` 均无残留；
+- seam wording sweep：把 time/host 一并称为 module binding 的具体残留无 finding；
 - abstraction dependency：formal sensing/separation 在 §5；seam/enabling point 在 §6；§6 前无 canonical seam/enabling-point leak；
 - `linearization / fencing / lease / attempt identity / expand-contract / exactly once` 等 later-module canonical vocabulary 无 finding；
-- 当前 `git status --short` 只包含 M06 module 修改与本 review record 新文件。
+- 当前 diff 只包含 M06 module、Lab 06、M06 instructor case 与本 review record；没有修改 TaskForge production/probe/test code。

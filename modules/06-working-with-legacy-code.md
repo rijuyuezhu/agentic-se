@@ -167,11 +167,15 @@ legacy_audit.socket.gethostname = lambda: "lab-host"
 
 这时再引入 **seam** 才有实际对象可指。按照 Feathers 的 seam model，一个 seam 是程序中允许你在不直接修改目标位置的情况下，让这里采用另一种行为的结构机会；真正选择 alternate behavior 的地方叫 **enabling point**。
 
-在这个 Python 例子里，`legacy_audit.datetime` 和 `legacy_audit.socket.gethostname` 的 module binding 就形成了现成 seam。测试把它们替换为 controlled behavior，那个替换动作就是 test harness 中的 enabling point。环境变量提供另一个 control surface；process boundary、function parameter、filesystem root、factory 或语言/链接机制也都可能形成 seam。
+这个 probe 里其实有两种不同的 Python substitution mechanism，不能都粗略叫成同一种 module-local rebinding。`legacy_audit.py` 用 `from datetime import datetime`，所以 `legacy_audit.datetime = FrozenDateTime` 是把 **`legacy_audit` 自己 namespace 里的 `datetime` name 重新绑定**；其他 module 的 `datetime` 不会因此改变。
 
-这解释了为什么 **seam 不是 interface 的同义词**。你完全可以有 seam 而没有 `ClockProtocol`；也可以拥有很多漂亮 interfaces，却没有一个便宜、可信的反馈路径。
+`socket` 则是 `import socket`。因此 `legacy_audit.socket` 指向的是进程里共享的 `socket` module object；`legacy_audit.socket.gethostname = ...` 修改的是这个共享 object 的 attribute，而不是只 rebind `legacy_audit` 的一个局部 name。在 patch 生效期间，其他拿到同一个 `socket` module object 的代码调用 `socket.gethostname()` 也会看到替代实现。这里仍然存在一个可替换 behavior 的 seam，而 test harness 中的 attribute assignment 是 enabling action，但它的 isolation 边界明显更宽。
 
-现成 module-binding seam 也不是无条件“好设计”。它依赖 import/binding shape：如果实现从 `from datetime import datetime` 改成另一种 import 方式，monkeypatch target 可能失效。大量 tests 都 patch internal names，也会形成 brittle implementation coupling。因此这里的判断只是：**它目前是否以最低成本提供了足够 feedback？** 不是“以后所有时间依赖都应该 monkeypatch”。
+当前 starter probe 串行运行，并在 `finally` 中恢复原 `gethostname`，所以这个 process-wide blast radius 在小型教学 probe 里仍是可接受的低成本 trade-off；如果 tests 并行、patch 期间有其他线程执行，或者越来越多测试依赖这种共享-module mutation，就会产生 interference risk。环境变量也有类似 process-scoped 特征。这个细节恰好说明：**找到 seam 不只要问能不能替换，还要问替换动作影响谁、怎样恢复、是否足够隔离。**
+
+这解释了为什么 **seam 不是 interface 的同义词**。你完全可以有 seam 而没有 `ClockProtocol`；也可以拥有很多漂亮 interfaces，却没有一个便宜、可信的反馈路径。process boundary、function parameter、filesystem root、factory 或语言/链接机制也都可能形成 seam。
+
+这些现成 control points 也不是无条件“好设计”。它们依赖 import/binding shape 或 process-global state；大量 tests 都 patch internal names / shared module attributes，会形成 brittle coupling 和 isolation cost。因此这里的判断只是：**它们目前是否以最低成本提供了足够 feedback？** 不是“以后所有时间/hostname dependency 都应该这样 monkeypatch”。
 
 ## 7. Characterization 也要验证自己有牙齿
 
@@ -210,7 +214,7 @@ JobRepository
 
 这样每个 dependency 都能显式注入，unit tests 看起来也很整齐。
 
-另一种 candidate 是承认当前 control surfaces 已经够用：time/host 由 module binding 控制，filesystem root 由 env + temp directory 控制，stdout 可 capture，TaskForge state 可以通过已有 service/worker setup 构造。然后 **不做任何 production structural patch**，直接在已有 feedback 下实现最小 behavior delta。
+另一种 candidate 是承认当前 control surfaces 已经够用：time 由 `legacy_audit.datetime` local rebinding 控制，host 由 shared `socket.gethostname` attribute patch 控制，filesystem root 由 env + temp directory 控制，stdout 可 capture，TaskForge state 可以通过已有 service/worker setup 构造。然后 **不做任何 production structural patch**，直接在已有 feedback 下实现最小 behavior delta。
 
 Instructor reference 选择的是第二条路。这不是因为 production dependency abstraction 永远没价值，而是当前 change 只需要改变 job selection；新 object graph 没有解决一个尚未被现有 seam 解决的 current risk。
 
@@ -234,7 +238,7 @@ Instructor reference 选择的是第二条路。这不是因为 production depen
 
 ```text
 scope="all"
-→ preserve the characterized default behavior relevant to this change
+→ no intended behavior change; preserve existing default behavior
 
 scope="failed"
 → include only jobs whose status is FAILED
@@ -250,7 +254,7 @@ invalid scope
 
 这里有两个 qualifier 不能丢。
 
-第一，`scope="all"` 的“保持”建立在我们实际 characterized 的 evidence surface 上，不是假装已经证明所有 hidden consumers 和所有可能输入。对于没有调查到的外部 parser、operator script 或异常路径，remaining risk 仍然存在。
+第一，**preservation obligation 比当前 evidence coverage 更宽。** Lab 已经规定 `scope="all"` 没有 intended behavior change，因此 existing default behavior 都属于本次 exercise 的 local preservation obligation。我们目前只用 empty/mixed/append/default-owner/stdout 等有限 scenarios characterize 了其中一部分；没有调查到的输入、异常路径、external parser 或 operator script 应记录成 **unproved / remaining risk**，而不是因为没有 characterization 就被移出 obligation。
 
 第二，invalid scope 的 no-effect guarantee 是**新 contract 明确要求的 boundary semantics**。它复用了 M04 的 reasoning：如果我们要告诉 caller“这个 input 在 effect 之前被拒绝”，validation 就必须发生在 `mkdir/open/write` 之前。不能因为错误最终抛出来了，就自动宣称没有 side effect。
 
@@ -342,7 +346,7 @@ Clean up legacy_audit.py, make it testable, and add failed-only mode.
 
 第五阶段在显式新 contract 下实现 requested behavior，展示 fail-before / pass-after，并重跑旧 characterization。
 
-最后让独立 reviewer 不依赖作者总结，检查：requested delta 之外的 characterized behavior 是否保持？seam 是否被无理由扩大？tests 是否保护 effect 而非新 helper choreography？哪些 unknown 仍未闭合？
+最后让独立 reviewer 不依赖作者总结，检查：failed-only 是否是唯一 intended behavior delta？现有 evidence 是否证明了已 characterized scenarios 没有 drift？对于尚未 characterized 的 default behavior，作者是否把它们诚实保留为未充分证明的 preservation risk，而不是当成 out of scope？seam 是否被无理由扩大？tests 是否保护 effect 而非新 helper choreography？
 
 一个具体 task contract 可以是：
 
@@ -363,7 +367,7 @@ Feedback:
 
 Behavior change:
 - scope=failed includes only FAILED jobs
-- scope=all preserves characterized default behavior
+- scope=all has no intended behavior change and preserves existing default behavior
 - invalid scope fails before filesystem mutation
 
 Non-goals:
@@ -393,7 +397,7 @@ Evidence:
 
 **Control / seam**：当前困难是 sensing、separation 还是两者？已有 control point 是否已经够用？若新增 seam，enabling point 在哪里，scope 是否超过 current change？
 
-**Behavior**：structural preparation 与 requested delta 是否分开？默认 append/order/format 等 characterized behavior 是否被无意识“clean up”？invalid input 的 no-effect claim 是否真的发生在 mutation 前？
+**Behavior**：structural preparation 与 requested delta 是否分开？`scope="all"` 是否仍以“无 intended behavior change”为 contract？append/order/format 等已 characterized samples 是否保持？未 characterize 的 default behavior 是否仍被视为 obligation 中尚未证明的部分，而不是被偷偷缩出 contract？invalid input 的 no-effect claim 是否真的发生在 mutation 前？
 
 **Remaining risk**：哪些 behavior 仍然 unknown？哪些 consumer 没调查？哪些高-fidelity scenario 没跑？是否需要后续 compatibility work 或 production observation？
 
@@ -431,7 +435,8 @@ requested change
 → distinguish sensing from separation
 → reuse or open the smallest sufficient control point
 → make the requested behavior change explicitly
-→ preserve evidence outside the intended delta
+→ preserve existing behavior outside the intended delta
+→ use evidence to measure confidence, not to define the preservation boundary
 → record remaining uncertainty
 ```
 

@@ -207,28 +207,25 @@ stdout
 
 # 6. 审查 Starter Probe 自己
 
-`m06_legacy_probe.py` 利用了现有 Python module binding：
+`m06_legacy_probe.py` 用了两种不同的 Python substitution mechanism：
 
 ```text
-legacy_audit.datetime
-legacy_audit.socket.gethostname
+legacy_audit.datetime = FrozenDateTime
+→ rebind legacy_audit module 自己的 datetime name
+
+legacy_audit.socket.gethostname = ...
+→ mutate 共享 socket module object 的 gethostname attribute
 ```
 
-以及：
-
-```text
-env + tempfile
-```
-
-来建立 deterministic experiment。
+后者不是 module-local rebinding：`legacy_audit.socket is socket`，所以 patch 生效时，同一进程中其他使用该 `socket` module object 的代码也会看到替代的 `gethostname`。Probe 依靠串行执行和 `finally` restore 控制这个 blast radius。它还用 `env + tempfile` 建立 controlled experiment；环境变量本身同样是 process-scoped state。
 
 回答：
 
-1. 这些算 seam 吗？
-2. enabling point 在哪里？
-3. 这种 monkeypatch seam 的优点是什么？
-4. 它有什么 fragility？
-5. 是否已经足够完成 feature？
+1. 这两种 substitution 分别怎样形成 seam？
+2. enabling action 在哪里？
+3. `datetime` local rebinding 与 `socket.gethostname` shared-module mutation 的 isolation boundary 有什么不同？
+4. 为什么当前串行 probe 仍可接受 process-wide patch？并行 tests / threads 会增加什么 risk？
+5. 这些低成本 control points 是否已经足够完成 feature？
 6. 哪些 seam 值得正式进入 production design，哪些可以只留在 test harness？
 
 ---
@@ -504,7 +501,8 @@ Phase 3: open at most the minimal seam needed for deterministic focused tests;
 Phase 4: add failed-only scope with explicit red-before test.
 
 Preserve:
-all characterized default behavior.
+default scope has no intended behavior change; preserve existing default behavior.
+The listed characterization scenarios are evidence for this obligation, not its boundary.
 
 Non-goals:
 no audit format redesign;
