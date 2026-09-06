@@ -357,7 +357,7 @@ if crash_after_effect:
 completed.add(job_id)
 ```
 
-实际 probe：
+实际 probe 使用 `SimulatedCrash` 这个同进程 failpoint：
 
 ```text
 external effect count = 1
@@ -367,15 +367,15 @@ retry
 external effect count = 2
 ```
 
-所以 `deliver_once` 的名字比真实 guarantee 强。
+所以 `deliver_once` 的名字比真实 guarantee 强。这是故意的。
 
-这是故意的。
+但这里不能把 probe evidence 写得比代码更强：`completed_jobs` 是进程内 `set`，`SimulatedCrash` 只是异常，不会真正结束并重启 Python process。这个 probe 直接证明的是“effect 已发生而 completion write 未发生时，同进程 retry 会 duplicate”；它**没有**证明当前 local bookkeeping 能跨真实 process crash 留存。
 
 ---
 
-# 10. 为什么 Record-First 不是修复
+# 10. 为什么 Record-First 仍不是修复
 
-把顺序换成：
+为了分析“只换顺序是否足够”，这里必须先补一个 starter 本身没有的 assumption：**completion record 能跨目标 failure / recovery horizon 留存。** 如果真实 process restart 会把 record 一起丢掉，就不能用下面的 recovery reasoning。带着这个 durability assumption，把顺序换成：
 
 ```python
 completed.add(job_id)
@@ -390,7 +390,7 @@ CRASH
 external effect never happened
 ```
 
-recovery：
+在上述 durability assumption 下，recovery：
 
 ```text
 completed says done
@@ -404,9 +404,9 @@ duplicate risk ↓
 loss risk ↑
 ```
 
-没有 exactly-once。
+没有 exactly-once。它只说明：**即使**先赋予 completion record 足够 durability，record-first 也会把 duplicate window 换成 loss window；当前 starter 的 in-memory set 连这个 durability 前提都不满足。
 
-这证明问题不是语句顺序，而是：
+因此课程真正要证明的问题不是语句顺序，而是：
 
 ```text
 local completion state
