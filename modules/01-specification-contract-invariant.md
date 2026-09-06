@@ -55,7 +55,7 @@ def divide(a: int, b: int) -> float:
     ...
 ```
 
-一种 contract 可以写：`b != 0` 是 precondition。也就是说 operation 的有效输入域只包含满足这个条件的调用；caller 违反它以后，implementation 不必承诺正常结果。
+一种 contract 可以写：`b != 0` 是 precondition。也就是说 operation 的有效输入域只包含满足这个条件的调用；如果 caller 违反它，这份 specification 就不再对这次调用提供 postcondition guarantee，返回值、exception 或 mutation 等行为都不由这个 postcondition 约束。implementation 当然仍可以选择 defensive check 或 fail fast，但除非 contract 另行承诺，caller 不能依赖这种防御性行为。
 
 从这个角度看，带 precondition 的 operation 可以理解成一个 **partial function**：类型签名给出的只是较大的表示域，specification 再说明其中哪些输入真正属于 contract 的定义域。这个词的价值不在数学包装，而在提醒我们：`int × int -> float` 仍然没有回答所有整数对是否都被允许。
 
@@ -81,17 +81,17 @@ contract 的价值就在这里：它不是文档装饰，而是在两边之间�
 
 ## 3. Behavior table 会把一句“取消任务”里藏着的决定逼出来
 
-回到 TaskForge。先不要写代码，先给出一个**候选** behavior table：
+回到 TaskForge。先不要写代码，先把 contract 的 **state dimension** 写成一个候选 behavior table。它还不是完整 contract；time、error、concurrency 和 repetition semantics 会在接下来的小节继续补全。
 
 | 当前状态 | `cancel(job_id)` 的语义 | public result | 状态/side effect |
 |---|---|---|---|
 | queued | 接受取消并持久化 transition | success | `queued -> cancelled` |
-| running | durable 地记录 cancellation requested | success | 暂不伪装成已停止 |
+| running | durable 地接受 cancellation request | success | `status` 保持 `running`；持久化 `cancellation_requested = true` |
 | succeeded / failed | 不改变 terminal result | already_terminal | none |
 | cancelled | 重复调用仍得到 success | success | no additional transition |
 | missing | 找不到目标 | not_found | none |
 
-这张表不是后续 M04 lab 的唯一标准答案。M04 的实验会故意采用一套更严格的 cancel semantics，让你比较不同 contract 的代价。这里选择这组行为，只是为了展示：一旦把模糊需求写成表格，原本藏在 implementation 里的 design choices 就不得不显式出现。
+这张表不是后续 M04 lab 的唯一标准答案。M00 为了追踪 change cost，曾暂时假设用 `CANCELLING` 表示过渡状态；这里故意选择另一种 representation：public `status` 继续是 `running`，另一个 durable fact 记录 cancellation request。M04 的实验还会采用更严格的 cancel semantics。三者不是互相推翻，而是在展示同一个 product pressure 可以对应不同 contract；只有先说明 decision criterion，才能判断哪个设计适合当前系统。
 
 例如 running 行为什么不能直接写成 `status = cancelled`？因为 subprocess 也许仍在执行。若状态名对外声称“已经 cancelled”，而现实 side effect 仍可能继续，系统就在制造 false claim。
 
@@ -101,7 +101,7 @@ contract 的价值就在这里：它不是文档装饰，而是在两边之间�
 
 `send_email(user) -> None` 的返回类型几乎没有告诉 caller 任何重要信息。operation 可能同步发送，也可能只是 enqueue；返回前 message 可能已 durable，也可能仍只在 memory queue；network failure 可能意味着 no effect，也可能意味着 outcome unknown。
 
-同样，`cancel()` 返回 success 可以有很多时间语义：request 已写内存、已 durable、worker 已观察到、subprocess 已退出、外部 side effect 已停止。它们不是实现细节，而是 caller 接下来能做什么的依据。
+同样，`cancel()` 返回 success 可以有很多时间语义。在当前候选 contract 中，running job 的 success **只承诺 `cancellation_requested = true` 已 durable committed**；它不承诺 worker 已观察到 request、subprocess 已退出，更不承诺外部 side effect 已停止。换一套 contract 完全可以选择别的时间点，但必须把这个时间点说出来，因为它决定 caller 接下来能做什么。
 
 所以在 concurrent / distributed system 里，**temporal semantics 是 specification 的一部分**。不要用一个模糊的 success 把多个时间点假装成同一件事。
 
@@ -153,19 +153,56 @@ class Job:
 
 这些事实不是 `cancel` 私有的。submit、reserve、finish、恢复代码和 migration 都不能制造违反它们的 Job。
 
-### 4.2 Protocol invariant：合法性可能跨多个对象或进程
+### 4.2 Representation 可以排除一部分 local illegal state
+
+既然我们已经知道 `queued` job 不应带 active `worker_id`，一个自然问题是：能不能让 representation 本身更难表达这种非法组合？上面的 dataclass 仍然允许构造 `status="queued", worker_id="w7"`。某些语言和场景下，可以改成更精确的 variants：
+
+```python
+QueuedJob(...)
+RunningJob(worker_id=...)
+FinishedJob(...)
+```
+
+这就是 “make illegal states unrepresentable” 的直觉：让一部分 local invariant 在 value 被构造时就得到自动 enforcement，减少后续每条路径都重复检查的 proof obligation。
+
+但不能由此推出“所有 invariant 都应该编码进 type system”。远端 mutable state 会过期，跨 process 的 uniqueness 需要共享 state，复杂 lifecycle 也可能因为类型数量爆炸而更难 serialization / migration。Type、constructor、database constraint、transaction、assertion、property test 和 review rule 都可能承担一部分 enforcement；选择依据仍然是这个事实由谁拥有、需要观察哪些 state，以及在哪里最便宜可靠地阻止非法状态进入系统。
+
+### 4.3 Protocol invariant：合法性可能跨多个对象或进程
 
 “同一个 job 在任意时刻最多有一个 authoritative active attempt”就不是单个 `Job` value 的 local representation invariant。它可能依赖数据库 constraint、lease、transaction、CAS 或 worker protocol。
 
 重要的是先把**必须为真的语义事实**和**当前用于 enforcement 的机制**分开。机制未来可以替换，invariant 仍然是 design/review 的共同对象。
 
-### 4.3 Durable invariant：成功承诺可以跨 crash
+### 4.4 State machine 把 lifecycle protocol 拉成可 review artifact
+
+当一个 lifecycle 已经不断出现 `if status == ...`，继续加 branch 以前先画状态转换，通常更容易暴露遗漏：
+
+```text
+            reserve
+ queued  ------------> running
+   |                     |   \
+   | cancel              |    \ fail
+   v                     |     v
+cancelled                |   failed
+                         |
+                         | finish
+                         v
+                      succeeded
+```
+
+然后明确 terminal set，并逐条问 transition：谁能触发？是否需要 atomic？返回前需要 durable 到什么程度？并发 transition 怎样 resolve？crash 在中间发生时 caller 能知道什么？state machine 的价值不是“画过图”，而是把散落在很多 `if` 中的 protocol contract 拉到同一个可 review artifact 上。
+
+这里还要防止另一种过度承诺：一张 state-machine 图只描述它选择建模的 state dimension。当前候选 `cancel` contract 中，running job 的取消不会改变 public `status`，而是持久化 `cancellation_requested = true`，所以在这张只画 status 的图里不会出现一条 `running -> ...` cancel edge。如果这个 flag 会改变后续允许的 transition，就必须把它作为 transition annotation 或新的 state dimension 纳入模型。**State machine 是 contract 的一种视图，不是完整 contract 本身。**
+
+### 4.5 Durable invariant：成功承诺可以跨 crash
 
 如果 API 对 caller 明确确认“cancellation request 已 durable 接受”，那么 daemon crash/restart 后这个 request 不能凭空消失。
 
 这个 invariant 把 API contract 与 persistence 连接起来，也说明很多 architecture decision 最后都可以还原成同一个问题：系统准备在哪里、用什么机制保持某些关键事实？
 
 ## 5. 找到 Invariant 以后，还要找到 Enforcement Point
+
+前面两种 artifact 做了不同的事：更精确的 representation 可以直接排除一部分 local illegal state，state machine 可以把 protocol transition 变得可见。但它们都没有自动回答“共享 mutable state 最终由谁保证”。
 
 一个常见坏状态是：API layer 以为 worker 会检查，worker 以为 repository 已经验证，repository 又假设 caller 不会传非法 transition。每层都“知道规则”，但没有任何一层真正拥有保证它的责任。
 
@@ -240,55 +277,7 @@ test 与 implementation 完全一致，却可能一起违反需求。测试没�
 
 这不是要求每个函数都机械做五维笛卡尔积，而是说明测试空间应该由**语义分区**产生。值得测的是会改变 contract outcome 的 distinction。
 
-## 8. “Make Illegal States Unrepresentable” 是工具，不是宗教
-
-有了 invariant 以后，一个自然问题是：能不能让 representation 本身减少非法组合？
-
-当前结构：
-
-```python
-@dataclass
-class Job:
-    status: str
-    worker_id: str | None
-```
-
-允许轻易构造 `status="queued", worker_id="w7"` 这类违反 invariant 的 value。某些语言和场景下，可以改成更精确的 variants：
-
-```python
-QueuedJob(...)
-RunningJob(worker_id=...)
-FinishedJob(...)
-```
-
-这样一部分 local invariant 能更早、自动地被 enforcement。
-
-但不能由此推出“所有 invariant 都应该编码进 type system”。远端 mutable state 会过期，跨 process 的 uniqueness 需要共享 state，复杂 lifecycle 也可能因为类型数量爆炸而更难 serialization / migration。
-
-Type、constructor、database constraint、transaction、assertion、property test、state machine 和 review rule 都可能是 enforcement mechanism。选择依据应是：这个事实由谁拥有，需要观察哪些 state，以及在哪里最便宜、最可靠地阻止非法状态进入系统。
-
-## 9. 对有 Lifecycle 的对象，先把 State Machine 写出来
-
-如果一个领域已经不断出现 `if status == ...`，在继续加 branch 前先画状态转换通常更容易暴露遗漏：
-
-```text
-            reserve
- queued  ------------> running
-   |                     |   \
-   | cancel              |    \ fail
-   v                     |     v
-cancelled                |   failed
-                         |
-                         | finish
-                         v
-                      succeeded
-```
-
-然后明确 terminal set，并逐条问 transition：谁能触发？是否需要 atomic？返回前需要 durable 到什么程度？并发 transition 怎样 resolve？crash 在中间发生时 caller 能知道什么？
-
-state machine 不是为了画图，而是把散落在很多 `if` 中的 protocol contract 拉到同一个可 review artifact 上。
-
-## 10. 给 Agent 的任务也应该先有 Behavioral Model
+## 8. 给 Agent 的任务也应该先有 Behavioral Model
 
 Specification 对 Agent workflow 的价值很直接：让实现者先证明自己理解“应该改成什么”，而不是在探索 repo 的同时顺便决定产品语义。
 
@@ -320,7 +309,7 @@ Specification 对 Agent workflow 的价值很直接：让实现者先证明自�
 
 这个流程不是说所有小改动都必须写六份文档。它表达的是 authority 顺序：**先决定 behavior，再让 implementation 对 behavior 负责。**
 
-## 11. Review 一个 Specification 时应该追问什么
+## 9. Review 一个 Specification 时应该追问什么
 
 完整 contract 不意味着每次都写一篇长文，但下面这些维度不能因为 signature 很短就被自动忽略。
 
@@ -351,9 +340,9 @@ Specification 对 Agent workflow 的价值很直接：让实现者先证明自�
 - 哪些 behavior 真正应该成为 public promise？
 - 有没有把当前 implementation accident 无意升级成 stronger contract？
 
-## 12. 四个练习：从“代码表现”剥离“系统承诺”
+## 10. 四个练习：从“代码表现”剥离“系统承诺”
 
-### 12.1 从实现中剥离 accidental behavior
+### 10.1 从实现中剥离 accidental behavior
 
 给定：
 
@@ -365,19 +354,19 @@ def list_jobs(db):
 
 分别写出：当前 implementation 表现出的 behavior、caller 真正需要的 behavior、你愿意承诺的 contract。讨论 `ORDER BY id` 是否应该进入 public promise，以及如果删掉 order 后某个 client 失败，这件事能说明什么、又不能自动说明什么。
 
-### 12.2 写一个完整的 `cancel` contract
+### 10.2 写一个完整的 `cancel` contract
 
 不要照抄本章候选表。自己选择 running、already-cancelled 和 missing 的语义，并写清楚 side effect、durability、concurrency、repetition/error behavior 和 non-goals。最后说明你的设计比另一种候选 contract 强在哪里，又限制了哪些 implementation freedom。
 
-### 12.3 找 invariant 的 enforcement point
+### 10.3 找 invariant 的 enforcement point
 
 在一个熟悉 repo 中选 `session`、`job`、`transaction`、`connection` 或 cache entry。列出一个重要 invariant、所有可能修改它的位置、当前真正 enforcement 的机制，以及是否存在绕过路径或第二份 authority。
 
-### 12.4 Tests against spec
+### 10.4 Tests against spec
 
 选择一个函数或 API。先不看 implementation，只根据 requirement / protocol 写 behavior partitions 和 tests；再读实现。记录哪些当前 behavior 你故意没有测试，因为它不是 contract，以及哪些 spec behavior 当前代码根本没有做到。
 
-## 13. 下一章：有了 Contract，Boundary 应该画在哪里？
+## 11. 下一章：有了 Contract，Boundary 应该画在哪里？
 
 这一章给了我们第一个可以直接拿去 review 的问题：**What must be true? Who must guarantee it? What may the other side rely on?**
 

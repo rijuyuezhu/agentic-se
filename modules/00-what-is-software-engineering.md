@@ -37,13 +37,15 @@ if job.cancelled:
 
 在这个世界里，问题主要是 programming：状态放在哪里、分支怎么写、测试怎样覆盖。实现也许十分钟就能完成。
 
-现在只改一个条件：worker 可能已经开始执行 command。`cancelled = True` 还代表什么？如果 subprocess 仍在跑，把 job 标成 cancelled 是不是在对 caller 撒谎？于是我们加一个 `CANCELLING` 状态，worker 在安全点观察 cancellation request，再决定何时进入 terminal state。
+现在只改一个条件：worker 可能已经开始执行 command。`cancelled = True` 还代表什么？如果 subprocess 仍在跑，把 job 标成 cancelled 是不是在对 caller 撒谎？此时至少有两类 plausible design：running job 可以拒绝取消，也可以接受 cancellation request、稍后再完成停止。
+
+为了继续追踪一个具体 change，M00 接下来**暂时假设产品选择第二类语义**，并用 `CANCELLING` 表示“取消请求已接受，但尚未确认停止”。这只是候选设计；M01 会回头问我们凭什么选择它。在这个 working assumption 下，worker 在安全点观察 cancellation request，再决定何时进入 terminal state。
 
 接着再改一个条件：`cancel` 和 worker 从 QUEUED 切到 RUNNING 可能同时发生。现在不能只问“哪条 if 先执行”，还要问系统允许哪些 transition、谁拥有决定权，以及 caller 最终应该观察到什么。
 
-再加入 crash/restart。client 已经收到“取消成功”，daemon 随后崩溃。如果 cancellation request 只写在内存里，重启后它消失了。那之前的 success 到底承诺了什么？
+沿用这个候选设计，再加入 crash/restart。client 已经收到“取消成功”，daemon 随后崩溃。如果 cancellation request 只写在内存里，重启后它消失了。那之前的 success 到底承诺了什么？
 
-再把 worker 放到另一台机器上。再允许 client 因 timeout 重试请求。再考虑旧 client 不认识新状态、数据库里已有旧 row、外部 command 已经产生不可撤销 side effect。原本的“一行功能”开始要求我们回答一组彼此关联的问题：
+再把 worker 放到另一台机器上。再允许 client 因 timeout 重试请求。再考虑旧 client 不认识这个候选设计新增的状态、数据库里已有旧 row、外部 command 已经产生不可撤销 side effect。原本的“一行功能”开始要求我们回答一组彼此关联的问题：
 
 - 哪个组件对 job lifecycle 拥有最终 authority？
 - `cancel` 成功时，caller 可以依赖什么事实？
@@ -62,9 +64,9 @@ if job.cancelled:
 
 ## 2. 复杂度通常在“下一次修改”时才暴露
 
-回到刚才新增的 `CANCELLING`。假设你改完 domain model 后发现，还必须修改 serializer、数据库 schema、CLI rendering、API response、metrics、migration 和一批 tests。
+继续沿用刚才的候选设计。假设你决定新增 `CANCELLING`，改完 domain model 后发现，还必须修改 serializer、数据库 schema、CLI rendering、API response、metrics、migration 和一批 tests。
 
-这不自动证明设计很差。一个真实的新状态本来就可能影响多个 externally observable surface。更值得追问的是：**这些修改中，哪些来自需求本身，哪些只是因为同一份知识被复制到了太多地方？**
+这不自动证明设计很差。一个真实的产品决策本来就可能影响多个 externally observable surface。更值得追问的是：**这些修改中，哪些来自需求本身，哪些只是因为同一份知识被复制到了太多地方？**
 
 软件特别容易把这种问题积累起来，因为局部修改的表面成本很低。加一个 flag、复制一段判断、临时 hardcode 一个特殊 case、再包一层 adapter，单独看都可能是当时最便宜的决定；代价往往要到后来的修改者必须同时理解这些历史分支时才出现。没有哪一次 commit 明显“把系统搞坏”，但 system model 会被一点点侵蚀，直到没人能确信一个局部 change 的影响面在哪里结束。
 
@@ -74,9 +76,9 @@ John Ousterhout 在 *A Philosophy of Software Design* 中用 change amplificatio
 
 ### 2.1 Change amplification：一个概念为什么要改这么多地方
 
-如果每个 caller 都自己维护一份“哪些 job state 可以 cancel”的集合，那么新增 `CANCELLING` 时，你必须找到所有复制过这条规则的位置。漏掉任何一个，系统就出现语义分叉。
+在这个候选设计下，如果每个 caller 都自己维护一份“哪些 job state 可以 cancel”的集合，那么新增 `CANCELLING` 时，你必须找到所有复制过这条规则的位置。漏掉任何一个，系统就出现语义分叉。
 
-相反，有些扩散是不可避免的。新状态要显示在 UI，也许就必须增加一个文案；要持久化，也许就必须更新 schema。工程判断不在于“修改文件越少越好”，而在于区分 **essential change surface** 和 **duplicated knowledge 带来的 accidental change surface**。
+相反，有些扩散是不可避免的。既然这个候选设计选择把新状态公开到 UI，就可能必须增加相应文案；既然要持久化它，也可能必须更新 schema。工程判断不在于“修改文件越少越好”，而在于区分 **essential change surface** 和 **duplicated knowledge 带来的 accidental change surface**。
 
 一个实用的警报是：如果修改一个核心概念以后，你只能靠全仓 grep 并“希望自己找全了”，就值得检查这份 knowledge 是否缺少明确 owner。这个警报不是定罪；有些横切关注点本来就会跨多个边界，但它至少提醒 reviewer 追问扩散原因。
 
@@ -150,7 +152,7 @@ TaskForge 可能有很多 operation：submit、reserve、finish、cancel、recov
 
 ### 3.4 Change：设计必须在过渡状态里也说得通
 
-很多“漂亮”的静态结构在升级时会暴露问题。新增 `CANCELLING` 后，旧 worker 能读新 row 吗？一半 worker 已升级、一半没升级时合法吗？新数据写进去以后还能 rollback 吗？
+很多“漂亮”的静态结构在升级时会暴露问题。仍以这个候选设计为例：如果新增 `CANCELLING`，旧 worker 能读新 row 吗？一半 worker 已升级、一半没升级时合法吗？新数据写进去以后还能 rollback 吗？
 
 因此软件设计不是只描述一个最终架构。系统从旧版本走到新版本的过程本身也是工程对象。M05、M08、M10 和后面的 production 模块会不断回到这个视角。
 

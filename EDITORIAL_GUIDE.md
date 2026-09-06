@@ -159,6 +159,20 @@ reviewer 的 diagnosis 与 remediation 也要分开判断。一个 reviewer 可�
 
 M04 pilot 的实际案例见 [`reading-notes/m04-editorial-pilot-review.md`](reading-notes/m04-editorial-pilot-review.md) 的“PR review 后的 dependency / flow refinement”：最初只被指出 §2 提前使用 `request_id`，全章复核后又发现 §3–§5 的 `request identity` / `idempotency` / `idempotent` 同样在偷跑；最终把这些泄漏一起清理，并保留了 reviewer 原建议中不应删除的 convenience-API reasoning。
 
+### Pass B.2 — design-decision dependency sweep
+
+dependency leak 不只会提前泄漏术语，也会提前泄漏**尚未建立 decision criterion 的设计结论**。如果后面的章节或小节负责教读者“怎样在多个 plausible design 之间做判断”，前面的 running example 可以先制造压力，也可以暂时选择一个 concrete candidate 继续追踪后果，但不能把该 candidate 写成自然必然的答案。
+
+遇到这种情况时：
+
+- 先确定读者到哪里才真正拥有选择这个设计所需的 criterion / authority；
+- 检查此前 narrative 是否已经把某个 state、schema、API shape、error policy、ownership arrangement 或 recovery policy 当成既定事实；
+- hypothetical candidate 是允许的，但必须明确它是为了继续推理而暂时采用的 working assumption，并让其他 plausible alternatives 继续保持可见；
+- 后文如果继续用该 candidate 分析 complexity、migration、testing 等问题，也要保持 conditional scope，不能因为重复引用而悄悄把它升级成课程答案；
+- 当 decision criterion 建立后，应允许章节重新比较、替换甚至拒绝前面的 candidate，而不让读者感觉课程自相矛盾。
+
+M00–M01 的 post-pilot review 给出了一个实际例子：M00 为了追踪 cancellation 的 change cost 使用 `CANCELLING` 很合适，但在 M01 建立 specification / design authority 之前，它只能是明确标记的候选设计，而不能写成“于是我们加一个 `CANCELLING`”这样的必然结论。完整记录见 [`reading-notes/m00-m01-editorial-review.md`](reading-notes/m00-m01-editorial-review.md)。
+
 ### Pass C — compression and rhythm
 
 寻找新的生成式写作习惯：
