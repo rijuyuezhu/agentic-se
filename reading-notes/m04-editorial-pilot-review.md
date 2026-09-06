@@ -26,11 +26,11 @@ M04 还有一个适合作为 pilot 的特点：已有 TaskForge `submit/get/canc
 
 | diagnostic | baseline | pilot |
 |---|---:|---:|
-| lines | 3043 | 658 |
-| bytes | 48,566 | 43,432 |
+| lines | 3043 | 643 |
+| bytes | 48,566 | 43,113 |
 | page-level H1 | 77 | 1 |
-| H2 | 29 | 14 |
-| H3 | 0 | 31 |
+| H2 | 29 | 13 |
+| H3 | 0 | 30 |
 | `text` fences | 209 | 5 |
 | `---` separators | 76 | 0 |
 
@@ -46,24 +46,24 @@ M04 还有一个适合作为 pilot 的特点：已有 TaskForge `submit/get/canc
 |---|---|---|
 | API 不只是 signature；boundary / shallow wrapper / pull complexity down | §1 | 由 TaskForge 四行 API 开场，先让 caller 问题出现，再引入 semantic compression；同时保留“过厚 boundary 会偷 caller policy”的反向限制 |
 | parse / validate / precise representation / illegal states | §2 | 保留 `Command.parse`、validate-and-forget 的信息丢失问题，以及“不是所有 invariant 都能靠 type”限制 |
-| validation before effect / no-effect contract | §2.2、§5.1、§12.4 | 保留 validation-before-mutation baseline，并把 distributed partial effect 和 no-effect limitation 放到 timeout episode 再解释一次 |
+| validation before effect / no-effect contract | §2.2、§5.1、§11.4 | 保留 validation-before-mutation baseline，并把 distributed partial effect 和 no-effect limitation 放到 timeout episode 再解释一次 |
 | cancel boolean、error taxonomy、collapse/preserve、human vs machine error identity | §3 | 先从 `cancel=False` 逼出 caller-action taxonomy；保留 message/reason/metadata distinction、error-class explosion critique |
 | error translation / error ownership / eliminate-mask-collapse-surface | §3.2–§3.3 | 保留“拥有足够 domain context 的层才适合翻译”以及 error 不等于 exception；define-errors-out-of-existence 仍明确是 heuristic |
 | API as state machine、state-specific API、staleness | §4 | 继续用 TaskForge lifecycle，保留 lease/capability 与 stale observation 的限制；没有把 type 当 freshness proof |
-| temporal coupling / convenience flags / defaults | §4.1–§4.2、§7.2 | 保留 hidden state machine、factory/staged type trade-off，以及 defaults/optional request identity 会改变 semantics |
+| temporal coupling / convenience flags / defaults | §4.1–§4.2、§6.6 | 保留 hidden state machine、factory/staged type trade-off，以及 defaults/optional request identity 会改变 semantics |
 | timeout、failure vs unknown outcome、partial side effect | §5 | 由 response-lost sequence 连续推出 outcome unknown；明确 transport timeout 不能推出 server 未执行 |
 | retry semantics / retry layer / backoff non-goal | §5.2 | 保留 operation + failure + layer 三方面判断；明确 backoff/jitter 留给后续模块，不用它掩盖 unsafe semantics |
 | idempotency definition / response bytes / payload hash | §6、§6.1 | 保留 intended effect、same logical request；明确 logs/metrics 可重复，response bytes 可变化；payload equality 不代表 intent identity |
 | request ID / same-id different-intent / dedup ownership / lifetime | §6.1–§6.3 | 保留 caller-provided identity、stable conflict、RequestRegistry 与 JobStore 各自 authority，以及 retention/lifetime coupling |
 | exactly-once wording / specific effect guarantee | §6.4 | 保留 request accepted、job row、worker execution、external effect 等不同事实；只对具体 dedup effect 作承诺 |
-| public/internal error vocabulary、diagnostics、observability、security | §3.1、§7 | 保留 public semantic compression 与内部 richer diagnostics；补回 public boundary 也是 disclosure/security surface；request identity 对 tracing/debugging 的价值仍在 |
-| boundary tests / semantic partitions / mutation thinking | §8 | 保留 behavior table、cancel/idempotency partitions、public error observation 与 mutation probes |
-| exception vs Result / request-registry alternatives | §8.2 | 保留 design-it-twice；没有把一种 encoding 升成唯一答案 |
-| Agent failure modes / task contract | §9 | 保留 wrapper proliferation、exception explosion、catch-all、string parsing、retry-everything、payload hash、validation-after-effect、type cosplay；恢复成可复用 task artifact |
-| M04 lab contract | §10 | 保留 Submit/Get/Cancel normative semantics 和“不规定唯一实现”的评分依据 |
-| review checklist | §11 | 重新按 Input+state / Success+error / Retry+identity / Ownership+evolution 编组，仍保留可扫描形式 |
-| four transfer exercises | §12 | 原 Error taxonomy / Temporal coupling / Idempotency / No-effect 四个练习继续存在 |
-| M01–M04 与后续模块连接 | §13 | 保留 contract → ownership → evidence → boundary 的关系，以及 M05/M07/M08/M09/M11 的后续压力 |
+| public/internal error vocabulary、diagnostics、observability、security | §3.1–§3.2、§6.6 | public semantic compression 与 richer internal diagnostics 现在在 error-translation episode 内一次讲完；public boundary 的 disclosure/security qualifier 保留；request identity 对 tracing/debugging 的 consequence 留在 identity episode 尾部 |
+| boundary tests / semantic partitions / mutation thinking | §7 | 保留 behavior table、cancel/idempotency partitions、public error observation 与 mutation probes |
+| exception vs Result / request-registry alternatives | §7.2 | 保留 design-it-twice；没有把一种 encoding 升成唯一答案 |
+| Agent failure modes / task contract | §8 | 保留 wrapper proliferation、exception explosion、catch-all、string parsing、retry-everything、payload hash、validation-after-effect、type cosplay；恢复成可复用 task artifact |
+| M04 lab contract | §9 | 保留 Submit/Get/Cancel normative semantics 和“不规定唯一实现”的评分依据 |
+| review checklist | §10 | 重新按 Input+state / Success+error / Retry+identity / Ownership+evolution 编组，仍保留可扫描形式 |
+| four transfer exercises | §11 | 原 Error taxonomy / Temporal coupling / Idempotency / No-effect 四个练习继续存在 |
+| M01–M04 与后续模块连接 | §12 | 保留 contract → ownership → evidence → boundary 的关系，以及 M05/M07/M08/M09/M11 的后续压力 |
 
 ## 4. Source-audit claim spot check
 
@@ -79,7 +79,7 @@ M04 还有一个适合作为 pilot 的特点：已有 TaskForge `submit/get/canc
 
 **应保留的 claim**：human message 与 machine identity 分离；reason/metadata 形成 compatibility surface；稳定 external vocabulary 不等于把内部诊断信息丢掉。
 
-**pilot**：§3.1 保留 code/reason/message/metadata JSON 例子，并明确 message 可演化、machine fields 才承担 protocol identity；§7 保留 richer internal diagnostics；同时提醒 public metadata 是 disclosure surface。
+**pilot**：§3.1 保留 code/reason/message/metadata JSON 例子，并明确 message 可演化、machine fields 才承担 protocol identity；§3.2 把 richer internal diagnostics 与 public/internal vocabulary separation 放在 translation 当下解释；同时提醒 public metadata 是 disclosure surface。
 
 ### AIP-194 / RFC 9110：retry 与 intended effect
 
@@ -97,7 +97,7 @@ M04 还有一个适合作为 pilot 的特点：已有 TaskForge `submit/get/canc
 
 **应保留的 claim**：已经验证出的信息应尽量保存在更精确 representation；但这是 ideal/heuristic，不代表所有 invariant 都应进入 type system。
 
-**pilot**：§2 先展示 validate-and-forget，再给 `Command.parse`；§2.1 用 request-id retention 反例说明跨时间、durable state 的 invariant 仍需 store/constraint/runtime mechanism。
+**pilot**：§2 先展示 validate-and-forget，再给 `Command.parse`；§2.1 用 `job_id` 与 shared store 的 uniqueness/coordination 问题说明有些 invariant 不属于单个 local type。request identity 术语留到 timeout/retry 真正需要它以后才出现。
 
 ### gRPC materials
 
@@ -111,11 +111,21 @@ M04 还有一个适合作为 pilot 的特点：已有 TaskForge `submit/get/canc
 
 1. **error type count 不是质量指标**：新版虽暗含 caller-action taxonomy，但丢了“把 lifecycle state-space mechanically 映射成 exception class-space”这个很有用的反例；已恢复到 §3.1。
 2. **public boundary 也是 security/disclosure boundary**：新版最初只提 metadata 不泄 secret，不足以保留原文对 resource-existence leakage 和 authorization-before-effect 的提醒；已恢复到 §3.1。
-3. **Agent task contract artifact**：新版最初把原来的 structured template 压成一句 prose；这损失了可直接迁移到 Agent workflow 的操作性；已在 §9 恢复为真正需要逐行阅读的 artifact，因此这里继续使用 `text` fence。
+3. **Agent task contract artifact**：新版最初把原来的 structured template 压成一句 prose；这损失了可直接迁移到 Agent workflow 的操作性；已在 §8 恢复为真正需要逐行阅读的 artifact，因此这里继续使用 `text` fence。
 
 修补第 1、2 项时，一次精确编辑还误覆盖了两段已有 prose：caller-action taxonomy 和 human-message/machine-contract。后续 read-back 发现后已经立即恢复。这次失误本身也是为什么 issue #2 不能靠一次 bulk rewrite + format counts 验收的例子。
 
-## 6. Cold-reader flow review
+## 6. PR review 后的 dependency / flow refinement
+
+独立 reviewer 对第一版 pilot 提出三点后，又重新按 Editorial Guide 的原则核了一遍，而不是直接照单修改。最后确认两类结构问题成立，并额外发现了同类遗漏：
+
+1. **request identity 出现得太早**：不仅 §2.1/§2.2 提前用了 `request_id`，§3.2、§4.2、§5.2 也分别提前出现了 `request identity` / `idempotency` / `idempotent`。现在 §6 之前这些术语全部移除：§2.1 改用已在故事中的 `job_id` shared-state invariant，§2.2 直接用 blank command 演示 validation-after-effect；§3.2 改用 `sqlite3.OperationalError` 的不同 mechanism causes；§4–§5 只描述“重复执行是否制造额外 effect”，直到 timeout/retry 已经建立问题后才命名 idempotency。
+2. **idempotency 后发生 narrative rewind**：原 §7 的 internal/external error vocabulary 与 diagnostics 实际属于 §3 的 translation 问题，因此合回 §3.2；但原 §7.2 convenience API 并不是 rewind，而是 request-identity contract 的直接 consequence，所以移动到 §6.6 而没有删除。`request_id` 对 log/trace/audit correlation 的影响只保留为 §6 尾部的一段 consequence，然后直接进入 executable evidence。
+3. **mask/recover 教学上过薄**：原第一版只保留了术语。§3.3 现在增加 read replica A failure → fallback to replica B 的具体例子，并明确 fallback 全部失败时才需要 surface public failure；没有恢复成四个碎片化 subsection。
+
+这轮修改后，§6 之前搜索 `request_id`、`request identity`、`logical intent`、`retention`、`idempotent*` 均为 0 次。这个数字本身不是质量指标，但它能验证“request identity 第一次命名发生在故事需要它之后”这一具体 dependency constraint。
+
+## 7. Cold-reader flow review
 
 第二遍 review 暂时不看旧标题，只按新版顺序问“读者为什么此刻需要下一个概念”。目前的因果链是：
 
@@ -130,14 +140,14 @@ M04 还有一个适合作为 pilot 的特点：已有 TaskForge `submit/get/canc
 
 这比基线“概念 → 定义 → 小例子 → 金句 → 下一个标题”的局部节奏更连续。
 
-仍需 independent reviewer 特别检查两个地方：
+仍需 independent reviewer 特别检查：
 
 - §3 error taxonomy 到 §4 state-machine surface 的过渡是否自然，还是仍像两个概念块拼接；
-- §7 diagnostics/observability 是否应留在 M04 主线，还是会让 idempotency episode 之后出现轻微回摆。
+- §6 在 identity、ownership/lifetime、guarantee scope、transfer case、convenience contract 连续展开后是否仍保持同一 episode，而不是变成新的术语清单。
 
 这两个判断不能通过 heading 数量回答。
 
-## 7. Rhythm / generated-answer smell review
+## 8. Rhythm / generated-answer smell review
 
 重写后专门搜索了连续的“真正……”“不是 X，而是 Y”“所以……”“这就是……”等表达。不是为了把某些词清零，而是检查它们是否在替 reasoning 做强调。
 
@@ -145,7 +155,7 @@ M04 还有一个适合作为 pilot 的特点：已有 TaskForge `submit/get/canc
 
 当前 bullet 主要集中在：Agent task artifact、lab normative contract、review questions 和 source list。它们本来就是 parallel/checklist/reference 信息，没有为了“像教材”强行 prose 化。
 
-## 8. 与其他教材的 calibration
+## 9. 与其他教材的 calibration
 
 本轮只借鉴教学组织方式，不把这些材料当成 M04 technical provenance。
 
@@ -156,7 +166,7 @@ M04 还有一个适合作为 pilot 的特点：已有 TaskForge `submit/get/canc
 
 对应 style calibration URL 已记录在 [`../EDITORIAL_GUIDE.md`](../EDITORIAL_GUIDE.md)。
 
-## 9. 仍然不能由作者自证的部分
+## 10. 仍然不能由作者自证的部分
 
 这个 pilot 目前可以自证的是：technical claims 有可追踪映射，主要 source limitations 仍在，lab contract 没有被 prose 化掉，Markdown hierarchy 已适合 canonical page/TOC。
 

@@ -106,22 +106,23 @@ CancelledJob(...)
 
 这样可以让 `QUEUED + exit_code=0` 之类组合更难出现。在支持 algebraic data type 的语言里，这种设计有时非常漂亮；在 Python 里也可以用受控 constructor、dataclass 和 encapsulation 获得一部分收益。
 
-但有些 invariant 根本不属于单个本地 value。例如“一个 `request_id` 在某个 retention interval 内只能绑定一个 logical intent”依赖 durable state、时间以及其他请求。你不能靠定义一个 `RequestId` class 就证明全局唯一性；它还需要 store、transaction/constraint、ownership 和 runtime checks。
+但有些 invariant 根本不属于单个本地 value。例如“新分配的 `job_id` 不能和 store 中已有的 id 冲突”依赖共享 state，存在多个并发提交者时还依赖它们之间的协调。定义一个 `JobId` class 并不能证明这件事；真正维护这个 invariant 的可能是集中 allocator、unique constraint、transaction 或 lock。
 
-更一般地说，type、constructor、transaction、state machine、lock、unique constraint、idempotency record 和 test 都可以承担 invariant。应选哪个，取决于这个事实由谁拥有、需要观察哪些外部状态、违反时在哪里最容易被发现。
+更一般地说，type、constructor、transaction、state machine、lock、unique constraint 和 test 都可以承担 invariant。应选哪个，取决于这个事实由谁拥有、需要观察哪些外部状态、违反时在哪里最容易被发现。
 
 ### 2.2 Validation 的顺序也是 contract
 
 如果 boundary 真要承诺 invalid input 没有 side effect，那么 validation 不能发生在 mutation 后面。下面这段代码的 bug 不只是“顺序不优雅”：
 
 ```python
-def submit(command, request_id):
-    allocate_id()
-    write_job()
-    validate_request_id(request_id)
+def submit(command):
+    job_id = allocate_id()
+    write_job(job_id, command)
+    validate_command(command)
+    return job_id
 ```
 
-如果最后一步发现 `request_id` 非法，API 可能返回 `INVALID_ARGUMENT`，但 job 已经创建。caller 很容易把 validation error 理解成“请求在任何 effect 前被拒绝”，而实现并没有做到。
+现在 `submit("   ")` 最终仍可能返回 `INVALID_ARGUMENT`，但那个 invalid job 已经写进 store。caller 很容易把 validation error 理解成“请求在任何 effect 前被拒绝”，而实现并没有做到。
 
 所以对很多 boundary，一个健康的 baseline 是先 parse/validate，再检查 authorization 和 precondition，最后才 commit side effect。当然到了 distributed workflow，mutation 可能跨多个组件，不能总得到这么干净的原子边界；M07 会继续处理 crash window 和 recovery。但在 M04 这里，至少要把“这个 error 是否保证 no effect”变成显式 contract，而不是靠 error 这个词暗示。
 
@@ -189,7 +190,7 @@ public boundary 同时也是 security boundary。authorization 应在承诺无�
 
 ### 3.2 Translation 需要 domain context
 
-假设 storage 从 dict 换成 SQLite，某次操作抛出 `sqlite3.IntegrityError`。如果 boundary 只做 exception forwarding，caller 就和 SQLite 绑定了；以后换 PostgreSQL，甚至只是 schema constraint 改名，都可能成为 API break。
+假设 storage 从 dict 换成 SQLite，某次操作抛出 `sqlite3.OperationalError`。如果 boundary 只做 exception forwarding，caller 就和 SQLite 绑定了；以后换 PostgreSQL，甚至只是底层故障形态变化，都可能成为 API break。
 
 可问题也不能通过：
 
@@ -198,15 +199,19 @@ except Exception:
     raise ApiError("INTERNAL")
 ```
 
-来解决。一个 integrity error 可能表示 duplicate request identity，也可能表示真正的 schema bug。前者也许应该成为 `IDEMPOTENCY_CONFLICT`，后者则可能是 internal failure。只有拥有 domain context 的那一层才知道如何分类。
+来解决。同一个 `sqlite3.OperationalError` 既可能来自暂时的 database busy/locked，也可能来自实现生成了错误 SQL。前者对 caller 也许属于暂时不可用，后者更接近内部 bug。只有拥有足够 context 的那一层才知道如何分类。
 
-因此 error handling 和 state ownership 是连在一起的。低层 socket 可以知道连接断了，却不知道 job 是否允许 retry；storage 可以知道 unique constraint 失败，却不知道这个 constraint 在 domain 里代表 duplicate intent 还是 corrupted state。负责把 mechanism failure 翻译成 public semantics 的 boundary 必须拥有足够信息，但它不必自己拥有所有恢复 policy。
+因此 error handling 和 state ownership 是连在一起的。低层 socket 可以知道连接断了，却不知道上层 operation 应该怎样恢复；storage 可以知道 database busy，却不知道这个操作对 caller 应该表现为暂时不可用还是另一种 domain failure。负责把 mechanism failure 翻译成 public semantics 的 boundary 必须拥有足够信息，但它不必自己拥有所有恢复 policy。
+
+这种 translation 也不要求销毁内部信息。内部代码可以继续区分 `StorageBusy`、`WorkerDisconnected`、`LeaseExpired`，日志和 trace 也可以保留 worker id、socket errno、last heartbeat、attempt id、stack 等诊断信息；跨 public boundary 后，再按 caller semantics collapse 成较少的稳定 category。public error 服务 caller recovery，内部 vocabulary 服务 recovery implementation 和 diagnosis，两者不需要是一套 taxonomy。
+
+这层 separation 还给实现留下演化空间。如果 public contract 是 unknown job -> `NOT_FOUND`，测试就不应该同时要求内部一定抛 `KeyError`。storage 从 dict 换成数据库时，internal exception 可以完全变化，只要 public semantic contract 仍然成立。
 
 ### 3.3 Error 不等于 exception
 
 到这里可以再给“error”一个更精确的定义：它是 operation 没有按 normal success contract 完成时，boundary 暴露给 caller 的语义信息。exception、`Result/Either`、status code、error object、sentinel 或 stream terminal status 都只是 encoding。
 
-因此成熟的 error handling 不只有“throw”一种动作。某些 case 可以通过重新定义 postcondition 消失，例如 delete 的 contract 若只是“调用后 resource absent”，那么原本就不存在可以算成功；某些低层 failure 可以在 boundary 内部 mask/recover；多个 mechanism failure 可以在 caller action 相同时 collapse；而 permission denial、invalid input、conflict、ambiguous outcome 等信息又可能必须 surface。
+因此成熟的 error handling 不只有“throw”一种动作。某些 case 可以通过重新定义 postcondition 消失，例如 delete 的 contract 若只是“调用后 resource absent”，那么原本就不存在可以算成功。某些低层 failure 可以在 boundary 内部 mask/recover：比如读 replica A 失败后改读 replica B 并成功返回，caller 没有必要为这次已被吸收的故障增加一个分支；如果所有 fallback 都失败，再 surface 一个稳定的 public failure。多个 mechanism failure 也可以在 caller action 相同时 collapse；而 permission denial、invalid input、conflict、ambiguous outcome 等信息又可能必须 surface。
 
 “define errors out of existence” 是一个 design heuristic，不是定律。是否把 already-done 当成功，取决于 operation 的 postcondition 和 caller 是否需要区分 first application 与 replay，而不是取决于某个流派偏好。
 
@@ -275,7 +280,7 @@ submit(
 
 但这些 flags 的组合会形成越来越大的 semantic state space，其中一些互相矛盾，一些只有在特定 lifecycle 才有意义。好的 abstraction 往往宁可提供更明确的 operation 和少量 orthogonal options，而不是让 caller 自己拼 hidden protocol。
 
-默认值也是 contract。`retry=True` 不是 UI convenience；它暗含哪些 failure 可 retry、retry budget、latency、idempotency 和 side-effect uncertainty。一个默认行为只有在大多数 caller 不理解隐藏危险也能安全接受时，才真的是“方便”。
+默认值也是 contract。`retry=True` 不是 UI convenience；它暗含哪些 failure 可 retry、retry budget、latency，以及重复执行会不会制造额外 side effect。一个默认行为只有在大多数 caller 不理解隐藏危险也能安全接受时，才真的是“方便”。
 
 ## 5. Timeout 之后，caller 知道的比想象中少
 
@@ -319,7 +324,7 @@ except Exception:
     retry()
 ```
 
-能否 retry 至少同时取决于 operation semantics、failure category，以及当前 layer 是否拥有足够的 workflow information。`INVALID_ARGUMENT` 重发通常没有意义；`UNAVAILABLE` 对一个 idempotent operation 可能可以 retry；`CONFLICT` 往往需要先 re-read state，再做 higher-level decision，而不是 blind retry 同一写操作。
+能否 retry 至少同时取决于 operation semantics、failure category，以及当前 layer 是否拥有足够的 workflow information。`INVALID_ARGUMENT` 重发通常没有意义；`UNAVAILABLE` 只有在重复执行不会制造额外 intended effect 时才可能安全重发；`CONFLICT` 往往需要先 re-read state，再做 higher-level decision，而不是 blind retry 同一写操作。
 
 retry 发生在哪一层也同样重要。假设一个 workflow 是 reserve quota、create job、record billing，底层 SDK 如果只看到 `create job` 失败就无限重试，它可能破坏上层 transaction 的语义。一个有用的经验是：让 retry 发生在**拥有足够 transaction semantics 的最低层**。这不是“越底层越自动越好”。
 
@@ -396,35 +401,15 @@ client timeout 后，参数 hash 仍然无法告诉 server 第二次调用是在
 
 相反，纯函数、无 side-effect query、本地 atomic call，或者 caller 可以直接确认 outcome 的操作，通常不值得为了“看起来专业”引入 request-id store。
 
-## 7. Public boundary 应隐藏 mechanism，但保留诊断能力
+### 6.6 Convenience API 可以存在，但不能伪造 guarantee
 
-到这里我们已经把 validation、error semantics、retry 和 idempotency 都拉进同一条 TaskForge story。还有一个容易产生误解的地方：对外做 semantic compression 不等于把内部信息丢掉。
-
-假设 caller 只需要看到 public category `UNAVAILABLE` 和稳定 reason `WORKER_UNAVAILABLE`。
-
-内部仍然可以记录 worker id、socket errno、last heartbeat、attempt id、trace id 和 stack。public error code 服务的是 caller recovery；root-cause taxonomy 和 operator diagnosis 是另一组 concern。强迫一个 public code 同时承担 caller action、根因分类和 incident debugging，通常会得到一个既不稳定又难用的 error surface。
-
-request identity 也能帮助 observability。若 `request_id` 是 contract 的一部分，log、trace 和 audit 可以围绕 logical request 关联多个 network attempts；否则 production debugging 常常只能根据 timestamp 猜“这两个 attempt 到底是不是同一件事”。M11 会继续讨论 telemetry，但 identity 设计从 API 层就已经开始影响可观察性。
-
-### 7.1 Internal vocabulary 与 external vocabulary 可以不同
-
-内部函数保留 `StorageBusy`、`WorkerDisconnected`、`LeaseExpired` 等更细的 failure distinctions 可能对 recovery、metrics 和 diagnosis 很有用；跨 public boundary 后，它们可以根据 caller semantics collapse 成较少的 category。boundary translation 正是两套 vocabulary 的 separation point。
-
-这种 separation 也给内部实现留下 evolution freedom。public test 如果要求 unknown job -> `NOT_FOUND`，它就不应该同时要求底层一定抛 `KeyError`。storage 从 dict 换 DB 时，internal exception 可以完全变化，只要 public contract 不变。
-
-### 7.2 Convenience API 可以存在，但不能伪造 guarantee
-
-TaskForge 完全可以保留一个简单的：
-
-```python
-submit(command)
-```
-
-并把每次调用视为新的 logical request。问题只在于文档必须诚实：如果 caller 在 outcome unknown 后自行 retry，可能创建 duplicate job。
+TaskForge 完全可以保留一个简单的 `submit(command)`，并把每次调用视为新的 logical request。问题只在于文档必须诚实：如果 caller 在 outcome unknown 后自行 retry，可能创建 duplicate job。
 
 另一个显式 API 可以要求 request identity，并给出更强的 dedup guarantee。也可以设计成一个 function 加 optional `request_id`，但那就必须说清楚 `None` 到底代表“无 dedup guarantee”“server 生成 identity”还是其他 semantics。optional parameter 可能切换整个 reliability contract，不应因为语法上可省略就让语义也变模糊。
 
-## 8. 把这些语义变成可执行证据
+一旦 `request_id` 成为 public contract，它也自然成为 production evidence 的 correlation identity。log、trace 和 audit 可以用它把多个 transport attempts 归到同一个 logical request；否则排查 timeout/retry 时，往往只能靠 timestamp 猜两次 attempt 是否属于同一件事。M11 会继续讨论 telemetry，这里只需要记住：API 选择的 identity 会直接影响以后能否解释 production evidence。
+
+## 7. 把这些语义变成可执行证据
 
 M04 的目标不是设计一张漂亮的 error taxonomy 图。boundary contract 如果不能被 test 和 review 独立检查，很容易退化成文档愿望。
 
@@ -443,7 +428,7 @@ M04 的目标不是设计一张漂亮的 error taxonomy 图。boundary contract 
 
 这个表逼我们同时写 success、negative semantics、side effect 和 retry，而不是只描述 happy path。
 
-### 8.1 Tests 应按 semantic partition，而不是实现 branch
+### 7.1 Tests 应按 semantic partition，而不是实现 branch
 
 对 `cancel`，只测一个 success 和一个 failure 太粗。由 state machine 自然得到的 partitions 至少包括 unknown、QUEUED、RUNNING、SUCCEEDED、FAILED、CANCELLED。每个 partition 的 public result 和 side effect 都应该有答案。
 
@@ -453,7 +438,7 @@ M04 的目标不是设计一张漂亮的 error taxonomy 图。boundary contract 
 
 还可以继续复用 M03 的 mutation thinking。故意把 `NOT_FOUND` 变成 `INTERNAL`，把 same-id retry 改成创建新 job，把 same-id/different-intent 改成静默返回旧 job，或者把 blank-command validation 移到 job 创建以后。如果测试仍然全绿，就说明这些 semantics 还没有成为 executable contract。
 
-### 8.2 Design it twice：encoding 不是唯一答案
+### 7.2 Design it twice：encoding 不是唯一答案
 
 课程不会规定 public failure 必须用 Python exception。两种都合理的方案例如：
 
@@ -468,7 +453,7 @@ exception-oriented boundary 的 success path 更自然，但 type signature 不�
 
 同样，request registry 可以是独立 module/store，也可以是 service-owned subcomponent。把 `request_id` 直接放进 Job metadata 会减少 store 数量，却可能把 request-history retention 与 job lifecycle retention 绑在一起。这里没有 pattern-name 标准答案。你需要说明 ownership、lifetime、compatibility 和 failure behavior 的 trade-off。
 
-## 9. Agent 为什么特别容易把 API 做“完整”却没做对
+## 8. Agent 为什么特别容易把 API 做“完整”却没做对
 
 coding agent 面对“给它加个 public API”这类任务，很容易产生表面上很专业的 patch：多一层 wrapper、每个 branch 一个 exception class、所有 error 都 catch 成 `INTERNAL`、给所有 network call 加 retry decorator、用 payload hash 当 idempotency key，再创建几个 dataclass 让类型看起来更丰富。
 
@@ -504,13 +489,13 @@ and full-suite evidence plus a compatibility/hidden-coupling review.
 
 这不是为了让 prompt 更长，而是为了把 engineering authority 从“Agent 看到代码以后自己猜”移回可以 review 的 artifact。
 
-## 10. TaskForge M04：把 shallow boundary 升级成 explicit contract
+## 9. TaskForge M04：把 shallow boundary 升级成 explicit contract
 
 对应实验见 [`../labs/04-api-error-boundary.md`](../labs/04-api-error-boundary.md)。实验初始 boundary 故意保留几类问题：raw `str` 直接进入 core、blank command 被接受、`KeyError` 可以穿过 public layer、`cancel=False` 模糊、没有 request identity，因而 timeout 后的 submit 无法安全 retry。
 
 你需要把它升级成一个明确 contract。课程不要求唯一代码结构，但至少要满足下面的 semantics。
 
-### 10.1 Submit
+### 9.1 Submit
 
 blank 或 whitespace-only command 应在创建 job 前得到 `INVALID_ARGUMENT`，并且没有 job 被创建。
 
@@ -522,21 +507,21 @@ blank 或 whitespace-only command 应在创建 job 前得到 `INVALID_ARGUMENT`�
 - same id + same intent：解析到同一个 job identity，不创建额外 job；
 - same id + different intent：返回稳定的 idempotency conflict，不创建额外 job。
 
-### 10.2 Get
+### 9.2 Get
 
 known id 返回 immutable/read-only public view，而不是把 caller 直接接到 mutable internal representation；unknown id 返回 `NOT_FOUND`。
 
-### 10.3 Cancel
+### 9.3 Cancel
 
 本 lab 默认采用严格 semantics：只有 `QUEUED -> CANCELLED` 算 success；unknown 为 `NOT_FOUND`；RUNNING 或 terminal state 为 `FAILED_PRECONDITION`，并提供足够 metadata 让 caller 理解当前 status。
 
 这里故意没有把“already cancelled”定义成 success。另一种 product contract 完全可以把 cancel 定义为“确保最终 cancelled”，从而让 repeated cancel 成功；但它必须解释 SUCCEEDED/FAILED 怎么处理，也必须说明 caller 是否需要区分首次 cancellation 与 replay。这个对比正好说明 define-errors-out-of-existence 需要结合 postcondition，而不是机械采用。
 
-### 10.4 评分看什么
+### 9.4 评分看什么
 
 实现可以使用 exception、`Result`、frozen DTO、独立 request registry 或其他合适结构。评分重点不是 pattern 名，而是 contract 是否完整，state ownership 是否清楚，invalid input 和 invalid transition 是否局部化，retry semantics 是否真实，internal implementation 是否被 public boundary 隔离，以及 tests 是否真的证明这些性质。
 
-## 11. Review 一个 boundary 时应该追问什么
+## 10. Review 一个 boundary 时应该追问什么
 
 学完这一章以后，面对一个新的 public API，不要先从命名或 class 数量开始。下面这些问题更接近它的 semantic surface。
 
@@ -576,9 +561,9 @@ known id 返回 immutable/read-only public view，而不是把 caller 直接接�
 
 这些问题不是 checklist 越长越好。它们的用途是让 reviewer 能从 caller、state owner 和 failure path 三个方向重建这个 boundary 的真实 contract。
 
-## 12. 四个迁移练习
+## 11. 四个迁移练习
 
-### 12.1 Error taxonomy critique
+### 11.1 Error taxonomy critique
 
 给你以下候选 public errors：
 
@@ -596,7 +581,7 @@ StoragePermissionError
 
 假设 public caller 只有 submit/get/cancel。为每个 error 写出 caller action，再判断哪些 mechanism distinctions 可以 collapse，哪些 lifecycle distinctions 必须保留。最后设计稳定的 machine-readable reason/metadata，并说明哪些 internal errors 根本不应成为 public error。不能用“exception class 越具体越好”作为理由。
 
-### 12.2 Temporal coupling
+### 11.2 Temporal coupling
 
 考虑：
 
@@ -612,7 +597,7 @@ s.run(command)
 
 画出 hidden state machine。哪些 transition 可以由 factory 吸收，哪些必须由 caller 控制？factory、staged type 或 capability object 能否减少非法调用？新设计如果只是 class 数量增加，却没有减少 caller knowledge，也不算改进。
 
-### 12.3 Idempotency
+### 11.3 Idempotency
 
 考虑：
 
@@ -628,11 +613,11 @@ key = sha256(json.dumps(request))
 
 作为 dedup key。解释为什么它不能区分 retry same intent 与 create another identical VM，然后给出 caller-provided request identity contract，包括 same-id/different-intent 的处理。
 
-### 12.4 No-effect guarantee
+### 11.4 No-effect guarantee
 
 对一个 `create account` operation，分别考虑 `INVALID_ARGUMENT`、`PERMISSION_DENIED`、`CONFLICT`、`UNAVAILABLE`、`DEADLINE_EXCEEDED`、`INTERNAL`。不要根据名字直接猜。对每一种错误，结合检测时机和可能的 mutation path，判断 API 能否保证 no side effect，还是只能说 depends / outcome unknown，并说明理由。
 
-## 13. 把 M01–M04 连成一条 reasoning chain
+## 12. 把 M01–M04 连成一条 reasoning chain
 
 M01 问的是 contract 是什么；M02 问谁拥有 state 和 invariant；M03 问什么 evidence 能区分满足 contract 与没有满足；M04 则把这些问题放到 boundary 上：如何让 caller 看到最小但足够的 semantic surface，同时允许内部 representation 和 mechanism 演化。
 
