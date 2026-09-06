@@ -215,12 +215,12 @@ cleanup cost
 
 # 4. 本轮 Change Contract
 
-本实验**只实现 Expand phase**。
+本实验的代码 change **只实现 capability expansion**：让新版本具备同时读取 v1/v2 的能力，但不宣称 supported consumers 已完成迁移，也不切 production writer。这里的 `Expand` 对应 Parallel Change 的 supplier-side capability expansion；后续 reader deployment/migration 和 durable writer cutover 是独立 rollout events。
 
 ## 4.1 必须保持
 
 - `snapshot-v1.json` 文件内容不允许修改；
-- v1 reader semantics 保持；
+- v1-format decode semantics 保持；
 - current default writer 必须仍产生 `schema_version: 1`；
 - default writer 输出必须继续被 frozen v1 reader 接受；
 - job ordering 保持；
@@ -340,7 +340,7 @@ current default W
 → PASS
 ```
 
-它证明 expand phase 还没有越过 writer cutover boundary。
+它证明当前 capability-expansion change 还没有越过 writer cutover boundary；它**不能**证明 reader migration 已经完成。
 
 ## 5.4 Explicit v2 writer → new reader
 
@@ -400,60 +400,50 @@ wrong type
 m08-rollout-plan.md
 ```
 
-不能只写“先升级 reader 再 writer”。
+不能只写“先升级 reader 再 writer”。本实验把 Fowler 的 `Expand → Migrate clients → Contract` 与 durable format 额外存在的 writer cutover 分开记录，至少包括下面四个 event。
 
-至少包括：
-
-## Phase E — Expand
+## Phase E — Expand capability
 
 ```text
-R2 reads v1/v2
+R2 code can read v1/v2
 W1 remains default
 ```
 
-写 exit criterion。
+这一阶段的 exit criterion 只证明新 reader capability 本身经过测试、可以部署；**不要**把“所有 reader 都已升级”塞进 Expand 的定义。
 
-例如：
+## Phase M — Migrate readers / consumers
 
-```text
-all processes/tools that may read the shared snapshot are known to run R2+
-```
-
-但如果还有：
+逐步把所有仍受支持、且可能读取 shared snapshot 的 consumers 迁到 R2。Exit criterion 可以是：
 
 ```text
-offline repair tool
-backup restore image
-old release rollback
+all supported processes/tools that may read the shared snapshot are known to run R2+
 ```
 
-也必须说明。
+inventory 必须包括 daemon 之外的 offline repair tool、backup restore image、supported old-release rollback target 等。如果某类 consumer 无法确认，说明 writer cutover 仍有未消除的 compatibility risk。
 
-## Phase M — Writer migration
+## Phase W — Writer cutover
 
-定义：
+只有 Phase M 的前置条件满足后，才定义：
 
 ```text
-何时可以打开 W2
+何时可以把 production default W1 -> W2
 ```
 
-以及 rollout evidence。
+同时写清 rollout evidence 和 rollback-compatible targets。这个 event 会改变 durable data universe；它是 TaskForge 对 Parallel Change 的 operational adaptation，不要把它重命名成 Fowler 的 client-migration phase。
 
-## Phase C — Contract
+## Phase C — Contract / cleanup
 
 明确：
 
 ```text
 何时可以停止 W1
-何时可以删除 R1
+何时可以删除 v1 read support
 ```
 
-这两个时点可以不同。
-
-如果产品承诺永远导入 v1 snapshot，也可以选择：
+这两个时点可以不同。如果产品承诺长期导入 v1 snapshot，也可以选择：
 
 ```text
-R1 retained intentionally
+v1 read support retained intentionally
 ```
 
 但必须写成 support policy，不是“先留着”。
@@ -467,13 +457,13 @@ R1 retained intentionally
 ## Case A
 
 ```text
-R2 deployed everywhere
-W1 only
+supported reader migration 已完成
+production writer 仍是 W1 only
 incident
 rollback binaries
 ```
 
-为什么容易？
+为什么在 **snapshot-format 这一层** rollback space 仍然较大？不要把这个结论扩大成“整个 release rollback 一定容易”。
 
 ## Case B
 
@@ -566,13 +556,13 @@ security/update cadence
 明确：
 
 ```text
-Expand phase only
+Capability expansion only
 historical fixture immutable
 default writer remains W1
 R2 must read v1/v2
 frozen R1 must accept default output
 future version rejects
-no contract phase
+no reader-migration claim, writer cutover, or contract cleanup in this code change
 ```
 
 比较：
@@ -612,10 +602,10 @@ reviewer 不应只看 tests 绿不绿。
 | 部分 | 权重 |
 |---|---:|
 | compatibility surface / matrix | 20% |
-| expand-phase design | 20% |
+| capability-expansion design | 20% |
 | implementation correctness | 20% |
 | executable compatibility evidence | 20% |
-| rollout / rollback / contract criteria | 15% |
+| reader migration / writer cutover / rollback / contract criteria | 15% |
 | dependency judgment | 5% |
 
 ---
@@ -625,7 +615,7 @@ reviewer 不应只看 tests 绿不绿。
 完成后，你应该能精确说：
 
 ```text
-“当前 change 只完成 expand phase：new reader 同时接受 v1/v2，default writer 继续写 v1，因此 rolling fleet 中 frozen v1 readers 仍可工作。切 W2 的前置条件是所有可能读取共享 snapshot、包括 rollback/offline tools 的 supported readers 都具备 v2 decode 能力。v1 reader 的删除时间由长期 import policy 决定，不自动等于 writer cutover 时间。”
+“当前代码 change 只完成 capability expansion：new reader 同时接受 v1/v2，default writer 继续写 v1，因此它没有要求 frozen v1 readers 立刻消失。接下来必须单独迁移所有可能读取 shared snapshot 的 supported consumers；只有这一步有证据闭合后，才能审查 W2 writer cutover。W2 一旦产生 durable v2 data，rollback-compatible targets 需要重新计算。v1 read support 的删除时间则由长期 import policy 决定，不自动等于 writer cutover 时间。”
 ```
 
 而不是：
