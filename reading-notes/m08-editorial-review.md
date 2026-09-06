@@ -190,6 +190,9 @@ Historical fixture 与 frozen reader承担不同 authority：
 4. **V2 design authority**：nested task object 被降回 explicit teaching candidate，不伪装成前置模块已决定的 future TaskForge model。
 5. **Contract overreach**：把“contract 阶段必须真的发生”改成 transitional burden 必须有 explicit removal/support decision；intentional long-term v1 reader 可保留。
 6. **Rollback scope**：Lab Case A 的“为什么容易 rollback”收窄到 snapshot-format surface，避免从 W1 durability事实推出 whole-release rollback 一定简单。
+7. **Post-review feature-flag loss**：独立复核 reviewer finding 后确认 `COURSE_DESIGN.md` 把 feature flag 明列为 M08 core，而 rewrite 正文/Lab/case/source audit 已把它整体压掉。重新核 Fowler 原文确认 migrate phase 确实提到 Feature Flag；现恢复为候选 activation control，用于区分 capability existence 与 production activation，但明确不承担 compatibility/migration/rollback proof。
+8. **Post-review role-mapping overclaim**：四事件模型本身保留，但不再把 TaskForge 的 R2 dual-read 硬说成 Fowler supplier-side Expand。Source roles 与 TaskForge producer/reader deployment roles 不要求一一同构；E/M/W/C 明确标为 durable-data course adaptation。
+9. **Post-review rollback projection loss**：恢复 merge-base 已有的 multi-artifact qualifier 与 `extensions/configuration-baselines-and-release.md` 链接。M08 §6 只投影 behavior/data/mixed-version compatibility，不冒充完整 release-configuration rollback model。
 
 ## 12. Cold-reader / rhythm review
 
@@ -222,9 +225,11 @@ Hygiene / structure：
 - `git diff --check` PASS；
 - changed Markdown fences balanced；
 - relative Markdown links resolve；
-- module 430 行、1 个 H1、0 个 page-level `---`；
-- instructor case 245 行、1 个 H1、0 个 page-level `---`；
+- module 436 行、1 个 H1、0 个 page-level `---`；
+- instructor case 247 行、1 个 H1、0 个 page-level `---`；
 - stale phase/overclaim sweep 对 `Phase M = Writer`、`Expand phase only`、`irreversible boundary`、`contract 阶段必须真的发生` 等均无残留；
+- post-review role sweep 不再存在“R2 reader capability = Fowler supplier-side Expand”的强映射；
+- `COURSE_DESIGN.md` M08 core occurrence sweep：dependency graph / semantic compatibility / Hyrum's Law / versioning / schema migration / expand-contract / feature flag / rollback 全部在 module/Lab/case/source-audit 教学链中有实际承载；
 - Markdown secret scan 无 finding；
 - 无新增 `uv.lock` / temp artifact。
 

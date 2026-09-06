@@ -215,7 +215,7 @@ cleanup cost
 
 # 4. 本轮 Change Contract
 
-本实验的代码 change **只实现 capability expansion**：让新版本具备同时读取 v1/v2 的能力，但不宣称 supported consumers 已完成迁移，也不切 production writer。这里的 `Expand` 对应 Parallel Change 的 supplier-side capability expansion；后续 reader deployment/migration 和 durable writer cutover 是独立 rollout events。
+本实验的代码 change **只实现 capability expansion**：让新版本具备同时读取 v1/v2 的能力，但不宣称 supported consumers 已完成迁移，也不切 production writer。这里的 E/M/W/C 是受 Parallel Change 启发的 durable-data adaptation：TaskForge 第一步扩的是 **reader/consumer capability**，不要求与 Fowler 原义里的 supplier-side Expand 做角色一一映射；后续 reader deployment/migration 和 durable writer cutover 是独立 rollout events。
 
 ## 4.1 必须保持
 
@@ -429,7 +429,9 @@ inventory 必须包括 daemon 之外的 offline repair tool、backup restore ima
 何时可以把 production default W1 -> W2
 ```
 
-同时写清 rollout evidence 和 rollback-compatible targets。这个 event 会改变 durable data universe；它是 TaskForge 对 Parallel Change 的 operational adaptation，不要把它重命名成 Fowler 的 client-migration phase。
+同时写清 rollout evidence 和 rollback-compatible targets。可以把 **feature flag / rollout gate** 作为候选 activation control，用来把“代码已经具备 W2 capability”和“production 已获准启用 W2”分开；本 Lab 不要求实现 flag。无论是否使用 flag，都必须明确：flag 不证明 reader migration 完成、不创造 compatibility，也不自动提供 rollback safety。
+
+这个 event 会改变 durable data universe；它是 TaskForge 对 Parallel Change 的 operational adaptation，不要把它重命名成 Fowler 的 client-migration phase。
 
 ## Phase C — Contract / cleanup
 

@@ -118,7 +118,7 @@ Fowler/Danilo Sato 的 Parallel Change 原文把 interface change 分成三个�
 
 新 release 的 reader 能读 v1/v2；production default writer 仍是 W1。
 
-这一 event 的目标只是让 supplier side 支持 new representation，而不破坏 old world。它完成后并不能声称 fleet 已经没有 R1。
+这一 event 的目标只是先扩大 **reader/consumer capability**：新 release 的 R2 能理解 new representation，而不破坏 old world。它是受 Parallel Change 启发的 TaskForge operational adaptation，不把 R2 硬映射成 Fowler 原义里的 supplier side。它完成后并不能声称 fleet 已经没有 R1。
 
 ### Event M — Migrate readers / consumers
 
@@ -135,6 +135,8 @@ all supported readers that may observe shared snapshot are known to be R2-capabl
 ### Event W — Writer cutover
 
 只有 reader migration evidence 闭合后，才单独审查 W1 default -> W2 default。
+
+Feature flag / rollout gate 可以作为候选 activation control：W2 capability 随 release 存在，但 production activation 仍保持 off，直到 reader-migration evidence 与授权条件闭合。Reference 不要求实现 flag，也不把它当 safety proof；flag 不会修复 incompatibility、不会证明 migration 完成，也不会让不兼容的 rollback target 变安全。
 
 这一步会改变 durable data universe。一旦第一份 v2 snapshot 写出，rollback 到只会 R1 的 binary 可能不再成立。因此 W2 cutover 需要独立 rollout evidence 和 rollback analysis。
 

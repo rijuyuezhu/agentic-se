@@ -131,6 +131,8 @@ Protocol Buffers 提供了另一个有用的反例。在 protobuf binary wire fo
 
 这时 Fowler/Danilo Sato 的 **Parallel Change** 才真正有用。原文把 backward-incompatible interface change 分成三阶段：**Expand** 时 supplier 同时支持 old/new form；**Migrate** 时逐步把 clients 从 old form 迁到 new form；**Contract** 时在所有 usages 都迁走后删除 old form。
 
+这套 source pattern 给 TaskForge 的是“不要一次跨过 old/new coexistence window”的结构启发，不是角色的一一映射。TaskForge 当前第一步扩大的是 **reader/consumer capability**：R2 能读 v1/v2；这并不等于 Fowler 原义里 supplier interface 的 Expand。后面的 E/M/W/C 是课程为 durable producer/consumer timeline 做的 operational adaptation。
+
 ### Durable format 需要把 writer cutover 单独看见
 
 TaskForge 的场景和一个普通 method signature change 有一个额外维度：client migration 之外，还有一个 durable **producer cutover**。如果我们直接把 writer cutover 叫作 Fowler 的 `Migrate`，就会把“clients 已升级”与“系统开始产生新 durable data”两个不同的时间点压成一个名字。
@@ -144,7 +146,7 @@ TaskForge 的场景和一个普通 method signature change 有一个额外维度
 | **Writer cutover** | production default W1 → W2 | durable state universe 改变；rollback compatibility 需要重算 |
 | **Contract** | 删除不再承诺的 W1 / old interface / transitional path；是否保留 v1 reader由产品 policy 决定 | 清理 temporary burden，但不能误删 intentional compatibility feature |
 
-前三个名字中，`Expand / Migrate / Contract` 的 interface-level pattern 来自 Fowler；**把 writer cutover 独立成第四个 operational event 是 TaskForge durable-data 场景的课程综合。** 这一区分很重要，因为 rollout evidence 和 rollback risk 在这两个事件之间发生了变化。
+这里不要求 source roles 与 TaskForge roles 同构：`Expand capability` 是课程给“先扩大 reader capability”的 operational label；Fowler source 仍只对 supplier-interface Expand / client Migrate / Contract old form 负责。
 
 ### 第一阶段为什么只做 capability expansion
 
@@ -161,6 +163,8 @@ R2 code 已经合入仓库，不代表所有 consumer 都已经 R2。daemon、CL
 ### Writer cutover 改变的是 rollback boundary
 
 当所有 relevant readers 都已具备 v2 decode 能力后，系统才有资格单独评审 W2 cutover。这个 change 风险高于 reader capability expansion，因为从第一份 v2 durable object 写出开始，“rollback 到只会 R1 的 binary”可能不再成立。
+
+一种常见的 activation control 是 **feature flag / rollout gate**：W2 capability 可以先随代码发布但保持 disabled，等 reader-migration evidence 和授权条件满足后再打开。Fowler 也明确提到 migrate phase 可以用 Feature Flag 控制 old/new interface 的使用；TaskForge 这里只把它当作候选 activation mechanism，而不是必需实现。**Flag 本身不会创造 compatibility、不会证明 readers 已迁完，也不会自动让 rollback 变安全。**
 
 这里不要把 writer cutover 写成普遍意义上的“不可逆操作”。如果系统有可靠 down-conversion、双向 representation compatibility，或 rollback target 本身能读 v2，它可以是可逆的。TaskForge 当前 teaching candidate 没有这些 mechanism，所以更精确的说法是：**W2 cutover 跨过了一个 compatibility boundary，并可能缩小可用 rollback set。**
 
@@ -205,6 +209,8 @@ R2 还需要明确验证 unknown future version、missing v2 `task`、unknown `t
 W2 cutover 以后条件变了。此时 rollback target 必须至少满足一种条件：自己能读 v2；存在被验证过的 down-conversion；或者 rollout 保证尚未产生任何 v2 durable state。只写“出问题就 rollback binary”没有回答这些数据问题。
 
 Offline tool 会把这个问题变得更尖锐。假设主 fleet 已经全是 R2，但一年运行一次的 repair tool 仍是 R1。“fleet old process count = 0”并不能证明 writer cutover 安全。你可以选择先升级/退役 tool、提供 explicit export-v1、长期保持 W1，或增加 conversion layer；哪一个正确由产品 support policy 决定，课程不替你决定。但这个 consumer 不能因为不常运行就从 matrix 里消失。
+
+这一节只投影 **behavior、data representation 与 mixed-version compatibility**。真实 release 还可能同时由 source、binary、schema、runtime config、generated artifact、feature-flag state 等多种 artifact 组成；这时“rollback”还必须先说明到底恢复哪一组 configuration。旁支 [Configuration、Baseline 与 Release](../extensions/configuration-baselines-and-release.md) 专门补这层 configuration identity / release composition，不应把本节的 snapshot condition 当成完整 release rollback model。
 
 这也是为什么 migration completion criterion 必须可证伪。`大家应该都升级了` 不是 evidence；`supported reader inventory 中 R1=0`、`old API usage metric 在约定窗口内为 0`、`repo 中 supported old usages=0`、`所有 supported rollback targets 都能 decode v2` 才是可以 review 的 statement。具体系统选择哪些 signal 不必相同，但 exit criterion 必须能被现实反驳。
 
@@ -405,7 +411,7 @@ Google AIP-180 支撑 source / wire / semantic compatibility 的 vocabulary，�
 
 Semantic Versioning 2.0.0 支撑 public API 先于版本规则、以及 major/minor/patch 的 communication contract；它不证明未知 downstream consumer 一定安全。Software Engineering at Google 的 Dependency Management 与 Deprecation 分别支撑 dependency network/time/visibility，以及 migration owner/milestone/backsliding reasoning；Google 的组织环境和 `Live at Head` 前提不被课程推广成普遍策略。
 
-Fowler/Danilo Sato 的 Parallel Change 明确提供 **Expand → Migrate clients → Contract** 三阶段 interface pattern。TaskForge 把 durable **writer cutover** 单独列成 operational event，是课程针对 producer/consumer data lifecycle 的适配，不是对原文 phase 名的改写。
+Fowler/Danilo Sato 的 Parallel Change 明确提供 **supplier Expand → Migrate clients → Contract** 三阶段 interface pattern，并提到 migrate phase 可用 Feature Flag 控制 old/new interface 的使用。TaskForge 的 reader-capability expansion、reader migration、durable **writer cutover** 与 cleanup 是课程针对 producer/consumer data lifecycle 的适配；这些 operational roles 不要求与 Fowler 的 supplier/client roles 一一同构。Feature flag 在本章也只作为候选 activation control，不承担 compatibility proof。
 
 Protocol Buffers 文档用于说明 encoding-specific compatibility rule；TaskForge 并不使用 protobuf。Kubernetes deprecation policy 则真实支撑 persisted representation 的 decode obligation、old/new version overlap 和 upgrade/rollback reasoning；课程只借这些 invariants，不复制 Kubernetes 的 machinery。
 

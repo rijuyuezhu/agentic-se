@@ -294,7 +294,7 @@ Migrate: 把 clients/usages 从 old 逐步迁到 new
 Contract: 所有 usages 迁完后删除 old form
 ```
 
-文章还明确讨论 Published Interface、external clients、database refactoring、remote API evolution、continuous delivery，以及 migrate period 同时维护两种形式的成本。这里的 **Migrate 主体是 clients/usages**；原文没有把“durable producer 开始默认写新格式”重新命名成 Migrate。
+文章还明确讨论 Published Interface、external clients、database refactoring、remote API evolution、continuous delivery，以及 migrate period 同时维护两种形式的成本。这里的 **Migrate 主体是 clients/usages**；原文没有把“durable producer 开始默认写新格式”重新命名成 Migrate。原文还明确写到：在 migrate phase，可以用 **Feature Flag** 控制使用 old/new interface；这是 activation/decoupling mechanism，不等于 compatibility proof。
 
 ## 本课程采用什么
 
@@ -309,7 +309,7 @@ Expand capability
 -> Contract/cleanup
 ```
 
-这不是把 Fowler 的三阶段改成四阶段 source taxonomy。它是课程适配：先保留原文 `Migrate clients` 的含义，再把 durable producer 开始生成 W2 这一不同 rollback boundary 单独显式化。
+这不是把 Fowler 的三阶段改成四阶段 source taxonomy。TaskForge 的 E/M/W/C 是受 Parallel Change 启发的 durable-data adaptation：第一步实际扩大的是 **reader/consumer capability**，因此 source 中 supplier/client 的角色与 TaskForge producer/reader deployment roles **不要求一一同构**；课程保留原文 `Migrate clients` 的含义，同时把 durable producer 开始生成 W2 这一不同 rollback boundary 单独显式化。
 
 ---
 
@@ -453,7 +453,7 @@ semantic behavior preserved?
 - SemVer 2.0.0：版本声明 contract，但不作为证明；
 - SE at Google Dependency Management：dependency network、time、visibility；
 - SE at Google Deprecation：owner/milestone/backsliding；
-- Parallel Change：expand supplier capability → migrate clients/usages → contract old interface；TaskForge writer cutover 另列为课程适配 event；
+- Parallel Change：supplier Expand → migrate clients/usages → contract old interface，并明确提到 migrate phase 可用 Feature Flag 控制 old/new interface；TaskForge 的 reader-capability expansion / reader migration / writer cutover / cleanup 是课程适配，角色不要求一一同构；
 - Protocol Buffers：具体 wire representation 规则；
 - Kubernetes Deprecation Policy：old/new overlap、storage decode、rollback reasoning。
 
