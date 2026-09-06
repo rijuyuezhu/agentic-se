@@ -89,6 +89,14 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 详细教学设计见 [`COURSE_DESIGN.md`](COURSE_DESIGN.md)。
 
+### Extensions：按需深入，不增加新的主线模块
+
+传统 Software Engineering 里有些问题没有必要重新占一个 M14/M15，却仍然会改变真实工程判断。例如 requirement 并不是从天上掉下来的；代码版本也不等于完整 release identity；Agent 写代码变快以后，review capacity、security boundary 和 professional responsibility 也不会消失。
+
+这些内容收在 [`extensions/`](extensions/index.md) 中，按需要阅读，不进入 M00–M13 的线性学习顺序。当前旁支包括 Requirements/Stakeholders、Configuration/Baseline/Release、Risk/Estimation/Economics、Process/Feedback/Team Coordination、Software Quality、Security Engineering、Professional Practice，以及 Models/Notation/UML。
+
+为什么只补这些、而没有再写一套传统 Architecture/Testing/Maintenance/Operations，见 [`traditional-se-gap-map.md`](reading-notes/traditional-se-gap-map.md)；所有新增 normative claims 的实际材料审计见 [`extensions-source-audit.md`](reading-notes/extensions-source-audit.md)。
+
 ---
 
 ## 贯穿实验：TaskForge
@@ -131,7 +139,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 - 以“CI 通过”代替 correctness argument；
 - 以“Agent 写出来了”代替 engineering judgment。
 
-这些内容有些会出现，但只会在它们能帮助回答真实工程问题时出现。
+这些内容有些会出现，但只会在它们能帮助回答真实工程问题时出现；其中仍然值得系统了解、但不应占用主线的部分收在 [`Extensions`](extensions/index.md) 中。
 
 ---
 
@@ -141,6 +149,7 @@ M00–M13 的完整主线现已形成：
 
 - M00–M13 全部已有自包含中文讲义；
 - `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m13-source-audit.md` 记录逐模块 source audit；M13 明确不新增“Capstone 权威教材”，只组合前面已经实际审计的一手材料；
+- [`reading-notes/traditional-se-gap-map.md`](reading-notes/traditional-se-gap-map.md) 对 SWEBOK v4.0a 的 18 个 Knowledge Areas 逐项判断“已覆盖 / 部分覆盖 / 真缺口 / 低优先级”，并据此只新增 8 个可选 [`extensions/`](extensions/index.md)；[`reading-notes/extensions-source-audit.md`](reading-notes/extensions-source-audit.md) 记录这些旁支实际检查过的当前标准、课程和一手实践资料及其取舍；
 - [`labs/13-capstone.md`](labs/13-capstone.md) 提供最终综合实验；[`labs/taskforge/capstone-starter/`](labs/taskforge/capstone-starter/) 是独立的 SQLite + remote-worker starting point，包含 old API、schema v1、background maintenance、known claim race、legacy finish quirk 与 flawed feature request；
 - `capstone_baseline_probe.py` 可确定性复现 double claim 与 stale v1 finish；baseline tests 仍是 `6 passed`，用于证明 green tests 不等于完整 correctness argument；
 - human decision pack 将错误的 arbitrary-command exactly-once 要求收敛为 attempt fencing + opt-in `automatic_at_least_once`，并定义 mixed-version rollout gate 与 rollback boundary；

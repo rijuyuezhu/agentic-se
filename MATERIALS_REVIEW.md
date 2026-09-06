@@ -636,3 +636,13 @@ M13 的 source policy 与前面不同，见：
 `reading-notes/m13-source-audit.md`
 
 Capstone 不再引入新的 normative source，而是显式复用 M02–M12 已实际审计的一手材料，并把新的跨模块组合标为 course synthesis。M13 特有的 claim——例如 frozen v1 binary 对 expand-only schema 是否仍能工作、v2 attempt 激活后 old server rollback 是否会接受 unfenced finish、state fencing 是否仍允许 external duplicate effect——全部使用实际 TaskForge runtime counterexample / reference evidence，而不是再引用“某个著名架构原则”。这样避免把 Capstone 变成材料数量竞赛。
+
+---
+
+## Extensions — 传统 Software Engineering gap audit
+
+M00–M13 完成后，我们另外检查了“课程没有按传统 syllabus 展开的内容，是否真的都不值得学”。结果记录在 [`reading-notes/traditional-se-gap-map.md`](reading-notes/traditional-se-gap-map.md) 和 [`reading-notes/extensions-source-audit.md`](reading-notes/extensions-source-audit.md)。
+
+这轮没有按书名补八门小课，而是先用当前 SWEBOK v4.0a 的 18 个 Knowledge Areas 做 coverage map，再用当前 CMU MSE、IEEE/ISO/NIST/OWASP/ACM、一手 Agile/Kanban/Google/C4 资料核查具体 claim。结论是：Architecture、Design、Testing、Operations、Maintenance 等已经被主线实质覆盖，不应重复；Requirements、Process、Risk/Economics、Professional Practice 存在真实缺口；Configuration、Quality、Security、Models 则需要补一层能把主线已有实践重新命名和迁移的解释框架。
+
+因此最终只增加 [`extensions/`](extensions/index.md) 这一层可选旁支，并明确拒绝“SWEBOK 有一个 KA → 本课程必须有一个 module”“标准列了 taxonomy → 打勾就证明 correctness”“Scrum/UML notation 属于 SE → 必须系统背诵”等推论。对会变化的来源，这轮开始显式记录访问日期和版本状态；例如 SWEBOK 使用 2025-09-25 后的 v4.0a 页面，NIST SSDF 将 v1.1 final 与仍处 draft 状态的 v1.2/Rev.1 分开记录。
