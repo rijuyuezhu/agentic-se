@@ -19,7 +19,7 @@
 
 不要把“去 bullet / 去 fence / 减 heading”当作目标。列表、behavior table、diagram、lab contract 和可复用 artifact 在确实需要结构化时应继续结构化。格式统计只能做 diagnostics，不能作为 acceptance metric。
 
-每个大章 rewrite 都要执行 [`EDITORIAL_GUIDE.md`](EDITORIAL_GUIDE.md) 的 original-vs-rewrite review protocol：semantic preservation、cold-reader flow、abstraction dependency sweep、compression/rhythm。
+每个大章 rewrite 都要执行 [`EDITORIAL_GUIDE.md`](EDITORIAL_GUIDE.md) 的 original-vs-rewrite review protocol：semantic preservation、cold-reader flow、abstraction dependency sweep、design-decision dependency sweep、compression/rhythm。
 
 ### Abstraction dependency sweep 是强制 review technique
 
@@ -37,6 +37,19 @@ M04 pilot 在 PR #7 中暴露出一个可推广的问题：reviewer 最初只指
 搜索为 0 只能证明一个具体 dependency constraint 没有已知泄漏，不能证明教材质量。
 
 完整案例与修订 reasoning 见 [`reading-notes/m04-editorial-pilot-review.md`](reading-notes/m04-editorial-pilot-review.md) 的“PR review 后的 dependency / flow refinement”。
+
+### Design conclusion 也必须服从 dependency order
+
+PR #8 的 M00–M01 review 暴露了第二类 leak：正文即使没有提前命名 abstraction，也可能在读者尚未拥有 decision criterion 时，把一个 plausible design 写成自然答案。M00 原先用“于是我们加一个 `CANCELLING`”继续故事，但 M01 才负责建立“没有 specification 就不能判断哪个 cancel design 正确”的 authority；这会让前一章偷偷替后一章做决定。
+
+因此后续 rewrite 还要检查：
+
+- 后文是否负责建立“怎样选择”的 criterion，而前文已经把某个 state/schema/API/error/ownership/recovery design 当成既定事实；
+- 为了维持 running example，可以明确采用 hypothetical candidate，但必须标记它只是 working assumption；
+- 后续 complexity / migration / testing 分析继续复用该 candidate 时，要保持 conditional scope；
+- criterion 建立以后，必须允许比较或替换此前 candidate，而不是为了维持故事连续性强行证明它“本来就对”。
+
+这条规则不是“前一章不能出现具体设计”。禁止的是**未声明的 design authority 偷跑**。案例与 reasoning 记录见 [`reading-notes/m00-m01-editorial-review.md`](reading-notes/m00-m01-editorial-review.md)。
 
 ## 如何处理 reviewer 意见
 
@@ -63,7 +76,9 @@ M04 pilot 的经验是：reviewer 对 narrative rewind 的 diagnosis 成立，�
 - compatibility qualifier；
 - security/disclosure qualifier；
 - source-backed claim 与 course synthesis 的边界；
-- lab normative contract 与后续模块依赖。
+- lab normative contract 与后续模块依赖；
+- 新引入的 contract-relevant state dimension 是否贯穿相关 behavior table / representation / state machine / test partition；如果某个 artifact 只投影一部分 state，必须明确 scope，不能靠读者猜遗漏维度；
+- contract 若区分 acceptance / completion / recovery 等 temporal phase，error、state transition、durability 与 test/evidence 必须使用同一时间模型；不要把 downstream completion failure 重新解释成此前 acceptance success 的失败，除非 contract 明确如此。
 
 “概念字符串还存在”不等于教学内容被保留。M04 的 `mask/recover` 就曾 technically present、但对 cold reader 过薄；最终用一个简短 replica fallback 场景恢复了 reasoning，而没有恢复碎片化小标题。
 

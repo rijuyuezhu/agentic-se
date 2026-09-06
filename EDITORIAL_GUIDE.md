@@ -134,7 +134,9 @@ Editorial rewrite 默认没有权限改变技术主张。每章重写前先读�
 - condition / limitation 是否仍在；
 - 原本明确的 non-goal 是否被故事吞掉；
 - 术语是否被无意改义；
-- lab contract、链接、后续模块衔接是否仍成立。
+- lab contract、链接、后续模块衔接是否仍成立；
+- 如果 rewrite 引入了新的 contract-relevant state dimension，后续 behavior table、representation example、state machine、test partition 等 artifact 是否一致携带它；若某个 artifact 只建模其中一部分，是否明确声明自己的 projection / scope，而不是让读者误以为它是完整模型；
+- 如果 contract 把一个 operation 拆成 acceptance / completion / recovery 等 temporal phase，后续 error、state transition、durability 与 evidence reasoning 是否保持同一时间模型；尤其不能让 completion failure retroactively 改写一个只承诺 acceptance 的既有 success，除非 contract 本来就这样定义。
 
 ### Pass B — cold-reader flow
 
@@ -158,6 +160,20 @@ Editorial rewrite 默认没有权限改变技术主张。每章重写前先读�
 reviewer 的 diagnosis 与 remediation 也要分开判断。一个 reviewer 可能正确发现“abstraction 出现太早”，但只指出了部分 occurrence，或者给出的搬移方案会损失另一条合理 reasoning。修复时应处理问题的完整类别，而不是机械执行 comment diff。
 
 M04 pilot 的实际案例见 [`reading-notes/m04-editorial-pilot-review.md`](reading-notes/m04-editorial-pilot-review.md) 的“PR review 后的 dependency / flow refinement”：最初只被指出 §2 提前使用 `request_id`，全章复核后又发现 §3–§5 的 `request identity` / `idempotency` / `idempotent` 同样在偷跑；最终把这些泄漏一起清理，并保留了 reviewer 原建议中不应删除的 convenience-API reasoning。
+
+### Pass B.2 — design-decision dependency sweep
+
+dependency leak 不只会提前泄漏术语，也会提前泄漏**尚未建立 decision criterion 的设计结论**。如果后面的章节或小节负责教读者“怎样在多个 plausible design 之间做判断”，前面的 running example 可以先制造压力，也可以暂时选择一个 concrete candidate 继续追踪后果，但不能把该 candidate 写成自然必然的答案。
+
+遇到这种情况时：
+
+- 先确定读者到哪里才真正拥有选择这个设计所需的 criterion / authority；
+- 检查此前 narrative 是否已经把某个 state、schema、API shape、error policy、ownership arrangement 或 recovery policy 当成既定事实；
+- hypothetical candidate 是允许的，但必须明确它是为了继续推理而暂时采用的 working assumption，并让其他 plausible alternatives 继续保持可见；
+- 后文如果继续用该 candidate 分析 complexity、migration、testing 等问题，也要保持 conditional scope，不能因为重复引用而悄悄把它升级成课程答案；
+- 当 decision criterion 建立后，应允许章节重新比较、替换甚至拒绝前面的 candidate，而不让读者感觉课程自相矛盾。
+
+M00–M01 的 post-pilot review 给出了一个实际例子：M00 为了追踪 cancellation 的 change cost 使用 `CANCELLING` 很合适，但在 M01 建立 specification / design authority 之前，它只能是明确标记的候选设计，而不能写成“于是我们加一个 `CANCELLING`”这样的必然结论。完整记录见 [`reading-notes/m00-m01-editorial-review.md`](reading-notes/m00-m01-editorial-review.md)。
 
 ### Pass C — compression and rhythm
 
