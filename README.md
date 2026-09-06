@@ -85,7 +85,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 | [10](modules/10-code-review-change-engineering.md) | Code Review 与 Change Engineering | 怎样把一次 PR 当作 bounded engineering argument 独立验证，而不是把 CI green 当 approval？ |
 | [11](modules/11-production-observability-reliability.md) | Production、Observability 与 Reliability | 系统上线后，怎样从 user contract 设计 SLI/SLO、telemetry、alert 与 overload evidence，而不是只堆 metrics？ |
 | [12](modules/12-agentic-software-engineering.md) | Agentic Software Engineering | 怎样把 system model、authority、evidence、stop/escalation 与 independent review 组织成 Agent 可安全执行的工作系统？ |
-| 13 | Capstone | 在一个持续演化的真实风格系统里完成多轮变更与 review |
+| [13](modules/13-capstone-change-engineering.md) | Capstone：完整 Change Engineering | 在一个持续演化的真实风格系统里，同时完成 issue review、system model、migration、Agent-assisted implementation、evidence、independent review 与 rollout 判断。 |
 
 详细教学设计见 [`COURSE_DESIGN.md`](COURSE_DESIGN.md)。
 
@@ -137,13 +137,13 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 ## 当前状态
 
-前十三个核心模块已经形成连续学习链：
+M00–M13 的完整主线现已形成：
 
-- M00–M12 已有自包含中文讲义；
-- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m12-source-audit.md` 记录逐模块 source audit；
-- M12 不把 Agentic SWE 收缩成 prompt 技巧，而是把前十一章组合成 delegation contract、authority matrix、evidence contract、stop/escalation 与 independent review；
-- [`labs/12-agentic-software-engineering.md`](labs/12-agentic-software-engineering.md) 用同一个 overload/backpressure change 比较 vague delegation 与 engineered delegation，并要求 bounded Agent 在 public-result/threshold authority 未决时正确 `STOP_AND_ESCALATE`；
-- `labs/taskforge/tools/m12_orchestration_probe.py` 实际稳定复现 `INSUFFICIENT_CONTRACT → REJECT_PLAN → STOP_AND_ESCALATE → AUTHORIZED_TO_IMPLEMENT` 四种状态；
-- [`case-studies/m12/instructor-analysis.md`](case-studies/m12/instructor-analysis.md) 记录授权后的 opt-in admission reference：原 6 个 core tests + 5 个 focused tests 共 `11 passed`，naive check→submit race 另有 deterministic counterexample，同时把 M10 replay harness 明确分类为 version-scoped teaching artifact。
+- M00–M13 全部已有自包含中文讲义；
+- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m13-source-audit.md` 记录逐模块 source audit；M13 明确不新增“Capstone 权威教材”，只组合前面已经实际审计的一手材料；
+- [`labs/13-capstone.md`](labs/13-capstone.md) 提供最终综合实验；[`labs/taskforge/capstone-starter/`](labs/taskforge/capstone-starter/) 是独立的 SQLite + remote-worker starting point，包含 old API、schema v1、background maintenance、known claim race、legacy finish quirk 与 flawed feature request；
+- `capstone_baseline_probe.py` 可确定性复现 double claim 与 stale v1 finish；baseline tests 仍是 `6 passed`，用于证明 green tests 不等于完整 correctness argument；
+- human decision pack 将错误的 arbitrary-command exactly-once 要求收敛为 attempt fencing + opt-in `automatic_at_least_once`，并定义 mixed-version rollout gate 与 rollback boundary；
+- [`case-studies/m13/instructor-analysis.md`](case-studies/m13/instructor-analysis.md) 记录实际 reference validation：临时 solution 共 `14 passed`；frozen v1 binary 对 expand-only schema 继续工作，但 v2 attempt 激活后 old server 会接受 unfenced finish，实际证明“任意时刻 old-binary rollback”不成立。
 
-下一阶段进入 M13 Capstone：不再引入新的单点主题，而是在一次持续演化的 TaskForge change 中完整执行 system modeling、specification、architecture、migration、Agent-assisted implementation、production evidence 与 independent review。
+课程主线至此完成。后续扩展应优先增加新的真实 case study、review exercise 或替代 capstone，而不是继续堆原则名词。

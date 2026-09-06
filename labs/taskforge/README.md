@@ -4,7 +4,7 @@ TaskForge 是本课程的贯穿实验系统。
 
 它不是“最佳实践示例仓库”，而是一个**经过设计的、会逐步演化的 teaching system**：每个版本只引入足够支撑当前模块的复杂度，并故意保留后续课程需要发现和修复的问题。
 
-## 当前版本：v0 / M02–M12 teaching baseline
+## 当前版本：v0 / M02–M12 teaching baseline；M13 使用独立 Capstone starter
 
 core 仍只有四类行为：
 
@@ -376,3 +376,26 @@ authorized plan  -> AUTHORIZED_TO_IMPLEMENT
 实验随后要求在人类 `M12-ADMISSION-001` decision record 之后，才在 isolated copy/worktree 中实现 opt-in admission control。Instructor 临时 reference 得到原 6 个 core tests + 5 个 focused tests = `11 passed`，并用 deterministic barrier counterexample 证明 naive `check queue -> submit` 可以让两个 contender 同时穿过一个 slot。
 
 完整实验见 [`../12-agentic-software-engineering.md`](../12-agentic-software-engineering.md)。Canonical baseline 不提交 reference implementation，因为 M12 的主要对象是 delegation / authority / evidence workflow，而不是提前改变后续 Capstone 的 product starting point。
+
+## M13：独立 Capstone Starter
+
+M13 不继续给上面的 v0 baseline 叠功能，而是提供一个新的时间点：
+
+```text
+capstone-starter/
+```
+
+它包含 SQLite schema v1、legacy public API、remote-worker protocol、background maintenance、deterministic double-claim race、legacy `job_id + exit_code` finish quirk，以及一份故意包含错误 guarantee 的 lease-recovery issue。
+
+运行：
+
+```bash
+cd capstone-starter
+PYTHONPATH=src uv run --with pytest --no-project python -m pytest -q
+PYTHONPATH=src uv run --with pytest --no-project \
+  python tools/capstone_baseline_probe.py
+```
+
+baseline 是 `6 passed`，但 probe 会稳定展示两个 worker 都成功 claim 同一个 job，以及 requeue/reclaim 之后 stale v1 finish 仍会被接受。
+
+完整实验见 [`../13-capstone.md`](../13-capstone.md)。只有完成 first-pass issue review 后才应阅读 [`capstone-starter/decision-pack/01-after-issue-review.md`](capstone-starter/decision-pack/01-after-issue-review.md)。Instructor reference 见 [`../../case-studies/m13/instructor-analysis.md`](../../case-studies/m13/instructor-analysis.md)。

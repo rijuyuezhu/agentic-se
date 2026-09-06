@@ -630,3 +630,9 @@ M12 继续使用同一标准，见：
 `reading-notes/m12-source-audit.md`
 
 这份审计实际检查了 OpenAI Codex 当前 Best Practices / `AGENTS.md` / ExecPlans / Subagents / agent-loop 材料，Anthropic 的 effective agents、long-running harness、harness simplification、agent eval 与 parallel compiler experiment，SWE-bench 原论文，METR 2025–2026 maintainer-acceptance / developer-productivity 研究，以及 GitHub Copilot code-review instruction behavior。课程据此把 Agentic SWE 建模成 `durable context + scoped capability/permission + explicit engineering authority + evidence contract + stop/escalation + independent acceptance`，并明确拒绝“prompt 越长越好”“一定先 plan”“多 Agent 一定更好”“benchmark/test pass 等于 mergeable”“所有 production action 永远必须人工点击”“某个固定 AI productivity uplift 数字可以当课程定律”等机械规则。
+
+M13 的 source policy 与前面不同，见：
+
+`reading-notes/m13-source-audit.md`
+
+Capstone 不再引入新的 normative source，而是显式复用 M02–M12 已实际审计的一手材料，并把新的跨模块组合标为 course synthesis。M13 特有的 claim——例如 frozen v1 binary 对 expand-only schema 是否仍能工作、v2 attempt 激活后 old server rollback 是否会接受 unfenced finish、state fencing 是否仍允许 external duplicate effect——全部使用实际 TaskForge runtime counterexample / reference evidence，而不是再引用“某个著名架构原则”。这样避免把 Capstone 变成材料数量竞赛。
