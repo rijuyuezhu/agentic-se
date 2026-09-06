@@ -92,7 +92,9 @@ QUEUED -> CANCELLED
 |---|---|---|---|
 | claim | job 仍是 `QUEUED` | job 进入 `RUNNING`，且 committed owner 与 success receipt 一致 | claim, queued cancel |
 | cancel queued | job 仍是 `QUEUED` | job 进入 `CANCELLED` | claim |
-| finish | job 是 `RUNNING`，并满足当前 owner policy | terminal result 被提交 | duplicate finish, cancellation, owner loss |
+| finish（current starter） | job 是 `RUNNING` | terminal result 被提交 | duplicate finish, cancellation |
+
+这里要区分两种不同的 “owner”。M02 讨论的是 **state write authority**；当前 `worker.finish(job_id, exit_code)` 只检查 `RUNNING`，并没有接收 worker identity，也不会查询 `claim_owners`，所以 starter 目前没有“只有 claimant 才能 finish”的 worker-owner contract。未来如果产品选择 owner-restricted completion，那会是一个新增 protocol rule：此时 finish 的 decision predicate 才需要把 committed claimant identity 纳入，并重新分析 owner loss / recovery。
 
 这张表仍然只是一个 projection：它描述的是本章正在分析的 lifecycle facts，不是 TaskForge 的完整 state model。以后如果 cancellation、ownership 或 recovery 又出现新的 contract-relevant dimension，不能因为这张表没有列出就假装它们不存在；要么扩表，要么明确另建一个只投影相应维度的 model。
 
@@ -122,6 +124,8 @@ invocation ------------------------------ response
 
 这个位置就是本章口语中的 **linearization point / commit point**。
 
+这里有一个容易被教学 shorthand 偷换掉的 qualifier：**linearizable history 只需要存在至少一个合法 sequential explanation，并保持 real-time precedence；这个 explanation 不要求唯一。** 同一个正确 concurrent history 完全可能有多个合法 linearizations。对 TaskForge 来说，baseline double claim 错在两个 success 无法对应到任何合法 sequential history；而下面 reference design 之所以要求指出清楚的 code-level point，是为了说明这个**具体 implementation**怎样实现 abstract atomic effect，不是为了证明“正确 history 必须只有一个 linearization”。
+
 对于当前 TaskForge lab，instructor reference 选择了一个小而直接的 candidate：先在 lock 外扫描并保留 `after_observe` teaching seam；真正要 commit 时进入一小段同步区域，重新确认 candidate 仍是 `QUEUED`，然后把 `RUNNING` 与 owner 一起提交。如果 re-check 发现 observation 已 stale，就继续扫描后续 queued job。
 
 概念上是：
@@ -150,7 +154,7 @@ leave boundary
 
 现在假设 one-job/two-worker case 已经只有一个 success。我们还不能立刻宣布 concurrency design 完成，因为 correctness 至少包含两类不同的问题。
 
-MIT 6.102 Mutual Exclusion 区分 **safety** 与 **liveness**。在 TaskForge 里，safety 可以包括：同一个 queued job 不会产生两个 successful claim；terminal job 不会被重新 claim；不满足 owner policy 的 actor 不能提交 finish。Liveness 则关心健康条件下系统能否继续 progress：queued job 在有可用 worker 时不会因为我们的修复永久卡住，lock ordering 不会造成 deadlock，某个 contender 不会因为同步设计被无界地饿死。
+MIT 6.102 Mutual Exclusion 区分 **safety** 与 **liveness**。在当前 TaskForge contract 里，safety 可以包括：同一个 queued job 不会产生两个 successful claim；terminal job 不会被重新 claim；`finish` 只从 `RUNNING` 提交 terminal result。若未来 design 明确加入 claimant-bound completion authority，才可以再增加“非 committed claimant 不能 finish”这一条 safety property。Liveness 则关心健康条件下系统能否继续 progress：queued job 在有可用 worker 时不会因为我们的修复永久卡住，lock ordering 不会造成 deadlock，某个 contender 不会因为同步设计被无界地饿死。
 
 最极端的“安全”实现当然可以是拿到一把永不释放的锁。double claim 从此不会再发生，因为任何 claim 都不会再发生。这说明“有锁，所以 race 修了”最多是一个 implementation observation，不是完整 design argument。
 
@@ -388,7 +392,7 @@ Evidence:
 
 注意这里没有要求“必须用 `threading.Lock`”。Task contract 约束的是 invariant、proof shape、non-goal 与 evidence，implementation candidate 仍可比较。
 
-Crash-safety task 更不能写成“确保 job 只执行一次，失败就 retry”。Agent 在动代码前应该先列出：要保护的是哪个具体 effect；local record 与 effect 是否共享 transaction authority；选择 at-most-once 还是 at-least-once；downstream 是否支持 stable idempotency key；timeout 后 caller 可能不知道什么；retry budget 归谁。**Guarantee selection 是 design authority，不应由 Agent 在 patch 中默默替系统设计者决定。**
+Crash-safety task 更不能写成“确保 job 只执行一次，失败就 retry”。Agent 在动代码前应该先列出：要保护的是哪个具体 effect；local record 与 effect 是否共享 transaction authority；attempt/retry side 选择什么 semantics（例如 at-most-once attempt 或在明确 recovery assumptions 下的 at-least-once attempt）；这个具体 external effect 又承诺什么 guarantee；downstream 是否支持 stable idempotency key；timeout 后 caller 可能不知道什么；retry budget 归谁。**Attempt policy 与 effect guarantee 都属于 design authority，不应由 Agent 在 patch 中默默替系统设计者决定，更不能用前者替代后者。**
 
 ## 11. Review concurrent lifecycle change 时，沿着时间轴检查
 

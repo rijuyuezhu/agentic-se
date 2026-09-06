@@ -253,7 +253,9 @@ invocation ---------------- response
 
 这个位置就是我们口语中所说的 **linearization point / commit point**。
 
-它不要求代码真的只执行一条 machine instruction；数据库 transaction、lock-protected region、compare-and-swap、single-owner event loop 都可能实现等价语义。
+但需要保留 Herlihy–Wing 定义中的一个重要 qualifier。对可能含 pending invocation 的 history `H`，形式定义要求**存在**一个 extension `H'`，使 `complete(H')` 等价于某个 legal sequential history `S`，并且 `S` 保持 `H` 已建立的 real-time precedence。这个 existential witness 不要求唯一；论文紧接着明确指出，同一个 history 可能有多个满足条件的 extension，也可能有多个合法 linearization。因此 “multiple valid linearizations” 本身不是错误。
+
+所以课程需要分两层提问：先问 concurrent history 是否存在至少一个合法 sequential explanation；只有在分析某个 concrete implementation candidate 时，才继续问哪些实际代码事件/region 可以承担这个实现的 linearization point。后者也不要求代码真的只执行一条 machine instruction；数据库 transaction、lock-protected region、compare-and-swap、single-owner event loop 都可能实现等价语义。
 
 ## 为什么放进本课程
 
@@ -277,9 +279,10 @@ operation-level abstract behavior
 
 - 完成 formal linearizability proof；
 - 学习 wait-free / lock-free hierarchy；
-- 把所有 distributed workflow 都硬套 linearizability。
+- 把所有 distributed workflow 都硬套 linearizability；
+- 为每个正确 history 找到唯一 linearization。
 
-M07 只用它帮助学生精确定位 atomic decision point。
+M07 只用它帮助学生先检查 history 是否能解释为至少一个合法 sequential behavior，再对具体 implementation candidate 定位其 atomic decision / linearization region。
 
 ---
 

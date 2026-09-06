@@ -130,7 +130,7 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/m07_interleaving_p
 
 M07 很容易因为并发需要新增 owner/cancel/recovery facts，而让一张简单 state machine 冒充 complete model。本轮明确留下三个 scope marker：
 
-1. §2 lifecycle operation table 是本章当前 claim/cancel/finish conflict 的 **projection**，不是 TaskForge 完整 state；如果出现新的 cancellation / ownership / recovery contract dimension，必须扩表或另建 scoped model；
+1. §2 lifecycle operation table 是本章当前 claim/cancel/finish conflict 的 **projection**，不是 TaskForge 完整 state；其中 current starter 的 `finish` 只要求 `RUNNING`，没有 claimant-identity check；owner-restricted finish 只能作为 future protocol candidate；
 2. starter 的 `Job.status` 与 `claim_owners` 分处两个 mutable location 是 teaching fixture，用来暴露跨 representation invariant，不是 production two-authority recommendation；
 3. cancellation 可以用 lifecycle state，也可以用 orthogonal request-state projection；选择哪种 representation 取决于 caller distinction / transition semantics，不机械把所有维度塞进一个 enum。
 
@@ -221,6 +221,14 @@ baseline module 1666 行，33 个 page-level H1。当前 module 约 500 行、1 
 5. **delivery-guarantee scope**：最初把 “at-least-once attempt/effect” 写得过宽，并让 lifecycle crash table 的 `Durable/local facts` 暗示了未建立的 durability。现在把 at-most/at-least 明确收窄到 attempt admission/retry；external effect guarantee 另由 effect owner / failure point 决定；lifecycle table 也改成 durability-neutral 的 state-side facts，并把“哪些 facts 跨 failure 留存”本身列为 recovery contract。
 
 这些修正比 heading/count hygiene 更重要，因为它们直接影响 abstraction dependency、design authority 与 temporal correctness。
+
+### PR review 后的独立复核
+
+收到 PR review 后没有直接照单修改，而是重新核了 Herlihy–Wing 定义、当前 Lab 全 occurrence、`worker.finish()` 与 M02 authority。三条 finding 都成立，并按更窄边界修正：
+
+1. **linearizability uniqueness**：论文定义要求存在 legal sequential history 且保持 real-time precedence，并明确允许一个 history 有多个 extension / linearization。Lab 已从“没有唯一答案就是错”改成 history-level existential check；concrete implementation 仍需要说明 candidate linearization point / region。module 与 source audit 同步补上这个 qualifier；
+2. **attempt/effect artifact-chain**：做了完整 occurrence sweep。Lab 不再把 effect-first table 命名成 `at-least-once attempt/effect`；Option A 拆成 attempt/retry policy 与 sink-owned idempotent logical effect 两个独立前提；Option B 明确只直接约束 admitted attempt，不能推出 arbitrary external effect at-most-once；最终交付物也分别要求 attempt/retry policy 与 scoped external-effect guarantee；module 的 Agent task contract 同样拆开两类 design decision；
+3. **finish owner authority**：真实 `worker.finish(job_id, exit_code)` 只检查 `RUNNING`，M02 的 owner 是 state write authority，不是 claimant identity。正文已把 claimant-bound finish 降为 future product/protocol candidate，没有新增 worker-owner implementation。
 
 ## 13. Final validation evidence
 
