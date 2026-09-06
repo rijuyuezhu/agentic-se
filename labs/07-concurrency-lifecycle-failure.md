@@ -102,13 +102,16 @@ RUNNING job has one owner
 | 5 | | write RUNNING, owner=B | RUNNING | B |
 | 6 | | return success | RUNNING | B |
 
-然后回答：
+然后先回答 history-level 问题：
 
 ```text
-哪一步开始 abstract claim 已经生效？
+这段 concurrent history 能否找到至少一个 legal sequential explanation，
+并保持已经完成 operations 的 real-time precedence？
 ```
 
-如果没有唯一答案，说明 commit point 不明确。
+对当前 baseline，答案是否定的：两个 successful claim 无法同时放进“一个 queued job 最多成功 claim 一次”的 sequential specification。
+
+不要把这件事误写成“history 必须有唯一 linearization”。同一个正确 concurrent history 可以存在多个合法 linearizations。等你比较具体 implementation candidate 时，再问：**哪些实际代码事件/区域可以承担这个 implementation 的 linearization point，使每个 operation 看起来在 invocation 与 response 之间原子生效？**
 
 ---
 
@@ -277,7 +280,7 @@ contention once
 
 # 6. 写 Linearization-Point Note
 
-实现完成后，不要只写“用了 mutex”。
+实现完成后，不要只写“用了 mutex”。这里要求指出的是**你这个 concrete implementation 的 candidate linearization point / region**；这不表示 abstract history 的合法 linearization 必须唯一。
 
 提交一个简短说明：
 
@@ -319,7 +322,7 @@ if not completed:
     completed.add(job)
 ```
 
-probe 会产生：
+probe 会用 `SimulatedCrash` 这个**同进程 failpoint**产生：
 
 ```text
 effect
@@ -328,33 +331,29 @@ retry
 effect again
 ```
 
-现在不要急着改代码。
+这里先不要把 `CRASH` 字样读成“已经测试了真实 process restart”。当前 `completed_jobs` 是进程内 `set`，`SimulatedCrash` 只是让 control flow 在 effect 之后、completion write 之前中断；它确定性证明 ordering hole，但没有提供 durable recovery record。
 
-先写 failure table。
+现在不要急着改代码。先写 failure table，并明确表格研究的是哪一个 failure horizon。
 
 ---
 
 # 8. Failure Table A — Effect First
 
-| Point | local completed | external effect count | restart/retry outcome |
+| Point | local completed | external effect count | next retry outcome in this starter process |
 |---|---:|---:|---|
 | before effect | 0 | 0 | retry executes once |
 | after effect, before record | 0 | 1 | retry duplicates |
 | after record | 1 | 1 | retry suppressed |
 
-这通常接近：
+这张表本身**不要**命名成 `at-least-once attempt/effect` guarantee。它直接证明的只有一个 ordering fact：callback 已经产生 effect、completion 尚未记录时，同进程 retry 会再次调用 callback，因此存在 duplicate-effect window。
 
-```text
-at-least-once attempt/effect
-```
-
-但具体 guarantee 还取决于 retry policy。
+要进一步声称 **at-least-once attempt**，还需要额外的 work identity、recovery trigger、retry/stopping policy 等前提；而 **at-least-once external effect** 又是另一条 contract，要看 attempt 失败点和 effect owner 的 semantics。把 attempt count、callback invocation count 与 logical effect guarantee 分开写。
 
 ---
 
-# 9. Failure Table B — Record First
+# 9. Failure Table B — Record First（durable-record thought experiment）
 
-假设改成：
+不要直接把 starter 的 in-memory `completed_jobs` 移到前面，然后宣称它能跨真实 crash 保留：process 真正退出时，这只 set 也会消失。为了单独分析 ordering，这一节增加一个 explicit assumption：**completion record 能跨我们研究的 interruption / recovery horizon 留存。** 在这个 assumption 下，假设顺序改成：
 
 ```text
 completed.add(job)
@@ -363,7 +362,7 @@ effect()
 
 写表：
 
-| Point | local completed | external effect count | restart/retry outcome |
+| Point | durable completion record | external effect count | recovery outcome under this assumption |
 |---|---:|---:|---|
 | before record | 0 | 0 | retry |
 | after record, before effect | 1 | 0 | retry suppressed → lost effect |
@@ -373,7 +372,7 @@ effect()
 
 > 这是否“修复 exactly-once”？
 
-正确答案必须是：没有。
+正确答案必须是：没有。即使 completion record durable，这种 reorder 也只是移动 failure window；如果 record 不 durable，真实 restart 还会出现不同的行为。
 
 它只是把：
 
@@ -395,7 +394,12 @@ loss risk
 
 可以选择：
 
-## Option A — At-least-once + idempotent sink
+## Option A — At-least-once attempt/retry policy + idempotent sink
+
+这个 option 有两个独立前提，不要把它们缩成一个 guarantee：
+
+1. **attempt side**：在你声明的 failure horizon 下，durable work identity / recovery policy 会重新尝试未确认 work；
+2. **effect side**：sink 对相同 logical effect ID 去重，使重复 callback attempts 不产生重复 logical sink effect。
 
 要求外部 effect 支持：
 
@@ -405,13 +409,13 @@ logical_effect_id = job_id / request_id
 
 重复调用相同 key 不产生重复 logical effect。
 
-TaskForge 可以 retry。
+在当前同进程 failpoint 实验里，TaskForge 可以直接 retry；若你把 **attempt/retry policy** 扩展到真实 process restart，则还必须设计 durable work identity / recovery trigger，不能由这只 in-memory `set` 推出来。
 
-## Option B — At-most-once attempt
+## Option B — At-most-once attempt with durable attempt record
 
-先记录 attempt，然后执行；crash window 接受 loss。
+先用一个能跨目标 failure horizon 留存、且竞争 caller 不能重复创建的 attempt record 获得执行权，然后执行；后续 crash window 接受 loss。
 
-适用于某些“绝不能重复”的 effect，但要明确丢失风险和 reconciliation。
+这只能直接给出 **at-most-one admitted attempt** 这一层的约束。若目标是某个“绝不能重复”的 external effect，还必须额外证明一个 admitted attempt 在该 effect boundary 上最多产生一次 logical effect，并处理 partial failure / reconciliation；不能从 at-most-once attempt 自动推出 arbitrary effect at-most-once。**当前 starter 的进程内 `set` 也不满足这里的 durability requirement。**
 
 ## Option C — Transactional coordination
 
@@ -652,8 +656,9 @@ expected proof shape
 ## Failure
 
 ```text
-[ ] effect-before-record crash window 有明确 counterexample
-[ ] record-before-effect loss window 有明确 counterexample
+[ ] effect-before-record 的 starter evidence 明确标成同进程 failpoint / retry
+[ ] record-before-effect 的 durability assumption 已显式写出
+[ ] 没有把 in-memory set 当成 restart-recovery evidence
 [ ] 没有虚假宣称 exactly-once
 ```
 
@@ -678,7 +683,7 @@ expected proof shape
 4. safe claim implementation
 5. deterministic safety tests
 6. `failure-window.md`
-7. chosen delivery guarantee + rationale
+7. chosen attempt/retry policy + separately scoped external-effect guarantee(s) + rationale
 8. idempotent-sink experiment or equivalent evidence
 9. Agent A/B comparison
 10. final independent review

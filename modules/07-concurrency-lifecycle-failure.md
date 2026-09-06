@@ -1,260 +1,82 @@
-# M07 — Concurrency、Lifecycle 与 Failure：正确性必须跨越交错与中断
+# M07 — Concurrency、Lifecycle 与 Failure：把时间纳入 Contract
 
-> 单线程代码里，“先检查，再修改”常常看起来完全正确。
->
-> 一旦另一个 actor 可以在两步之间行动，或者进程可以在两步之间 crash，原来隐含的“这两步连续发生”就不再成立。
->
-> M07 的目标不是学会更多 concurrency primitives，而是学会：**把 lifecycle operation 当成跨时间的 protocol，明确它的 invariant、interleaving、commit point、failure window 与 retry semantics。**
+前六章里，我们已经反复问过：谁拥有 state、operation 承诺什么、哪些 behavior 必须保持、什么 evidence 足以支持一次 change。那些问题还缺一个维度：**时间**。
 
----
+只要两个 operation 可以 overlap，或者一个 operation 可以在中途 crash、timeout、restart、retry，原来隐藏在顺序代码里的假设就会暴露出来。`read → decide → write` 不再天然连续；“函数已经返回 success”也不再是我们唯一需要描述的时刻。M07 不打算把课程变成 mutex / semaphore / actor primitive 目录，而是先追着这些时间上的裂缝问：哪些历史还能算合法，另一个 actor 能在哪两步之间行动，哪些事实必须一起生效，crash 或 retry 后又留下了什么。
 
-# 0. 从两个“最后状态看起来没问题”的 bug 开始
+## 1. 最终 state 看起来正常，为什么还是错了
 
-假设 TaskForge 有一个 queued job：
+先看 TaskForge 为本章专门准备的 `concurrent_claim.py`。starter 会扫描第一个 queued job，允许测试在 observation 之后插入一个 hook，然后把 status 与 owner 写进去：
 
-```text
-job-1: QUEUED
+```python
+for job in state.jobs.values():
+    if job.status != JobStatus.QUEUED:
+        continue
+
+    if after_observe is not None:
+        after_observe(worker_id, job.id)
+
+    job.status = JobStatus.RUNNING
+    claim_owners[job.id] = worker_id
+    return ClaimReceipt(job_id=job.id, worker_id=worker_id)
 ```
 
-两个 worker 同时执行：
+单独看一个 caller，这段代码很自然：看见 `QUEUED`，于是 claim，最后留下一个 `RUNNING` job 和一个 owner。现在让 worker A 和 worker B 同时执行，并让 `after_observe` 的 barrier 保证两边都先看见同一个 `QUEUED`：
 
 ```text
-if status == QUEUED:
-    status = RUNNING
-    owner = me
-    return SUCCESS
-```
-
-可能发生：
-
-```text
-Worker A              Worker B
---------              --------
-read QUEUED
-                      read QUEUED
-write RUNNING
-owner=A
+Worker A                         Worker B
+--------                         --------
+observe job-1 == QUEUED
+                                 observe job-1 == QUEUED
+-------- both observations complete --------
+write RUNNING, owner=A
 return success
-                      write RUNNING
-                      owner=B
-                      return success
+                                 write RUNNING, owner=B
+                                 return success
 ```
 
-最终 state：
+运行仓库里的真实 probe：
+
+```bash
+cd labs/taskforge
+PYTHONPATH=src uv run --with pytest --no-project python tools/m07_interleaving_probe.py
+```
+
+当前 baseline 会稳定报告：
 
 ```text
-job-1.status = RUNNING
-owner = B
+[RACE REPRODUCED] one queued job produced two successful claims: worker-A, worker-B
+[FINAL STATE] one RUNNING job and one recorded owner can hide the bad history
 ```
 
-如果你只检查最终 state，甚至可能觉得：
-
-> “挺正常，一个 running job，一个 owner。”
-
-但 history 已经包含：
+最后对象甚至没有明显 corruption：`status == RUNNING`，`owner` 也是 A 或 B 中的一个。真正无法接受的是已经发生过的 **operation history**：
 
 ```text
-A: claim(job-1) -> success
-B: claim(job-1) -> success
+claim(A) -> success
+claim(B) -> success
 ```
 
-这不符合我们的抽象 contract：
+如果 sequential contract 是“一个 queued job 最多产生一次 successful claim”，那么第一次 success 之后 job 已经不再是 queued，第二次就不可能仍然 success。坏的是 history，而不是某个字段最终长得难看。
 
-> **一个 queued job 最多只能被一个 worker 成功 claim。**
+这时再引入 **race condition** 才有对象可指。MIT 6.102 给出的 framing 是：correctness 是否依赖事件的相对时序。课程把它翻译成一个工程判断：如果存在一种系统允许的 interleaving，会破坏 intended postcondition / invariant / operation history，那么这里就有 race。两个 thread 的存在本身不是 race；反过来，async task、多个 process、多个 client、queue consumer，甚至两个被 retry 的 attempt，都可能竞争同一个 state 或 effect。
 
-这说明：
-
-> **Concurrent correctness 不能只检查最终对象长什么样，还要检查 operation history 是否可以解释成合法行为。**
-
-再看第二个问题。
-
-我们想保证一个 external effect “只执行一次”：
-
-```python
-if job_id not in completed:
-    send_email()
-    completed.add(job_id)
-```
-
-如果：
+这也是为什么经典的 check-then-act 形状危险：
 
 ```text
-send_email()
-  ↓
-邮件已经发出
-  ↓
-CRASH
-  ↓
-completed.add(...) 尚未发生
+READ / CHECK
+    |
+    | another actor may change the fact here
+    v
+ACT / WRITE
 ```
 
-恢复后 retry：
+问题不在 `if` 这个语法，而在从 check 到 act 之间，谁保证 predicate 仍成立。回答“这两行很近”“通常 scheduler 不会刚好切走”或者“当前解释器碰巧有某种执行特性”，都不是稳定的 correctness argument；实现语言、process boundary 或 scheduling policy 一变，论证就消失了。
 
-```text
-completed 中没有 job
-→ 再发一次邮件
-```
+同一问题也不会因为换成 message passing 自动消失。一个 authority 可以把 mutation confinement 到自己内部，但如果 client 先发 `get_status`，收到 `QUEUED`，另一个 client 随后先 `claim` 成功，第一个 client 再根据旧 observation 发 `claim`，它仍然基于 stale fact。更好的 protocol 往往需要让“如果仍 queued 就 claim”成为 authority 内部的一个 semantic operation，而不是把 check 与 act 拆成两个独立 message。
 
-有人会说：
+## 2. Sequential state machine 不够：edge 也需要 protocol semantics
 
-> “那先写 completed，再发邮件。”
-
-于是：
-
-```text
-completed.add(job_id)
-  ↓
-CRASH
-  ↓
-send_email() 尚未发生
-```
-
-恢复后：
-
-```text
-completed 已存在
-→ 不再执行
-→ 邮件永远没发
-```
-
-这不是换两行顺序可以解决的问题。
-
-真正的问题是：
-
-```text
-local completion authority
-和
-external side-effect authority
-```
-
-不是同一个 atomic transaction。
-
-M07 要学会先说清：
-
-```text
-at-most-once?
-at-least-once?
-idempotent effect?
-transactional effect?
-```
-
-而不是先写 retry loop。
-
----
-
-# 1. Concurrency 到底是什么
-
-不要把 concurrency 等价成：
-
-```text
-threads
-```
-
-更有用的定义是：
-
-> **多个 computation / operation 的相对顺序不是由单个顺序控制流完全决定。**
-
-因此这些都属于 concurrency：
-
-```text
-threads
-async tasks
-multiple processes
-multiple HTTP clients
-worker queue consumers
-filesystem users
-DB transactions
-signals/callbacks
-crash + restart + retry
-```
-
-最后一项容易被忽略。
-
-但从一个 logical operation 的角度：
-
-```text
-attempt 1
-CRASH
-attempt 2
-```
-
-也是两个可能对同一 state/effect 竞争的 execution。
-
-所以“retry safety”本质上和 concurrency 很近。
-
----
-
-# 2. Race condition 的工程定义
-
-MIT 6.102 给出的 framing 很好：
-
-> correctness 是否依赖事件相对时序？
-
-于是：
-
-```text
-race
-!=
-代码里出现两个线程
-```
-
-而是：
-
-```text
-存在至少一种允许的 interleaving
-使 contract/postcondition/invariant 被破坏
-```
-
-例如：
-
-```python
-if inventory > 0:
-    inventory -= 1
-```
-
-单线程：
-
-```text
-inventory = 1
-check true
-subtract
-inventory = 0
-```
-
-并发：
-
-```text
-A read 1
-B read 1
-A write 0
-B write 0
-```
-
-最终 `inventory == 0`。
-
-单看最终值甚至没发现负数。
-
-但两个 purchase 都返回 success。
-
-所以 invariant 不能只写：
-
-```text
-inventory >= 0
-```
-
-还需要 operation-level contract：
-
-```text
-每一次 success purchase 都对应一个真实消耗的 unit
-```
-
-这和 TaskForge double claim 是同一类问题。
-
----
-
-# 3. 从 State Machine 升级到 Concurrent Protocol
-
-M01 里我们会画：
+M01 已经可以把 TaskForge lifecycle 画成：
 
 ```text
 QUEUED -> RUNNING -> SUCCEEDED
@@ -262,368 +84,83 @@ QUEUED -> RUNNING -> SUCCEEDED
 QUEUED -> CANCELLED
 ```
 
-这还只是 sequential lifecycle。
+但这张图只告诉你哪些 state transition 在顺序世界里合法。M07 还要问：`claim` 与 `claim` 能不能 overlap？`claim` 与 `cancel` 呢？`finish` 与未来的 running cancellation 呢？一个 worker 在 transition 中间消失时，谁接管剩下的 lifecycle？
 
-M07 要继续问：
+因此一个 lifecycle operation 至少需要再补几列：
 
-```text
-claim 与 cancel 可以 overlap 吗？
-claim 与 claim 可以 overlap 吗？
-finish 与 cancel 可以 overlap 吗？
-timeout/retry 可以在哪个阶段发生？
-worker crash 在 RUNNING 时代表什么？
-```
+| Operation | Required fact at decision time | 必须一起成立的结果 | 可能冲突的 operation |
+|---|---|---|---|
+| claim | job 仍是 `QUEUED` | job 进入 `RUNNING`，且 committed owner 与 success receipt 一致 | claim, queued cancel |
+| cancel queued | job 仍是 `QUEUED` | job 进入 `CANCELLED` | claim |
+| finish（current starter） | job 是 `RUNNING` | terminal result 被提交 | duplicate finish, cancellation |
 
-一个 state machine 只有 node/edge 不够。
+这里要区分两种不同的 “owner”。M02 讨论的是 **state write authority**；当前 `worker.finish(job_id, exit_code)` 只检查 `RUNNING`，并没有接收 worker identity，也不会查询 `claim_owners`，所以 starter 目前没有“只有 claimant 才能 finish”的 worker-owner contract。未来如果产品选择 owner-restricted completion，那会是一个新增 protocol rule：此时 finish 的 decision predicate 才需要把 committed claimant identity 纳入，并重新分析 owner loss / recovery。
 
-还要给 edge 加 protocol semantics：
+这张表仍然只是一个 projection：它描述的是本章正在分析的 lifecycle facts，不是 TaskForge 的完整 state model。以后如果 cancellation、ownership 或 recovery 又出现新的 contract-relevant dimension，不能因为这张表没有列出就假装它们不存在；要么扩表，要么明确另建一个只投影相应维度的 model。
 
-| Operation | Pre-state | Commit point | Post-state | Concurrent conflict |
-|---|---|---|---|---|
-| claim | QUEUED | owner + RUNNING atomic decision | RUNNING | claim, cancel |
-| cancel queued | QUEUED | CANCELLED decision | CANCELLED | claim |
-| finish | RUNNING + correct owner | terminal result decision | SUCCEEDED/FAILED | duplicate finish, worker loss |
+最关键的问题是：**一次 operation 中，哪些 read / validate / write 必须构成一个不可被竞争者拆开的 decision？** 对 double claim 来说，至少“确认 job 仍 queued”与“提交 claimed facts”不能分别基于两个可被打断的时刻。
 
-真正的 lifecycle design 是：
+实现这个 semantic decision 可以有很多机制：mutex、compare-and-swap、database conditional update / transaction、single-owner event loop、serialized message handler 都可能成立。这里不能从 primitive 倒推 contract。先确定 invariant 与 atomic decision，之后才有资格比较哪种 mechanism 最适合当前 system boundary。
 
-```text
-state machine
-+
-operation atomicity
-+
-conflict semantics
-+
-failure semantics
-```
+这把 M02 的 state ownership 推进一步。仅仅知道“谁拥有 state”还不够；owner 还需要暴露足够原子的 semantic operations。否则 caller 虽然不能直接 mutate representation，却仍可能通过多个合法 API call 拼出一个不安全的 check-then-act protocol。
 
----
+TaskForge starter 又故意把 lifecycle status 和 `claim_owners` 放在两个 mutable location。这个教学 fixture 的目的正是让学生看到跨 representation 的 invariant；它不是在建议 production system 长期保留两个独立 claim authorities。无论最后 representation 是一个 object、两个 dict 还是数据库多列，review 的问题都应是：**哪些 facts 必须作为同一个 abstract decision 被观察和提交？**
 
-# 4. Check-Then-Act：最常见的 race shape
+## 3. Function boundary 不是 atomicity boundary
 
-很多 race 都长这样：
+假设有人把 `claim_next()` 整个包进一个函数，甚至再包一层 class method。代码组织变整齐了，但 caller 真正需要知道的是：从哪个时刻开始，其它 actor 必须把这个 claim 当成已经发生？
+
+Herlihy 与 Wing 的 linearizability 给了一个很有用的 operation-level abstraction：一个 concurrent operation 可以被理解为在 invocation 与 response 之间的某个瞬间原子生效，同时保持必要的 real-time ordering。M07 不要求 formal proof，也不会把 linearizability 当成所有 distributed workflow 的默认 consistency level；我们只借它问一个很具体的问题：
 
 ```text
-READ / CHECK
-   ↓
-assume fact remains true
-   ↓
-ACT / WRITE
+claim(job)
+
+invocation ------------------------------ response
+                    ^
+                    |
+          other actors must treat
+          the claim as committed here
 ```
 
-例如：
+这个位置就是本章口语中的 **linearization point / commit point**。
 
-```python
-if job.status == QUEUED:
-    job.status = RUNNING
-```
+这里有一个容易被教学 shorthand 偷换掉的 qualifier：**linearizable history 只需要存在至少一个合法 sequential explanation，并保持 real-time precedence；这个 explanation 不要求唯一。** 同一个正确 concurrent history 完全可能有多个合法 linearizations。对 TaskForge 来说，baseline double claim 错在两个 success 无法对应到任何合法 sequential history；而下面 reference design 之所以要求指出清楚的 code-level point，是为了说明这个**具体 implementation**怎样实现 abstract atomic effect，不是为了证明“正确 history 必须只有一个 linearization”。
 
-问题不是 `if`。
+对于当前 TaskForge lab，instructor reference 选择了一个小而直接的 candidate：先在 lock 外扫描并保留 `after_observe` teaching seam；真正要 commit 时进入一小段同步区域，重新确认 candidate 仍是 `QUEUED`，然后把 `RUNNING` 与 owner 一起提交。如果 re-check 发现 observation 已 stale，就继续扫描后续 queued job。
 
-问题是：
-
-> **从 check 到 act 之间，谁保证 predicate 仍成立？**
-
-如果答案是：
+概念上是：
 
 ```text
-“通常很快”
+observe candidate
+run deterministic after_observe seam
+        |
+        v
+enter claim synchronization boundary
+        |
+re-check job is still QUEUED
+        |
+commit RUNNING + owner + success receipt
+        |
+leave boundary
 ```
 
-那不是 correctness argument。
+这不是本章唯一允许的 design。Lab 还要求比较 single-authority operation；未来如果 state 进入数据库，conditional update 也可能比 process-local lock 更自然。reference path 的价值只是让当前 starter 有一个可以实际验证的最小实现方向。
 
-如果答案是：
+为什么一定要 **re-check**？因为 lock 保护的是 commit decision，不会让 lock 外已经读到的旧事实自动变新。如果两个 worker 都在锁外看见 `QUEUED`，A 先进入 boundary 并 commit；B 随后进入 boundary 时必须重新确认 predicate，否则只是把 race window 移到了 lock 外。
 
-```text
-“CPython 有 GIL”
-```
+为什么 `after_observe` 不能简单放进这把 lock 里？真实 probe 的 barrier 要等两个 worker 都完成 observation；若 A 持锁后进入 barrier，B 会在拿锁之前被挡住，永远到不了 barrier。测试 instrumentation 也参与 concurrency semantics。这里保留 seam 的目的不是 production observability，而是**确定性制造 stale observation**，然后验证真正 authority decision 能拒绝它。
 
-也必须继续问：
+## 4. “加锁修了 safety”之后，系统还能不能前进
 
-- 具体哪些 bytecode/extension calls 会切换？
-- 以后实现换了怎么办？
-- process/remote worker 后怎么办？
-- contract 是依赖语言偶然 scheduling 还是明确同步？
+现在假设 one-job/two-worker case 已经只有一个 success。我们还不能立刻宣布 concurrency design 完成，因为 correctness 至少包含两类不同的问题。
 
-工程上更稳定的 reasoning 是：
+MIT 6.102 Mutual Exclusion 区分 **safety** 与 **liveness**。在当前 TaskForge contract 里，safety 可以包括：同一个 queued job 不会产生两个 successful claim；terminal job 不会被重新 claim；`finish` 只从 `RUNNING` 提交 terminal result。若未来 design 明确加入 claimant-bound completion authority，才可以再增加“非 committed claimant 不能 finish”这一条 safety property。Liveness 则关心健康条件下系统能否继续 progress：queued job 在有可用 worker 时不会因为我们的修复永久卡住，lock ordering 不会造成 deadlock，某个 contender 不会因为同步设计被无界地饿死。
 
-```text
-check + transition
-```
+最极端的“安全”实现当然可以是拿到一把永不释放的锁。double claim 从此不会再发生，因为任何 claim 都不会再发生。这说明“有锁，所以 race 修了”最多是一个 implementation observation，不是完整 design argument。
 
-必须被定义成一个 atomic decision。
+M07 lab 特意加入 two-jobs/two-workers 场景。两个 worker 都先撞上 `job-1`；winner commit `job-1` 后，loser 重新检查发现 stale。一个过度保守的实现可以直接 `return None`。它对 one-job safety 没问题，却不必要地让 `job-2` 留在 queue。Instructor reference 因此选择 `continue`，让 loser 继续扫描；这不是宣称所有 queue 都必须拥有某种强 fairness，而是在当前 `claim_next` 语义下保留一个很基本的 progress expectation。
 
-实现可以是：
-
-```text
-mutex
-CAS
-DB conditional update
-transaction
-single owner event loop
-serialized message handler
-```
-
-不要从 primitive 倒推 contract。
-
----
-
-# 5. Atomicity：不是“一个函数”就天然原子
-
-函数边界：
-
-```python
-def claim_next():
-    ...
-```
-
-只是代码组织。
-
-调用者真正关心的是：
-
-> 从外部看，这个 operation 在什么时候已经算发生？
-
-这需要一个 **commit point / linearization point**。
-
-Herlihy–Wing 的 linearizability 提供了非常有用的抽象：
-
-```text
-invocation ---------------- response
-                  ^
-                  |
-      operation 在这一点“看起来瞬间生效”
-```
-
-例如 safe claim：
-
-```text
-A invokes claim
-B invokes claim
-
-atomic transition QUEUED -> RUNNING(owner=A)
-
-A returns success
-B returns no-job/conflict
-```
-
-我们不要求 CPU 真的只执行一条 instruction。
-
-只要求 abstract history 能对应到某个合法 sequential history。
-
----
-
-# 6. Linearization Point 为什么对 Code Review 有用
-
-面对一段 concurrency patch：
-
-```python
-job = find_queued()
-await reserve_worker()
-job.status = RUNNING
-```
-
-不要只问：
-
-> “是不是用了 Lock？”
-
-更好的问题是：
-
-> **claim 到底在哪一行之后对其它 actor 生效？**
-
-如果答案含糊：
-
-```text
-大概 await 后？
-可能 status 写入后？
-worker reservation 成功后？
-```
-
-说明 operation contract 没闭环。
-
-你还要问：
-
-```text
-如果 reserve_worker 成功但 status write 失败呢？
-如果 status write 成功但 response 丢了呢？
-```
-
-这就自然进入 failure semantics。
-
----
-
-# 7. Safety 与 Liveness 必须分开
-
-MIT 6.102 Mutual Exclusion 明确区分：
-
-## Safety
-
-```text
-坏事不会发生
-```
-
-TaskForge：
-
-```text
-一个 job 不会有两个成功 claim
-terminal job 不会重新变 RUNNING
-非 owner 不能 finish
-```
-
-## Liveness
-
-```text
-好事最终会发生
-```
-
-TaskForge：
-
-```text
-queued job 在 worker 健康且容量存在时最终可被 claim
-lock acquisition 不会永久死锁
-cancel request 不会永远卡 pending
-```
-
-一个方案可能：
-
-```text
-safety = excellent
-liveness = terrible
-```
-
-最极端：
-
-```python
-lock.acquire()
-never_release()
-```
-
-不会再发生 double claim。
-
-因为什么都不发生了。
-
-所以：
-
-> **“加锁修复 race”不是完整 review conclusion。**
-
-必须继续检查：
-
-```text
-lock duration
-lock ordering
-blocking I/O inside lock
-exception cleanup
-cancellation while waiting
-fairness/starvation
-```
-
----
-
-# 8. Shared Memory 与 Message Passing 都需要 Authority Design
-
-共享内存：
-
-```text
-A ─┐
-   ├─ mutable job table
-B ─┘
-```
-
-风险直观：多个 actor 可以 mutate 同一 representation。
-
-message passing：
-
-```text
-A ─request─┐
-           ├─ JobAuthority
-B ─request─┘
-```
-
-优点是 mutation 被 confinement 到 authority。
-
-但不要误以为 race 消失。
-
-如果 protocol 是：
-
-```text
-A -> get_status
-authority -> QUEUED
-
-B -> claim
-authority -> success
-
-A -> claim
-```
-
-那么 A 的“先检查再 claim”仍可能基于 stale fact。
-
-正确设计可能要求：
-
-```text
-claim-if-queued
-```
-
-成为一个 authority 内部的 atomic operation。
-
-所以 M02 的 State Ownership 到 M07 会变成：
-
-> **谁拥有状态还不够；owner 必须提供足够原子的 semantic operations。**
-
----
-
-# 9. Lock 是实现手段，不是设计理由
-
-看到：
-
-```python
-with lock:
-    ...
-```
-
-要问：
-
-```text
-这个 lock 保护哪个 invariant？
-```
-
-如果回答是：
-
-```text
-“保护这个 dict”
-```
-
-通常还不够。
-
-dict 可能包含：
-
-```text
-job lifecycle
-owner mapping
-retry count
-cancel flag
-```
-
-真正需要同步的是 semantic invariant，例如：
-
-```text
-job.status == RUNNING
-iff
-exactly one active owner exists
-```
-
-如果 status 用 lock A，owner 用 lock B：
-
-```text
-两个 dict 都“线程安全”
-```
-
-但跨数据结构 invariant 仍可能坏。
-
-因此同步边界应该跟 invariant boundary 对齐，而不是跟 field/container 对齐。
-
----
-
-# 10. Critical Section 也不能无限扩大
-
-反方向的坏修复：
+同步边界的大小也影响 liveness。下面这种修复可能压住许多 race：
 
 ```python
 with global_lock:
@@ -633,99 +170,117 @@ with global_lock:
     write_logs()
 ```
 
-可能避免很多 race。
+代价是一个慢 dependency 会长时间阻塞所有 claimant，cancellation/exception cleanup 更难，未来还可能和别的 lock 形成 cycle。更稳定的设计目标是保护**最小 semantic atomic decision**，例如 `QUEUED -> RUNNING(owner=A)`；真正 command execution 通常不应该被同一把全局 claim lock 包住。
 
-但也可能：
+Lock scope 还必须和 invariant boundary 对齐，而不是和 container 对齐。假设 status 放在一个 dict，owner 放在另一个 dict；“两个 dict 各自 thread-safe”不能推出 `RUNNING iff committed owner exists` 这样的跨结构 invariant 永远成立。同样，只修 `concurrent_claim.claim_next()` 也不自动意味着整个 lifecycle thread-safe。`worker.claim_next()`、`service.cancel()`、`worker.finish()`、未来的 recovery/admin path 只要能写同一事实，都必须进入 writer map，检查它们是否服从相同 authority/synchronization rule。
 
-```text
-parallelism -> 0
-latency -> lock hold time
-one slow dependency -> block all work
-deadlock/cancellation cleanup -> harder
-```
+如果系统有多把锁，review 也不能只逐函数看 `with lock:`。例如一条 path 先拿 jobs lock 再拿 workers lock，另一条反过来，就可能形成 cycle。建立全局 lock order，或者更好地减少 simultaneous lock ownership，都是 liveness reasoning 的一部分。
 
-更好的思路是识别：
+## 5. Concurrency evidence 应该主动构造坏 history
 
-```text
-最小 atomic decision
-```
-
-例如：
-
-```text
-QUEUED -> RUNNING(owner=A)
-```
-
-只要求 claim decision 原子。
-
-真正 command execution 不应在同一个全局 lock 内。
-
----
-
-# 11. Crash 不是 Exception
-
-普通 exception：
+普通 stress test 很容易写：
 
 ```python
-try:
-    do_x()
-except ...:
-    cleanup()
+for _ in range(10000):
+    start_two_threads()
 ```
 
-至少假设：
+跑过一万次只能说明在这些运行里 scheduler 没让 oracle 看到 bug，不能证明不存在允许的坏 interleaving。它还会把 evidence 变得环境相关：本地偶尔红、CI 偶尔绿，大家最后用 `sleep()` 调概率。
 
-```text
-当前 process 仍然活着
-cleanup code 有机会运行
-```
+M07 的 starter 采用相反策略：如果我们已经知道 bug 需要“两边都基于同一个 `QUEUED` observation”，就用 `threading.Barrier` 直接制造这个条件。测试不是等 scheduler 碰运气，而是在问一个清楚的 claim：
 
-crash：
+> 当两个 claim 都曾观察到同一个 queued candidate 时，最终最多一个能够成功 commit 这个 job。
 
-```text
-process terminated
-power lost
-machine rebooted
-SIGKILL
-runtime died
-```
-
-可能根本没有 finally。
-
-所以这样的 invariant：
+Oracle 也必须看 history，而不只看 final state。下面的断言会漏掉 baseline bug：
 
 ```python
-acquire_resource()
-try:
-    work()
-finally:
-    release_resource()
+assert status == JobStatus.RUNNING
+assert owner in {"worker-A", "worker-B"}
 ```
 
-对 process-local mutex 可能足够，因为 OS 会回收。
+真正高信息量的 observation 还包括两个 operation 的结果：
 
-但对：
+```python
+results = [claim_A_result, claim_B_result]
+assert successes(results) == 1
+```
+
+这把 M03 的 executable evidence 扩展到了 operation history。对于更复杂的 lifecycle protocol，可以记录 invocation / return sequence，再问它是否能解释成一个符合 sequential specification 的合法 history。M07 借用 linearizability intuition 就到这里；不要求学生实现通用 history checker。
+
+确定性 instrumentation 也有自己的 proof boundary。一个 barrier test 可以稳定拒绝已知 double-claim interleaving，但“这个 test 绿了”仍不能证明所有 concurrency bug 都消失；writer map、其它 conflict path、deadlock、starvation 与 operation 被中断后的行为仍需独立检查。搜索和 stress 可以帮助发现新候选，不能替代 contract-level reasoning。
+
+## 6. Crash 之后，哪一步已经发生？
+
+Double claim 的问题发生在两个活着的 actor 交错。现在看第二个 TaskForge teaching target：没有第二个 thread，也会出现跨时间 correctness hole。
+
+`effect_delivery.py` 当前是：
+
+```python
+def deliver_once(job_id: str, effect: Callable[[str], None], *, crash_after_effect=False) -> bool:
+    if job_id in completed_jobs:
+        return False
+
+    effect(job_id)
+
+    if crash_after_effect:
+        raise SimulatedCrash(...)
+
+    completed_jobs.add(job_id)
+    return True
+```
+
+函数名 `deliver_once()` 是故意比实现能支持的 guarantee 更强。真实 probe 使用 `SimulatedCrash` 这个**同进程 failpoint**：先让 external effect 发生，再在 `completed_jobs.add(...)` 之前抛出异常。它不是一次真实 process restart；它确定性证明的是“effect 已发生、completion write 尚未发生，随后 retry 会再次调用 effect”这个 ordering hole：
 
 ```text
-remote lease
-DB status
-external API reservation
-filesystem marker
+[CRASH REPRODUCED] effect happened, completion record was lost, retry produced a duplicate effect
 ```
 
-未必足够。
+这个 failpoint 与真正 process crash 还要再区分一层。当前 `completed_jobs` 只是进程内 `set`；如果 Python process 真正退出，它自己也不会作为 recovery record 留下来。因此 starter 直接给出的 evidence 是 **effect/write ordering counterexample**，不是“这只 set 已经实现 crash recovery”。真正讨论 SIGKILL、power loss、runtime death 或 machine reboot 时，必须额外问哪些 facts 能跨 failure horizon 留存，以及 recovery authority 会看到什么。
 
-必须问：
+普通 exception 与 crash 的区别也因此很重要。`try/finally` 至少假设当前 process 仍有机会运行 cleanup；真正 process death 可能根本不给你 finally。Process-local mutex 常可由 OS 回收，但 durable DB status、remote reservation、filesystem marker 或已经发生的 external effect 不会因此自动被撤销。
 
-> **owner 消失后，谁恢复这个 lifecycle？**
+分析 multi-step operation 时，一个很有效的做法是把 interruption 插到每两个 effect 之间。先严格按当前 starter 的同进程 failpoint / retry horizon 看 effect-first ordering：
 
-这就是 lifecycle ownership 的 failure dimension。
+| Interruption point | local `completed` | external logical effect | same-process retry 后风险 |
+|---|---:|---:|---|
+| before effect | 0 | 0 | 可以再次尝试 |
+| after effect, before record | 0 | 1 | retry 可能重复 effect |
+| after record | 1 | 1 | local bookkeeping 会抑制后续 attempt |
 
----
+为了隔离“仅仅调换顺序能不能解决问题”这个问题，再做一个明确的 thought experiment：**暂时假设 completion record 能跨我们关心的 interruption / recovery horizon 留存**，然后把顺序倒过来，先记录 completion，再做 effect。这个额外 assumption 很重要；当前 starter 的 in-memory `set` 本身并不满足它。在这个 assumption 下，effect-first 的 duplicate window 会被换成另一个 window：
 
-# 12. Failure Window：把 crash 插到每两个 effect 之间
+| Crash point | durable completion record | external logical effect | recovery 后果（在上述 assumption 下） |
+|---|---:|---:|---|
+| before record | 0 | 0 | retry |
+| after record, before effect | 1 | 0 | retry 被抑制，effect 丢失 |
+| after effect | 1 | 1 | 当前顺序下完成 |
 
-分析一个 multi-step operation：
+所以即使给 record-first 补上 durability assumption，它仍不是 exactly-once 修复，只是把 duplicate risk 换成 loss risk。若 record 根本不 durable，真实 restart 还会有另一组行为。并且这些表主要分析 effect/record ordering；如果允许多个 caller 同时进入 `deliver_once()`，还需要另外处理 concurrent check-then-act。不要让一个 failure model 的表格假装覆盖另一个维度。
+
+根因是 local completion record 和 external effect 不属于同一个 atomicity authority。只要这两个事实不能在同一 atomic boundary 内提交，单纯重排本地语句就无法凭空得到“一个 logical operation 恰好产生一个 external effect”的强保证。
+
+## 7. 先选择 guarantee，再谈 retry mechanism
+
+看到上面的两个表以后，“失败后重试，确保只执行一次”已经不是一个足够精确的需求。至少要先问：这里的“执行一次”指的是 attempt、process launch、job terminal state，还是某个具体 external effect？不同事实可能由不同 authority 拥有。
+
+一个系统可以选择不同 guarantee，关键是把 trade-off 写清楚。
+
+**At-most-once attempt** 偏向“不重复 attempt”。一种 candidate 是在放行 attempt 前，先原子地建立一个能跨目标 failure horizon 留存的 admission / attempt record；如果之后 crash，可以接受这个 attempt 对应的 effect 最终没发生。这里的 guarantee 只约束“被 authority 放行的 attempt 次数”，不自动约束 attempt 内部可能触发的所有 downstream effects。它是否真的成立还取决于 concurrent callers 能否重复建立 record、record durability 与 recovery policy，不能只靠“代码顺序看起来 record-first”宣布。
+
+**At-least-once attempt** 偏向“不要因为一次未确认 failure 就永远放弃 work”。在系统另有 durable work identity / recovery trigger、能够在失败后再次尝试未确认 work 的前提下，recovery 会保证至少发起一次 attempt，并可能发起多次。它**不自动等于 at-least-once external effect**：effect 是否至少发生一次，还取决于 attempt 在哪里失败、effect owner 的 contract 与 recovery 何时停止。当前 effect-first teaching shape 只说明：一旦 callback 已成功产生 effect、completion record 又没写，后续 retry 可能 duplicate。starter 的 in-memory set + 同进程 failpoint 是这个 ordering hole 的最小 demonstration，并不单独提供 restart recovery。
+
+如果 external effect owner 支持 **idempotency key**，这条路会更强。Instructor reference 用一个小型 sink 演示：TaskForge 对同一个 `effect_id` 可以调用两次，但 sink 自己拥有 `effect_id -> logical effect already committed?` 的 knowledge；第二次 attempt 被 effect authority 去重，于是：
+
+```text
+callback attempts = 2
+logical sink effects = 1
+```
+
+这里的 guarantee 必须收窄到这个 boundary：**对这个 sink，相同 logical effect ID 的 retry 产生一个 logical sink effect。** 它不能推出整个 job、subprocess、filesystem mutation 或所有 downstream service 都 exactly once。一个 job 可能包含多个 independently observable effects，每个 effect 的 authority 和 dedup capability 都不同。
+
+还有更强的 transactional coordination candidate：如果 completion record 与 effect 本来就能进入同一 transaction，或者系统有专门的 coordination protocol，就可以设计不同 guarantee。M07 不展开具体 pattern；重点是知道当前 starter 没有这种 mechanism，因此 Agent 或 reviewer 不能靠一个 local `set()` 伪造更强 contract。
+
+同样的 failure-window 方法也能迁移到真正的 lifecycle。假设 worker claim 后要：
 
 ```text
 1. mark RUNNING
@@ -734,933 +289,214 @@ filesystem marker
 4. acknowledge claim
 ```
 
-不要只分析 happy path。
+每一步之间 crash 都留下不同事实：
 
-做 failure table：
-
-| Crash point | Persistent facts | External facts | Recovery question |
+| Crash point | State-side facts just before failure | External facts | Recovery question |
 |---|---|---|---|
-| before 1 | QUEUED | no process | safe to retry claim? |
-| after 1 before 2 | RUNNING | no process | orphaned RUNNING? |
-| after 2 before 3 | RUNNING | process exists | how locate it? |
-| after 3 before 4 | RUNNING+pid | process exists | caller may retry claim? |
+| before 1 | job 仍 queued | no process | claim 是否可重新尝试？ |
+| after 1 before 2 | `RUNNING` | no process | 这个 state 是否 durable；若是，谁处理 orphaned running state？ |
+| after 2 before 3 | `RUNNING` | process exists | state / process identity 哪些能被 recovery 重新发现？ |
+| after 3 before 4 | `RUNNING + pid` | process exists | 这些 facts 是否跨 failure 留存；caller 若没看到 ack，下一步做什么？ |
 
-这比一句：
+这张表刻意不假设 state-side facts 一定 durable；“哪些 facts 能跨 failure 留存”本身就是 recovery contract 的一部分。表格没有自动给答案，但会迫使设计暴露 **recovery authority**：原 owner 消失后，谁有资格判断这次 work 仍活着、已经完成、应该终止，还是可以重新执行？
 
-> “我们有 error handling。”
+## 8. Timeout 是 knowledge state；retry 还会制造新的 load
 
-强太多。
+假设 `submit(job)` 穿过 network boundary，caller 等到 deadline 却没收到 response。至少有这些可能：request 根本没到 server；server 收到但尚未 commit；server 已 commit 但 response 丢了；server 已经进入后续 execution。
 
----
+因此 timeout 本身不能推出 operation failed。更准确的说法是：**caller 在 deadline 内没有获得足够信息确认 outcome。** 这是 caller knowledge state，不是一个 server-side lifecycle transition。
 
-# 13. Timeout 是 Knowledge Failure，不是 Operation Failure
+这时 M04 的 request identity 才真正派上用场。若 retry 表示同一个 logical request，稳定 identity 可以让 server 识别“这是同一个 intent 的另一次 attempt”，而不是误创建第二份 work。但要保持边界：request dedup 只回答那个 request boundary 的 intended effect；它不自动把 downstream subprocess/email/payment 也变成 deduplicated effect。
 
-这是 distributed/client-server code 最重要的 mental model 之一。
-
-caller 发请求：
+即使 retry 在语义上安全，也不意味着可以无限重试。Google SRE 的 cascading-failure material 强调，retry attempt 仍然是一个真实 request。假设三层各自允许 **最多 4 次 total attempts**，一个 logical request 最坏可能放大成：
 
 ```text
-submit(job)
+4 x 4 x 4 = 64 downstream attempts
 ```
 
-然后 timeout。
+因此设计文档最好写 `max attempts` 或明确“1 initial + N retries”，不要用含糊的“retry 3 次”让不同人算出不同 contract。
 
-至少有这些可能：
+Review retry policy 时至少要知道：哪一层拥有 retry；什么 error 可 retry；最大 attempts / total deadline 是什么；有没有 backoff、jitter 或 system-wide retry budget。SRE 与 AWS 的 guidance 说明了两个相关 failure mode：exponential backoff 可以降低频率，但如果大量 client 在同一时刻失败、又按相同 schedule 重试，仍会形成 synchronized spike；jitter 的作用之一就是把 attempts 在时间轴上打散。
 
-```text
-A. request 根本没到 server
-B. server 收到但未 commit
-C. server 已 commit，response 丢了
-D. server 正在执行
-```
+所以 retry timing 也是 concurrency behavior，而不只是 performance tuning。一个 operation 可以是 idempotent 的，同时因为无限 retry 把一个局部故障推成 overload positive feedback。**duplicate semantics 与 load/liveness semantics 是两个不同 proof obligation。**
 
-因此：
+## 9. Cancellation 与 restart：state name 不能比现实走得更快
 
-```text
-timeout
-!=
-operation did not happen
-```
+现在把前面的 temporal model 迁移回 TaskForge lifecycle。当前系统对 running job 的 `cancel()` 直接返回 `False`；Lab 只要求你设计未来“running job 可以 cancel”的 protocol，不要求这一章真的把它实现进 core。
 
-更准确：
+一个危险的 spec 是把 `cancel(job)` 压成一个 boolean，却不说明这个 boolean 对应哪个时刻。对于 running work，现实里可能依次发生：request accepted、signal sent、worker acknowledged、process exited、cleanup completed、terminal state recorded。它们不是同一个瞬间。
 
-> **timeout 表示 caller 在 deadline 内没有获得足够信息来确认 outcome。**
-
-这是 knowledge state。
-
-于是 retry semantics 必须和 M04 request identity 结合：
-
-```text
-same request_id
-→ server 能识别 same logical request
-```
-
-但即使 request dedup 解决，也不能自动解决 external effect exactly-once。
-
----
-
-# 14. At-Most-Once / At-Least-Once / Exactly-Once
-
-这些词不要背定义，要看 failure window。
-
-## At-most-once
-
-宁愿漏，也不要重复：
-
-```text
-record done
-then effect
-```
-
-crash window 可能：
-
-```text
-recorded done
-but effect missing
-```
-
-## At-least-once
-
-宁愿重复，也不要漏：
-
-```text
-effect
-then record done
-```
-
-crash window 可能：
-
-```text
-effect happened
-record missing
-→ retry duplicates
-```
-
-## Exactly-once
-
-要想真的保证：
-
-```text
-one logical operation
-→ one externally visible effect
-```
-
-通常需要更强机制，例如：
-
-```text
-same transactional authority
-idempotent external operation keyed by logical request
-transactional message/outbox style coordination
-```
-
-课程此处不展开具体 pattern。
-
-最重要的是认识：
-
-> **如果 completion record 与 external effect 不在同一个 atomicity boundary，单纯调换两行顺序不能凭空得到 exactly-once。**
-
----
-
-# 15. “Idempotent” 也不是魔法
-
-如果 external service 支持：
-
-```text
-send_email(request_id=req-123)
-```
-
-并保证相同 request ID 只产生一个 logical effect，
-
-那么 TaskForge 可以安全地：
-
-```text
-effect(req-123)
-CRASH
-retry effect(req-123)
-```
-
-因为 dedup authority 在 effect owner 那边。
-
-这是一种 authority alignment。
-
-但注意：
-
-```text
-HTTP POST retry request dedup
-```
-
-和：
-
-```text
-subprocess command 本身的 external side effect
-```
-
-不是同一个层面。
-
-TaskForge submit idempotent：
-
-```text
-只创建一个 job
-```
-
-不代表 command：
-
-```bash
-charge-credit-card
-```
-
-就只执行一次。
-
----
-
-# 16. Retry 是新的 Load，不只是新的机会
-
-Google SRE 的 cascading failure 章节非常重要的一点：
-
-```text
-retry attempt
-```
-
-仍然是一个真实 request。
-
-如果：
-
-```text
-frontend 4 attempts
-backend 4 attempts
-database wrapper 4 attempts
-```
-
-一个 logical request 最坏可能变成：
-
-```text
-4 × 4 × 4 = 64
-```
-
-次底层 attempt。
-
-所以 review retry policy 要问：
-
-```text
-谁 retry？
-retry 几次？
-哪些 error retriable？
-有没有 total deadline？
-有没有 backoff？
-有没有 jitter？
-有没有 retry budget？
-```
-
-而不是：
-
-```python
-for _ in range(3):
-    try_again()
-```
-
----
-
-# 17. Backoff 和 Jitter 也是 Concurrency Control
-
-假设 1000 个 client 同时收到 failure。
-
-固定 1 秒 retry：
-
-```text
-t=0: failure spike
-
-t=1: 1000 retries together
-
-t=2: another synchronized spike
-```
-
-backoff：
-
-```text
-1s, 2s, 4s, ...
-```
-
-可以降低频率。
-
-但如果所有 client schedule 一样，仍然同步。
-
-jitter 的目的：
-
-```text
-把 attempt 在时间轴上打散
-```
-
-所以：
-
-> **Retry timing 本身就是 concurrency behavior。**
-
-这不是性能-only concern。
-
-它可能决定系统是否进入 positive feedback outage。
-
----
-
-# 18. Cancellation 不是一个 Boolean
-
-很多系统写：
-
-```python
-cancel(job) -> bool
-```
-
-但对于 running work，至少可能有：
-
-```text
-cancel requested
-signal sent
-worker acknowledged
-process exited
-cleanup done
-terminal CANCELLED recorded
-```
-
-这些不是一个瞬间。
-
-所以 lifecycle 可能需要：
+因此 `cancel accepted` 与 `work stopped` 必须保持 temporal distinction。至于怎样表示它，设计并不唯一。一种 candidate 是增加 `CANCELLING`：
 
 ```text
 RUNNING
-  ↓ request
+   |
+   | cancel request accepted
+   v
 CANCELLING
-  ↓ worker/process confirms stop
+   |
+   | executor confirms termination
+   v
 CANCELLED
 ```
 
-是否需要额外 state 取决于 contract。
+另一种 candidate 是保留 execution status 仍为 `RUNNING`，另有 `cancellation_requested=true` 之类的 request-state projection，直到 executor 真正停止后才把 execution lifecycle 写成 `CANCELLED`。M01 已经用过这种“orthogonal flag / projection”思路。哪个表示更好取决于 caller 需要区分什么、哪些 transition 必须原子、未来查询与恢复如何工作；M07 不应因为 running example 顺手选择一个 state，就替 design authority 做完这道题。
 
-关键是：
+无论选哪种 representation，有一条 temporal consistency 不能丢：如果 `CANCELLED` 在 public contract 里意味着 command 已不再执行，就不能在“只接受了 cancellation request”时提前写 `CANCELLED`。Acceptance success 也不能因为后续 termination failure 被 retroactively 改写成“当初没有接受”；更准确的 model 应分别表达 request 是否被接受、work 是否停止、recovery 是否完成。
 
-> **不要让 state name 宣称比现实更多的事实。**
+`finish` 与 cancellation acknowledgment 还可能 overlap。它们谁赢不能靠最后一次 write；要回到 concurrent protocol，定义 commit point 和 conflict semantics。比如 process 在 cancel request 之后但 signal 生效前自然完成，到底应该记录 `SUCCEEDED` 还是 `CANCELLED`？没有 product contract，代码本身给不出唯一答案。
 
-如果 process 还在跑，却已经写：
-
-```text
-CANCELLED
-```
-
-调用者可能合理地认为：
+Worker crash 又增加另一个 lifecycle pressure：
 
 ```text
-external work 已停止
-```
-
-这就是 temporal contract bug。
-
----
-
-# 19. Lease / Heartbeat：什么时候需要
-
-worker crash 后：
-
-```text
-job = RUNNING
+status = RUNNING
 owner = worker-A
+worker-A disappears
 ```
 
-如果 owner 永远不会主动 cleanup：
+如果只有 owner 会 cleanup，这个 job 可能永久 orphan。一种常见候选是 lease / heartbeat，让 ownership 带 expiry；expiry 后 recovery 可以 reclaim。但 lease 本身又引入 clock assumption 与 stale-owner risk：旧 worker 也许并没有真的死，只是 heartbeat 延迟；新 worker reclaim 后，旧 worker 恢复并继续写结果，就需要 generation/token/version/fencing 一类更强 semantics 阻止 stale owner commit。
 
-```text
-RUNNING 永久 orphan
-```
+M07 只要求你看见这条 reasoning chain，不展开完整 distributed lease/fencing design。重要的是：restart recovery 不是 `finally` 的延长版，而是一个需要单独 authority、state 与 conflict rule 的 protocol。
 
-一种常见设计是 lease：
+## 10. 给 Agent 的任务不能只写“修 race，加测试”
 
-```text
-owner=A
-lease_until=t
-```
+Agent 很容易生成几类看起来合理的伪修复：给整个模块套 global `Lock`；写一个 1000 次 stress test；catch exception 后无条件 retry；看到 request ID 就声称 exactly once；用 `sleep(0.1)` 改变 timing。它们都可能让某个 symptom 消失，却没有完成前面的 correctness argument。
 
-当 lease expired：
-
-```text
-job 可被 recovery/reclaim
-```
-
-但 lease 引入新的问题：
-
-```text
-clock assumptions
-heartbeat delay
-old worker may still be running
-new worker may reclaim
-```
-
-如果旧 worker 恢复后继续写结果：
-
-```text
-stale owner writes
-```
-
-就需要更强 token/version/fencing semantics。
-
-M07 只把这个问题提出来；真正分布式 lease/fencing 可以在后续 architecture/production 模块展开。
-
----
-
-# 20. Deterministic Interleaving Test
-
-普通 race test：
-
-```python
-for _ in range(10000):
-    start_two_threads()
-```
-
-缺点：
-
-```text
-失败不可重复
-环境相关
-跑过不代表安全
-CI 可能 flaky
-```
-
-更高信息量的方法：
-
-```text
-A read QUEUED
----- barrier ----
-B read QUEUED
----- barrier ----
-A/B continue commit
-```
-
-这样我们不是“等待 scheduler 恰好撞出 bug”。
-
-而是直接构造：
-
-```text
-the interleaving that violates the invariant
-```
-
-测试的 claim 也更明确：
-
-```text
-当两个 claim 都基于同一个 QUEUED observation 时，
-最多一个可以成功 commit。
-```
-
----
-
-# 21. Failure Injection 也应该是 Deterministic
-
-不要：
-
-```text
-kill -9 random process
-希望某次刚好在正确 window
-```
-
-教学/单元级 evidence 更适合：
-
-```text
-before_commit failpoint
-after_commit failpoint
-after_external_effect failpoint
-before_ack failpoint
-```
-
-然后逐一回答：
-
-```text
-persistent state 是什么？
-external effect 是什么？
-caller 能观察到什么？
-recovery/retry 应做什么？
-```
-
-production chaos testing 当然有价值。
-
-但它不能替代 protocol-level failure reasoning。
-
----
-
-# 22. Final-State Assertions 不够
-
-假设 double claim 后最终：
-
-```text
-owner=B
-status=RUNNING
-```
-
-测试如果只断言：
-
-```python
-assert owner in {"A", "B"}
-assert status == RUNNING
-```
-
-会绿。
-
-真正应该观察 history：
-
-```python
-results = [claim_A_result, claim_B_result]
-assert successes(results) == 1
-```
-
-这就是 M03 的 oracle 在 concurrency 下升级：
-
-```text
-oracle 不只观察 state
-也观察 operation history / side-effect count
-```
-
----
-
-# 23. History-Oriented Testing
-
-对于 lifecycle operation，测试对象可以是：
-
-```text
-invoke(A, claim)
-invoke(B, claim)
-return(A, success)
-return(B, success)
-```
-
-然后问：
-
-> 能不能把这个 history 排成一个符合 sequential specification 的顺序？
-
-对于：
-
-```text
-claim A -> success
-claim B -> success
-```
-
-不能。
-
-因为 sequential spec 是：
-
-```text
-第一次 claim 后 job 已 RUNNING
-第二次不可能再 success
-```
-
-这是 linearizability 思维最实用的工程形式。
-
----
-
-# 24. Concurrency Invariant 要覆盖所有 Writers
-
-假设你修：
-
-```python
-claim_next()
-```
-
-加了 lock。
-
-但：
-
-```python
-admin_requeue()
-recover_orphan()
-cancel()
-```
-
-仍直接改同一个 lifecycle state。
-
-那么：
-
-```text
-claim path thread-safe
-```
-
-不等于：
-
-```text
-lifecycle thread-safe
-```
-
-M02 的 writer map 在这里重新变得关键：
-
-```text
-invariant
-→ enumerate every writer
-→ every writer obeys same synchronization/authority rule
-```
-
-所以 concurrency review 前必须重新做 writer search。
-
----
-
-# 25. Deadlock Review：不要只看单个函数
-
-经典情况：
-
-```text
-path A:
-lock jobs
-then lock workers
-
-path B:
-lock workers
-then lock jobs
-```
-
-各自看：
-
-```text
-“都用了 lock”
-```
-
-组合：
-
-```text
-A holds jobs, waits workers
-B holds workers, waits jobs
-```
-
-所以 lock review 需要 global order：
-
-```text
-jobs_lock < workers_lock < io_lock
-```
-
-或者更好的 design：减少 simultaneous lock ownership。
-
-这再次说明：
-
-> concurrency correctness 是 protocol property，不是单个 function property。
-
----
-
-# 26. Agent 最容易生成的并发伪修复
-
-## 26.1 “加一个 global Lock”
-
-可能修 safety，但：
-
-```text
-隐藏 architecture issue
-串行化所有 work
-把 blocking I/O 放进 critical section
-```
-
-## 26.2 stress test 1000 次
-
-```text
-1000 passed
-```
-
-不能推出 race-free。
-
-## 26.3 捕获 exception 然后 retry
-
-没有回答：
-
-```text
-操作是否已 commit？
-external effect 是否已发生？
-```
-
-## 26.4 “request_id 所以 exactly once”
-
-只可能覆盖某一个 boundary 的 dedup。
-
-不能自动覆盖：
-
-```text
-subprocess
-email
-payment
-filesystem
-remote tool call
-```
-
-## 26.5 sleep 修时序
-
-```python
-sleep(0.1)
-```
-
-可能改变概率，不是建立 happens-before contract。
-
----
-
-# 27. Agent Task Contract：必须要求并发模型
-
-坏 prompt：
-
-```text
-修一下 worker race，加测试。
-```
-
-更好的任务：
+一个更可审查的 TaskForge task contract 可以是：
 
 ```text
 Current invariant:
 - a queued job may produce at most one successful claim.
-- only the committed owner may finish it.
+- the committed owner and successful claim receipt must agree.
 
 Required analysis before edit:
-1. enumerate lifecycle writers;
+1. enumerate all lifecycle writers relevant to claim state;
 2. provide the concrete double-claim interleaving;
-3. identify the desired linearization point;
-4. state safety and liveness properties separately.
+3. identify the proposed linearization point;
+4. state safety and basic progress expectations separately.
 
 Implementation constraints:
-- do not hold the global claim synchronization boundary during command execution;
-- preserve FIFO selection among jobs that are queued at the commit point;
-- do not change M02–M06 public behavior unless explicitly required.
+- preserve the deterministic after_observe seam;
+- do not hold the claim synchronization boundary during command execution;
+- preserve the current first-eligible/insertion-order selection semantics at the commit decision;
+- if a candidate becomes stale, do not unnecessarily prevent claiming later queued jobs;
+- do not change M02-M06 public behavior unless the task explicitly requires it.
 
 Evidence:
-- deterministic barrier test that fails on baseline;
-- test showing exactly one success under competing claim;
-- test that loser can continue to claim another queued job;
+- deterministic one-job/two-worker reproduction that fails on baseline;
+- exactly one successful claim for the competing job after the fix;
+- two-job/two-worker progress sanity check;
 - full regression suite;
-- explanation of lock/authority scope.
+- explanation of synchronization/authority scope and remaining risks.
 ```
 
-这里 task prompt 本身就是 concurrency specification。
+注意这里没有要求“必须用 `threading.Lock`”。Task contract 约束的是 invariant、proof shape、non-goal 与 evidence，implementation candidate 仍可比较。
 
----
+Crash-safety task 更不能写成“确保 job 只执行一次，失败就 retry”。Agent 在动代码前应该先列出：要保护的是哪个具体 effect；local record 与 effect 是否共享 transaction authority；attempt/retry side 选择什么 semantics（例如 at-most-once attempt 或在明确 recovery assumptions 下的 at-least-once attempt）；这个具体 external effect 又承诺什么 guarantee；downstream 是否支持 stable idempotency key；timeout 后 caller 可能不知道什么；retry budget 归谁。**Attempt policy 与 effect guarantee 都属于 design authority，不应由 Agent 在 patch 中默默替系统设计者决定，更不能用前者替代后者。**
 
-# 28. Crash-Safety Task Contract
+## 11. Review concurrent lifecycle change 时，沿着时间轴检查
 
-坏 prompt：
+完成 patch 后，可以按下面几组问题独立 review。它们不是“用了哪个 primitive”的清单，而是前面 reasoning 的压缩形式。
+
+### Shared authority 与 state projection
+
+- 哪些 actor / path 可以写同一个 lifecycle fact？writer map 是否完整？
+- representation 中有没有第二份可独立漂移的 authority？
+- 某个 table / flag / lease model 是完整 state，还是明确 scope 的 projection？
+- 所有相关 writer 是否服从同一个 atomicity / ownership rule？
+
+### Interleaving 与 atomicity
+
+- operation 在哪里可能 yield、block、await 或被另一个 actor 插入？
+- check 与 act 之间依赖的 predicate 谁保证？
+- abstract operation 的 commit / linearization point 在哪里？
+- final state 与 operation history 是否都能解释成合法 behavior？
+
+### Safety 与 liveness
+
+- 什么坏事不能发生？tests 是否直接观察它？
+- 一个过度保守的 safety fix 会不会让工作永久等、制造 deadlock/starvation，或把慢 I/O 锁进 global critical section？
+- lock order / cancellation / exception cleanup 是否闭合？
+
+### Failure、timeout 与 retry
+
+- crash 可以插在哪两个 effects 之间？每个 window 留下哪些 durable/local/external facts？
+- owner 消失后谁负责 recovery？
+- timeout 后 caller **知道什么、不知道什么**？operation 是否可能已 commit？
+- retry 是 same logical request 还是 new intent？会不会 duplicate effect？
+- retry 是否放大 load；deadline、backoff、jitter、attempt budget 归谁？
+
+### Evidence
+
+- 已知 race 是否有 deterministic reproduction，而不是主要依赖 sleep/stress？
+- failure 是否有 explicit failpoint / failure table？
+- oracle 是否检查 history / side-effect count，而不只看最终字段？
+- evidence 覆盖了哪些 interleavings / failure windows，哪些仍是 remaining risk？
+
+## 12. TaskForge M07 Lab：两个 correctness hole，要给两种答案
+
+[Lab 07](../labs/07-concurrency-lifecycle-failure.md) 把这一章压成两个 teaching targets。
+
+**Target A — double claim** 在当前 process 内已经有足够 mechanism 构造并修复：先写 writer map 和 bad interleaving，再比较实现方向，选择一个清楚的 commit point，用 deterministic barrier 证明同一个 queued job 只产生一个 successful claim，并检查 loser 仍能继续尝试后续 work。
+
+**Target B — external effect crash window** 则故意不提供能够让任意 external callback exactly once 的本地 mechanism。你需要实际复现 duplicate，写 effect-first / record-first failure table，说明为什么 reorder 只是在 duplicate 与 loss 间移动风险，然后选择一个明确 guarantee。Instructor reference 用 idempotent sink 做实验，但 lab 允许其它被当前 authority/mechanism 真正支持的答案。
+
+这两个目标放在一起，是为了训练一个重要判断：有些 correctness hole 可以通过一个更好的 local atomic decision 修复；另一些 hole 暴露的是 authority / contract assumption 不够，继续“多写一点本地代码”反而会制造虚假 guarantee。
+
+## 13. 来源边界与本章不能推出的结论
+
+本章的 race、shared-memory / message-passing concurrency 与普通测试难以稳定复现 race 的 framing 来自 MIT 6.102 Concurrency；atomic region、`await` 可能发生 interleaving、safety / liveness 与 deadlock reasoning 来自 MIT 6.102 Mutual Exclusion。MIT 材料主要是 programming-level concurrency，本章把这些 reasoning 迁移到 Python/threading 与 TaskForge lifecycle，并不把它当 distributed failure model 教材。
+
+Herlihy & Wing 的 linearizability 只在这里提供 operation history 与 invocation-response 之间“看起来原子生效”的概念模型。课程不要求 formal linearizability proof、wait-free/lock-free hierarchy，也不推出“所有 workflow 都应该 linearizable”。
+
+Google SRE 的 cascading-failure material 支撑 retry amplification、有限 attempts / retry budget、backoff 与 jitter 的 reliability reasoning；AWS retry/backoff guidance 作为补充，帮助说明 synchronized retry 会改变系统 schedule。`Barrier` / failpoint 作为 deterministic teaching evidence、TaskForge 的 effect/record failure analysis、at-most/at-least/exactly-once 的具体 boundary reasoning、cancellation/restart representation candidates、lease/fencing extension、Agent task contract 和 guarantee-selection workflow 都属于课程自己的工程综合，而不是这些来源逐字给出的流程。
+
+因此本章不能推出：
+
+- shared state 一律应该加 mutex；
+- message passing 永远优于 locks；
+- 一个 function 或 transaction 的存在就自动完成 lifecycle reasoning；
+- request identity 自动带来 arbitrary external effect exactly-once；
+- idempotent operation 可以无限 retry；
+- stress test 跑得足够多就能证明 race-free；
+- `CANCELLING`、lease、fencing 或某一种 lock layout 是 TaskForge 唯一正确 architecture。
+
+更完整的 claim/source mapping 与 limitations 见 [M07 source audit](../reading-notes/m07-source-audit.md)。
+
+## 14. 把前六章的 model 加上时间
+
+M01 问 invariant 与 legal transition；M02 问 authority；M03 问 executable evidence；M04 把 timeout / retry / request identity放进 public boundary；M05 要求 change sequence 的每个 checkpoint 有窄 proof obligation；M06 在证据不足时先建立 trustworthy feedback。M07 并没有替换这些模型，而是把它们放进同一条时间轴：
 
 ```text
-确保 job 只执行一次，失败后重试。
+             invocation
+                 |
+          read / validate
+                 |
+        interleaving possible?
+                 |
+                 v
+        atomic decision / commit
+                 |
+          external effects
+                 |
+             crash?
+                 |
+             response
+                 |
+            timeout?
+                 |
+              retry?
 ```
 
-这是自相矛盾风险很高的要求。
+以后看到任何 concurrent lifecycle operation，先别问“应该用什么锁”。先问：什么 history 合法；哪些 facts 必须一起 commit；谁可能在中间行动；crash 前后留下什么；caller 在 timeout 后知道什么；recovery authority 在哪里；retry 对 effect 与 load 各造成什么。
 
-应该先问：
+当这些问题有了答案，primitive selection 才是 implementation design。反过来，如果只知道“加了 lock”“CI concurrency test 绿了”，我们仍然没有一个足够完整的 correctness argument。
 
-```text
-什么叫“执行”？
-本地 process launch？
-command external effect？
-terminal state？
-```
+## 可选原始资料
 
-然后选择 guarantee：
-
-```text
-A. at-most-once attempt
-B. at-least-once attempt
-C. external effect supports idempotency key
-D. transactional coordination exists
-```
-
-Agent 不应该替产品/系统设计者默默选一个。
-
----
-
-# 29. M07 Review Checklist
-
-## Shared authority
-
-- 哪些 actor 可以写同一事实？
-- 有没有 ambient writer 绕过 synchronization？
-
-## Interleaving
-
-- operation 在哪里可能 yield/block/await？
-- check 与 act 之间可以发生什么？
-- 能构造最坏 interleaving 吗？
-
-## Atomicity
-
-- abstract operation 的 commit point 在哪里？
-- final state 与 operation history 都合法吗？
-
-## Safety
-
-- 什么坏事绝对不能发生？
-- tests 是否直接检查它？
-
-## Liveness
-
-- 谁可能永远等？
-- lock order / starvation / blocking I/O 怎么样？
-
-## Failure
-
-- crash 可以插在哪些 side effect 之间？
-- crash 前后哪些事实 durable？
-- recovery authority 是谁？
-
-## Timeout / Retry
-
-- timeout 后 caller 知道什么？
-- operation 是否可能已经 commit？
-- retry 是否语义安全？
-- retry 是否会放大 load？
-
-## Evidence
-
-- race 是否 deterministic reproduction？
-- failure 是否 explicit failpoint？
-- 有没有只靠 stress/sleep？
-
----
-
-# 30. 本章实验：两个不同的 atomicity failure
-
-TaskForge M07 会增加两个 teaching targets。
-
-## Target A — double claim
-
-我们会故意让：
-
-```text
-Worker A observes QUEUED
-Worker B observes QUEUED
-A commit success
-B commit success
-```
-
-最终 owner 可能只有一个。
-
-但 history 里有两个 success。
-
-任务：
-
-```text
-find invariant
-construct deterministic interleaving
-choose commit point
-fix with smallest semantic synchronization boundary
-verify safety + basic progress
-```
-
-## Target B — external effect crash window
-
-starter：
-
-```text
-if not completed:
-    effect()
-    maybe_crash()
-    completed.add(job)
-```
-
-任务不是机械改顺序。
-
-而是：
-
-1. 实际复现 duplicate effect；
-2. 写出两种 ordering 各自的 failure table；
-3. 解释为什么 local bookkeeping + independent external effect 无法仅靠 reorder 得到 exactly-once；
-4. 选择一个明确 guarantee；
-5. 如采用 idempotent external sink，验证 retry 仍只有一个 logical effect。
-
----
-
-# 31. 与前六章的连接
-
-M01：
-
-```text
-Invariant 是什么？
-```
-
-M02：
-
-```text
-谁拥有 state？
-```
-
-M03：
-
-```text
-什么 evidence 真的能拒绝错误实现？
-```
-
-M04：
-
-```text
-retry/error 是什么 public contract？
-```
-
-M05：
-
-```text
-如何分阶段安全改变实现？
-```
-
-M06：
-
-```text
-没有 feedback 时先怎样打开 seam？
-```
-
-M07：
-
-```text
-当 operation 可以 overlap / crash / retry 时，
-上述 contract 与 invariant 是否仍成立？
-```
-
----
-
-# 32. 最终 mental model
-
-面对任何 concurrent lifecycle operation，画出：
-
-```text
-          invocation
-              |
-              v
-        read / validate
-              |
-       interleaving?
-              |
-              v
-       atomic decision   <--- linearization / commit point
-              |
-       external effects
-              |
-          crash?
-              |
-              v
-          response
-              |
-          timeout?
-              |
-              v
-           retry?
-```
-
-然后分别回答：
-
-```text
-Safety:
-什么永远不能发生？
-
-Liveness:
-什么最终必须能发生？
-
-Crash semantics:
-commit 前后分别留下什么？
-
-Retry semantics:
-caller 不知道结果时如何继续？
-```
-
-如果这四组问题没有答案，
-
-```text
-“加了 lock”
-```
-
-或者：
-
-```text
-“CI concurrency test 绿了”
-```
-
-都不足以说明设计正确。
-
-> **M07 的核心不是控制线程；而是把“时间、交错、中断和重试”纳入软件 contract。**
+- MIT 6.102 — Concurrency: <https://web.mit.edu/6.102/www/sp26/classes/14-concurrency/>
+- MIT 6.102 — Mutual Exclusion: <https://web.mit.edu/6.102/www/sp26/classes/16-mutual-exclusion/>
+- MIT 6.102 — Message Passing & Networking: <https://web.mit.edu/6.102/www/sp26/classes/18-message-passing-networking/>
+- Herlihy & Wing, *Linearizability: A Correctness Condition for Concurrent Objects*: <https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf>
+- Google SRE — Addressing Cascading Failures: <https://sre.google/sre-book/addressing-cascading-failures/>
+- AWS — Exponential Backoff and Jitter: <https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/>

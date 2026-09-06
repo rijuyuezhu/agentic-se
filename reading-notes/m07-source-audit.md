@@ -253,7 +253,9 @@ invocation ---------------- response
 
 这个位置就是我们口语中所说的 **linearization point / commit point**。
 
-它不要求代码真的只执行一条 machine instruction；数据库 transaction、lock-protected region、compare-and-swap、single-owner event loop 都可能实现等价语义。
+但需要保留 Herlihy–Wing 定义中的一个重要 qualifier。对可能含 pending invocation 的 history `H`，形式定义要求**存在**一个 extension `H'`，使 `complete(H')` 等价于某个 legal sequential history `S`，并且 `S` 保持 `H` 已建立的 real-time precedence。这个 existential witness 不要求唯一；论文紧接着明确指出，同一个 history 可能有多个满足条件的 extension，也可能有多个合法 linearization。因此 “multiple valid linearizations” 本身不是错误。
+
+所以课程需要分两层提问：先问 concurrent history 是否存在至少一个合法 sequential explanation；只有在分析某个 concrete implementation candidate 时，才继续问哪些实际代码事件/region 可以承担这个实现的 linearization point。后者也不要求代码真的只执行一条 machine instruction；数据库 transaction、lock-protected region、compare-and-swap、single-owner event loop 都可能实现等价语义。
 
 ## 为什么放进本课程
 
@@ -277,9 +279,10 @@ operation-level abstract behavior
 
 - 完成 formal linearizability proof；
 - 学习 wait-free / lock-free hierarchy；
-- 把所有 distributed workflow 都硬套 linearizability。
+- 把所有 distributed workflow 都硬套 linearizability；
+- 为每个正确 history 找到唯一 linearization。
 
-M07 只用它帮助学生精确定位 atomic decision point。
+M07 只用它帮助学生先检查 history 是否能解释为至少一个合法 sequential behavior，再对具体 implementation candidate 定位其 atomic decision / linearization region。
 
 ---
 
@@ -449,6 +452,20 @@ safe retry rule
 ```
 
 这比“用什么锁”更接近真实 engineering contract。
+
+### TaskForge failpoint / durability 边界
+
+这里还需要记录一个 **course fixture / local code clarification**，不能把它误归给上述外部来源。当前 `effect_delivery.completed_jobs` 是进程内 `set`，`SimulatedCrash` 是同进程异常；`m07_interleaving_probe.py` 用它确定性制造“external effect 已发生、completion write 尚未发生”的 interruption point，然后在同一进程 retry。
+
+因此这个 probe 直接支持的是 effect/record ordering counterexample，不是“当前 starter 已实现真实 process-restart recovery”。如果要讨论 record-first 在 crash/recovery 后抑制 retry，必须额外声明 completion/attempt record 能跨目标 failure horizon 留存；当前 starter 本身没有这个 durability mechanism。即使补上该 assumption，record-first 仍只是在 duplicate risk 与 loss risk 之间移动 window，不能推出 arbitrary external effect exactly-once。
+
+这项 precision 来自仓库真实 fixture/probe 的核对，是课程自己的 model-boundary 澄清，不是 MIT / Herlihy-Wing / SRE / AWS 的原文 claim。
+
+### 其它 course-synthesis 边界
+
+本章对 at-most-once / at-least-once / exactly-once 的具体 effect-boundary comparison、`cancel accepted` 与 `work stopped` 的 temporal split、`CANCELLING` vs orthogonal cancellation-request projection，以及 lease / heartbeat / fencing 的 restart-recovery extension，也都属于课程自己的工程综合。当前选定的 MIT / Herlihy-Wing / SRE / AWS 材料分别支撑 concurrency、linearizability intuition 与 retry/load reasoning，但**不作为这些 distributed lifecycle design choices 的直接来源**。
+
+因此正文只能把这些内容写成 scoped reasoning / design candidates，并保留 mechanism、durability、authority 与 product-contract qualifier；不能借已有 source 的权威把它们升级成“唯一正确 protocol”或无条件 guarantee。
 
 ---
 
