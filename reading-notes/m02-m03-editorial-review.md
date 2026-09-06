@@ -97,6 +97,8 @@ M05 以后没有混入本批，避免一次 PR 同时审 refactoring / legacy / 
 
 第一版曾在 future-owner 例子里提前写出 `attempt identity` / `lease`。这两个 abstraction 由后续章节建立，M02 此处并不需要它们才能理解“report completion != accept authoritative transition”。最终改成 generic `authoritative execution/recovery state`，只保留后续压力的 foreshadowing。
 
+Reviewer follow-up 又暴露出同类遗漏：ownership taxonomy 的 replica/cache 段还孤立出现了 `fencing`。独立复核后确认 M02 当前 reasoning 只需要“谁有最终权威、怎样判断副本过期、分歧后怎样收敛”，不需要先建立后续 concurrency/recovery vocabulary；因此也收回成这组三个普通问题。
+
 `JobView` 在 §2 第一次出现时明确是“一种候选边界”，后面 projection 分析也改成“前面候选边界里的 `JobView`”，避免一个 illustrative type 因重复出现被自然化成课程 canonical representation。
 
 M00/M01 的 `CANCELLING` / `cancellation_requested` 只在开头用于解释**它们不属于当前 repo v0 baseline**，没有被带入 M02 的实际 authority model。
@@ -118,8 +120,8 @@ M03 在读者先拥有 “tests green but ownership defect remains” 以后才�
 
 ### M03
 
-- representation-exposure regression test 保护 isolation property，不要求 immutable `JobView` 这一种实现。
-- defensive snapshot 是 case-study 验证过的最小 candidate，但 shallow-copy limitation 保留。
+- representation-exposure regression test 只保护 authority isolation：mutation attempt 可以被 read-only observation 拒绝，也可以只修改 detached observation；它既不要求 writable snapshot，也不要求 immutable `JobView` 这一种实现。
+- defensive snapshot 是 case-study 原先实际验证过的最小 candidate，shallow-copy limitation 保留；follow-up probe 另外确认同一 oracle 也接受 frozen `JobView`，但没有把这个 probe 冒充完整 architecture validation。
 - M02 lab 的 exact `job-N` preservation 与 M03 lab 后半段 opaque-ID contract 被明确区分：后者只是**本次 testing exercise 的 authority**，不替未来产品 contract 做最终决定。
 
 ## 7. State/model projection 与 temporal consistency
@@ -130,15 +132,17 @@ M03 将同一规则迁移到 test partition：如果 contract 有两个 state di
 
 当前 TaskForge v0 本身没有这些完整 distributed phases，因此正文只把它们作为跨章 evidence rule，没有伪造 v0 已经具备的状态字段或协议。
 
-## 8. 本轮自审实际发现并修正的问题
+## 8. 本轮自审与 reviewer follow-up 实际修正的问题
 
 1. **M02 factual regression：错误把 `metrics.py` 写成复制 terminal-status set。** 实际 v0 已经通过 `Job.terminal` 局部化这份 knowledge；已改为正例，真正分散的是 transition / collection authority。
 2. **M02 design naturalization：`JobView` 第一版读起来像默认答案。** 已在首次出现和 projection 段都标明 candidate scope，并与 defensive copy / frozen projection 并列。
 3. **M02/M03 contract authority 过宽：第一版把 M03 lab 的 opaque-ID contract 写成“长期 public contract”。** lab 本身只为 exercise 建立 authority；已收回为 lab-specific scope，并明确不决定未来产品 promise。
 4. **跨章 abstraction leak：M02 future example 提前用了 `attempt identity` / `lease`。** 已改成 generic execution/recovery state。
 5. **格式残留：若干一句话 `A != B` / slogan 仍被 `text` fence 包裹。** 已改回 prose；authority map、mutation output、Agent task contract、test-design record 等真正需要结构化阅读的 artifact 保留 fence。
+6. **Reviewer follow-up：M03 regression oracle 与自己声明的 legal implementation set 冲突。** 旧示例无条件执行 `observed.status = ...`，所以 frozen view 会在最终 assertion 前抛异常；这实际上偷加了“observation 必须 writable”的 contract。独立复核 merge-base、lab contract 与当前 candidates 后确认 finding 成立，已同步修正 module / lab / instructor case：mutation attempt 可以被拒绝或只修改 detached observation，authoritative state 必须保持不变。实际 probe 证明 baseline alias FAIL，而 defensive snapshot 与 frozen `JobView` 对 `get()` / `list_jobs()` 都 PASS。
+7. **Reviewer follow-up：M02 replica/cache 段漏掉了一处 `fencing` abstraction dependency。** 独立检查后确认该 term 对本章 reasoning 非必要，且完整 semantics 在后续章节才建立；已改成 authority precedence / staleness / reconvergence 的 plain-language questions，没有补一段提前教学。
 
-这些修正都来自 original-vs-rewrite sweep，不是 reviewer comment 的机械 patch。
+前五项来自 initial original-vs-rewrite self-sweep；后两项来自 reviewer 提示后重新核对实际 contract 和跨章 dependency。这里记录的是复核后的 engineering judgment，不把 reviewer wording 当作自动 authority。
 
 ## 9. Cold-reader flow
 
@@ -166,7 +170,7 @@ M03 将同一规则迁移到 test partition：如果 contract 有两个 state di
 
 ## 11. Validation record
 
-在未修改 `labs/taskforge` production/tests 的前提下，本批实际执行：
+在未修改 `labs/taskforge` production/tests 的前提下，本批及 reviewer follow-up 实际执行：
 
 ```bash
 cd labs/taskforge
@@ -176,12 +180,16 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/mutation_probe.py
 
 结果与正文引用一致：baseline `6 passed`；supplied mutation probe 为 `3 killed, 3 survived`，survivors 仍是 `terminal_forgets_cancelled`、`submit_drops_command`、`list_jobs_hides_terminal`。
 
+针对新的 authority-isolation oracle，还用临时 monkeypatch/candidate view 分别验证了 `get()` 与 `list_jobs()`，没有落盘修改 production/tests。两处结果相同：baseline authoritative alias FAIL；defensive snapshot PASS；frozen `JobView` 在 mutation attempt 被拒绝后仍 PASS。这个 probe 验证的是 oracle 的 legal-implementation acceptance，不是完整 `JobView` architecture。
+
 仓库 hygiene 还执行了：
 
 - `git diff --check`：通过；
 - changed Markdown relative-link existence check：通过；
-- changed-files secret scan：无 finding；
-- `git status`：除两章 rewrite 和本 review record 外无其他 tracked/untracked change；
+- changed Markdown fence balance，以及 M02/M03/review-record page-H1 check：通过；
+- changed-files secret-pattern scan：无 finding；
+- M02/M03 对 `fencing / lease / attempt identity / epoch` 的 dependency-term sweep：无残留；
+- follow-up diff 只涉及 M02/M03 正文、M03 lab instructions、M03 instructor case 与本 review record，共 5 个 Markdown 文件；
 - 测试生成的 `.pytest_cache` 被 ignore，没有进入 diff；没有生成 `uv.lock` 或其他待提交临时文件。
 
-这些结果只证明本批编辑没有破坏当前 lab baseline / probe 和基本仓库卫生；它们不替代本文件前述 semantic/cold-reader review。
+这些结果只证明本批编辑没有破坏当前 lab baseline / probe、当前 regression oracle 接受声明的 candidate set，并保持基本仓库卫生；它们不替代本文件前述 semantic/cold-reader review。

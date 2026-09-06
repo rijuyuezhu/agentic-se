@@ -329,23 +329,30 @@ job = service.get(job_id)
 job.status = JobStatus.SUCCEEDED
 ```
 
-如果我们已经把“read 不授予 authoritative mutation authority”确定为 M03 lab contract，那么 regression test 可以写：
+如果我们已经把“read 不授予 authoritative mutation authority”确定为 M03 lab contract，那么 oracle 必须允许两种结果：read-only observation 可以拒绝 caller 的 mutation attempt；writable observation 也可以接受本地修改，但修改不能穿透到 authoritative state。一个保持这两种实现都合法的 regression test 可以写：
 
 ```python
 job_id = service.submit("echo hi")
 observed = service.get(job_id)
-observed.status = JobStatus.SUCCEEDED
+
+try:
+    observed.status = JobStatus.SUCCEEDED
+except Exception:
+    # 本 lab contract 允许 read-only observation 拒绝 mutation。
+    pass
 
 assert service.get(job_id).status == JobStatus.QUEUED
 ```
 
-在 v0 baseline 上，这个 test **必须先失败**。这一步非常关键：它把“我们认为这里有 bug”变成可执行 counterexample。
+这里 `except Exception` 只包住一次故意的 mutation probe，不是在建议测试代码普遍吞掉异常。之所以不检查 `FrozenInstanceError`、`AttributeError` 或其他特定类型，是因为 M03 contract 没有规定“拒绝修改时必须怎样报错”。如果未来 public contract 明确承诺某个 exception type，再为那条更强的 promise 单独写 test。
+
+在 v0 baseline 上，assignment 会成功并直接改 authoritative object，因此最后一条 assertion **必须先失败**。对 defensive snapshot，assignment 可以成功但只改本地副本；对 immutable `JobView`，assignment 可以被拒绝。两种情况下 authoritative status 都保持 `QUEUED`，所以同一条 regression test 都应通过。
 
 然后才比较 fix。例如一种最小 candidate 是 read API 返回 defensive snapshots；另一种是把 internal mutable entity 与 external immutable `JobView` 分开。两种都可能满足 property，但有不同 trade-off：change size、type clarity、nested mutable fields、performance、API compatibility、future persistence。
 
-注意 design-decision dependency：**M03 的 testing chapter 不应该因为写 regression test，就偷偷决定 immutable `JobView` 永远是唯一 architecture。** test 保护的是 isolation property；copy、frozen projection 或别的实现都应属于 legal implementation set，只要 contract 没要求更强的 identity/type semantics。
+注意 design-decision dependency：**M03 的 testing chapter 不应该因为写 regression test，就偷偷决定 observation 必须 writable，或 immutable `JobView` 永远是唯一 architecture。** test 保护的是 isolation property；copy、frozen projection 或别的实现都应属于 legal implementation set，只要 contract 没要求更强的 identity/type/mutation-attempt semantics。
 
-实现 candidate fix 后，再保存三层 evidence：focused regression 由红变绿；相关 full suite 仍绿；mutation probe 没有因为修 ownership 而失去已有 discrimination。Instructor case study 已经在临时副本实际验证 defensive snapshot candidate 的 red -> green；它仍明确记录 shallow-copy limitation，而不是把小 diff 说成永久终局。
+实现 candidate fix 后，再保存三层 evidence：focused regression 由红变绿；相关 full suite 仍绿；mutation probe 没有因为修 ownership 而失去已有 discrimination。Instructor case study 已经在临时副本实际验证 defensive snapshot candidate 的 red -> green；这轮又额外验证同一个 oracle 接受 immutable view candidate。两种 candidate 仍各自保留 limitation，而不是因为 test 通过就升级成永久终局。
 
 这也是为什么“all tests pass”通常是太弱的 bugfix summary。它没有告诉 reviewer 新 test 是否曾经能抓住旧 bug，也没有说明哪个 contract 被保护。
 

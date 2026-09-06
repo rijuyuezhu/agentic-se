@@ -198,7 +198,7 @@ Information hiding 仍然没有完全回答 TaskForge 的问题。即使 lifecyc
 
 **Storage** 负责让事实跨 process lifetime 保存。SQLite 可以 durable 地存一个 status，却不自动成为所有业务 transition 的 semantic decision maker。应用层、database constraint、stored procedure 都可能承担不同部分的 invariant enforcement；关键是责任要明确。
 
-**Replica / cache** 保存 derived copy 以改善 locality 或性能。它可以过期。如果它和 authority 冲突，系统需要明确 owner-wins、version/fencing 或 reconciliation protocol，而不是让两份 mutable copy 都“差不多算真的”。
+**Replica / cache** 保存 derived copy 以改善 locality 或性能。它可以过期。如果它和 authority 冲突，系统需要明确哪一侧有最终权威、怎样判断副本是否已经过期，以及发生分歧后怎样重新收敛，而不是让两份 mutable copy 都“差不多算真的”。
 
 **View / projection** 为 UI、metrics、search 等用途派生出部分 representation。它应该明确自己只投影哪些事实，并通常能够从 authoritative facts 重新构建。
 
