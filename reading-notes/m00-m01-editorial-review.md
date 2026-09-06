@@ -32,8 +32,8 @@ M00、M01 当前没有独立的 `m00-source-audit.md` / `m01-source-audit.md`。
 | M00 | H2 / H3 | 16 / 5 | 9 / 15 |
 | M00 | `text` fences | 11 | 3 |
 | M00 | `---` | 19 | 0 |
-| M01 | lines | 950 | 386 |
-| M01 | bytes | 18,270 | 26,138 |
+| M01 | lines | 950 | 387 |
+| M01 | bytes | 18,270 | 28,011 |
 | M01 | page-level H1 | 19 | 1 |
 | M01 | H2 / H3 | 30 / 5 | 11 / 28 |
 | M01 | `text` fences | 36 | 2 |
@@ -209,6 +209,24 @@ PR review 还暴露了 **design-decision dependency**：术语即使没有偷跑
 
 reviewer 另外提到 M00 candidate qualifier 稍密。它不是 blocker，但独立顺读后确认其中两次重复没有新的 scope 信息，因此只压掉 crash 段与 change-amplification 开头的重复声明；跨 section 或远距离回引用处仍保留 candidate qualifier，避免为了“更自然”重新引入 design-authority leak。
 
+### 第三轮 PR review：让 temporal phase 与 state / error / evidence 使用同一模型
+
+第三轮 independent review 找到的是前一轮横向 state-dimension consistency 之外的纵向 temporal consistency：当前 candidate 已经明确把 running `cancel()` success 定义为 durable **request acceptance**，但 state machine、error examples 与 test partitions 仍有部分措辞沿用“`cancel()` 负责真正停掉 worker”的旧模型。这个 diagnosis 成立，而且 reviewer 点出的 occurrence 属于同一个 semantic cluster。
+
+当前修订没有扩成完整 distributed cancellation protocol，而是只闭合本章已经选择的两阶段 contract：
+
+1. 在候选第一次出现和 behavior table 后明确区分 **request acceptance** 与 **cancellation completion**；running 两行只规定 `cancel()` 返回时哪些 fact 已成立，不承诺 worker 已停止；
+2. §3.2 只把 missing / already-terminal / durable write failure / caller 无法判断是否已 durable accepted 的 timeout 作为 acceptance outcome 问题；worker unreachable 与 termination failure 被移到 downstream completion / recovery，不能 retroactively 把已经返回的 acceptance success 改成 failure；
+3. §3.4 把“最终已经 cancelled”改成条件式：只有 worker 随后确实完成 cancellation、lifecycle 进入 `cancelled` 后，才讨论 terminal replay；
+4. status-only state machine 新增 `running --cancel complete--> cancelled`，并明确这不是 `cancel()` request edge，而是 worker 确认停止后的 completion edge；
+5. durable invariant 明确保护的是 acceptance promise，而不是 eventual-cancellation guarantee；
+6. §7 evidence partitions 分成 acceptance durability / uncertainty 与 completion / recovery；后者验证后续 lifecycle contract，不改写既有 acceptance outcome；
+7. 练习题只在学生选择 asynchronous contract 时要求分别说明 acceptance 与 completion，不把两阶段模型升级成所有 cancel API 的普遍规则。
+
+反向 sweep 没有发现残留的 `worker failure` 被列为 `cancel()` acceptance failure，也没有再出现“job 最终已经进入 cancelled”这样的无条件 eventual-success 句子。completion failure 最终是保持 running、转 failed、人工恢复还是其他 policy，本章故意不选；那属于另一项 lifecycle / recovery contract decision。
+
+这次经验仍然没有新增 Pass。`EDITORIAL_GUIDE.md` 的 Pass A 在既有 artifact-projection consistency 后增加 temporal-phase consistency：如果 contract 自己区分 acceptance / completion / recovery，后续 error、state transition、durability 与 evidence 必须使用同一个时间模型。`AGENT.md` 只同步对应操作性检查。
+
 ## 8. Cold-reader flow 自审
 
 M00 当前主线是：
@@ -233,9 +251,9 @@ bullet 主要剩在：真正 parallel 的 pressure/questions、review checklist�
 
 - M00 从 cancellation story 进入三种 complexity vocabulary 时，读者是否觉得 abstraction 是被问题逼出来，还是仍有轻微 taxonomy jump；
 - M00 四个核心对象连续出现是否已经形成过多“课程总纲”感；
-- 新 behavior table 把 `running` 细分成 `cancellation_requested=false/true` 后，是否真正更精确而没有让 M01 过早陷入二维状态细节；
-- representation example 明确只是 partial projection、且不决定 `cancellation_requested` 的 storage co-location，这个 qualifier 是否足够清楚而不过度防御；
-- `semantic outcome` 与 `cancel(...) -> bool` concrete encoding 的区分是否已经消除表面矛盾；
+- acceptance / completion 两阶段现在贯穿 table、error、state machine、durable invariant 与 evidence 后，是否读起来是同一条 temporal-semantics reasoning，而不是 reviewer-driven qualifier 堆积；
+- `running --cancel complete--> cancelled` 是否足够清楚地区分了 API request acceptance 与后续 lifecycle completion，又没有暗示 eventual completion 必然成功；
+- completion / recovery failure 被移出 `cancel()` acceptance outcome 后，是否仍给读者留下了足够清楚的“后续仍需定义 contract”的边界，而没有过早设计 recovery policy；
 - M01 后半的 specification strength、tests 与 Agent workflow 是否仍属于同一条 argument；
 - 是否还有 baseline 中 technically present 但 pedagogically compressed too far 的 distinction；
 - prose 是否仍有过度整齐、作者不断总结的 generated-answer rhythm。

@@ -19,7 +19,7 @@ def cancel(job_id):
 
 它非常容易解释：只有还没开始的任务可以 cancel。已经 running、finished 或 cancelled 都返回 `False`。
 
-另一个实现也很合理：如果 job 已经 cancelled，再次调用仍然返回 success；如果正在 running，不立刻把状态改成 cancelled，而是 durable 地记录 cancellation requested，让 worker 在安全点停止。
+另一个实现也很合理：如果 job 已经 cancelled，再次调用仍然返回 success；如果正在 running，不立刻把状态改成 cancelled，而是 durable 地记录 cancellation requested。之后由 worker 尝试在安全点停止执行；只有实际停止得到确认以后，lifecycle 才可能再进入 `cancelled`。这里已经出现了两个不同时间阶段：**request acceptance** 和 **cancellation completion**。
 
 哪一个更“正确”？只看 Python 代码无法回答。你必须先知道产品究竟希望 caller 可以依赖什么：
 
@@ -92,6 +92,8 @@ contract 的价值就在这里：它不是文档装饰，而是在两边之间�
 | cancelled | — | 重复调用仍得到 success | success | no additional transition |
 | missing | — | 找不到目标 | not_found | none |
 
+对两个 `running` 行，这张表定义的是 **`cancel()` request acceptance**：调用返回时哪些 fact 已经成立。worker 之后是否真正完成 cancellation 属于后续 lifecycle phase，不由这两行 success 偷偷承诺。
+
 这张表不是后续 M04 lab 的唯一标准答案。M00 为了追踪 change cost，曾暂时假设用 `CANCELLING` 表示过渡状态；这里故意选择另一种 representation：public `status` 继续是 `running`，另一个 durable fact 记录 cancellation request。M04 的实验还会采用更严格的 cancel semantics。三者不是互相推翻，而是在展示同一个 product pressure 可以对应不同 contract；只有先说明 decision criterion，才能判断哪个设计适合当前系统。
 
 例如 running 行为什么不能直接写成 `status = cancelled`？因为 subprocess 也许仍在执行。若状态名对外声称“已经 cancelled”，而现实 side effect 仍可能继续，系统就在制造 false claim。
@@ -102,13 +104,15 @@ contract 的价值就在这里：它不是文档装饰，而是在两边之间�
 
 `send_email(user) -> None` 的返回类型几乎没有告诉 caller 任何重要信息。operation 可能同步发送，也可能只是 enqueue；返回前 message 可能已 durable，也可能仍只在 memory queue；network failure 可能意味着 no effect，也可能意味着 outcome unknown。
 
-同样，`cancel()` 返回 success 可以有很多时间语义。在当前候选 contract 中，running job 的 success **只承诺 `cancellation_requested = true` 已 durable committed**；它不承诺 worker 已观察到 request、subprocess 已退出，更不承诺外部 side effect 已停止。换一套 contract 完全可以选择别的时间点，但必须把这个时间点说出来，因为它决定 caller 接下来能做什么。
+同样，`cancel()` 返回 success 可以有很多时间语义。在当前候选 contract 中，我们明确把 **request acceptance** 和 **cancellation completion** 分开：running job 的 `cancel()` success **只承诺 `cancellation_requested = true` 已 durable committed**。它不承诺 worker 已观察到 request、subprocess 已退出，更不承诺外部 side effect 已停止；这些属于后续 completion phase。换一套 contract 完全可以选择别的完成点，但必须把这个时间点说出来，因为它决定 caller 接下来能做什么。
 
 所以在 concurrent / distributed system 里，**temporal semantics 是 specification 的一部分**。不要用一个模糊的 success 把多个时间点假装成同一件事。
 
 ### 3.2 Error semantics 必须支持 caller 做决定
 
-如果 `cancel(job_id) -> bool` 把 missing、already terminal、storage failure、worker failure 和 timeout 全部压成 `False`，caller 下一步就只能猜。
+在当前候选 contract 里，先只看 request acceptance。missing、already terminal、无法把 request durable 写下，以及“caller timeout 到无法判断 request 是否已经 durable accepted”等情况，如果全被 `cancel(job_id) -> bool` 压成同一个 `False`，caller 下一步就只能猜。
+
+worker unreachable 或 termination 最终无法完成是另一阶段的问题：如果 `cancel()` 已经按当前 contract 返回 success，它们不会 retroactively 把那次 acceptance 改成 failure。系统仍然需要为 completion / recovery 设计可观察语义，但那不是这个 `cancel()` success 已经承诺的内容。
 
 这并不意味着 error class 越多越好。需要判断的是：不同情况是否要求 caller 采取不同动作，是否有不同 side-effect guarantee，是否允许 retry，以及哪些 mechanism failure 应该被 boundary 翻译成更稳定的 public semantics。M04 会专门深入这部分。
 
@@ -124,7 +128,7 @@ contract 的价值就在这里：它不是文档装饰，而是在两边之间�
 
 当前候选最直接的 replay window 其实发生在 job 仍然 `running` 时：第一次 `cancel` 已经把 `cancellation_requested=true` durable 写下，但 response 丢失，worker 还没有停止。caller 重试后面对的是“同样是 `running`，但 cancellation request 已经存在”的第二个 durable state。这里我们明确规定：第二次调用仍得到 `success`，并且不产生额外 intended effect。
 
-job 最终已经进入 `cancelled` 后再次调用，本候选同样选择返回 `success`。这两个选择都不是在声称“所有 cancel API 都应该如此”，而是在说明 response 丢失或重复发送时，repetition behavior 必须由 contract 明确决定，不能让 caller 根据当前实现去猜。
+如果 worker 随后确实完成 cancellation、lifecycle 进入 `cancelled`，再次调用时本候选同样选择返回 `success`。这两个选择都不是在声称“所有 cancel API 都应该如此”，而是在说明 response 丢失或重复发送时，repetition behavior 必须由 contract 明确决定，不能让 caller 根据当前实现去猜。
 
 后面的 M04 会把“同一个 logical request 重复发生时不产生额外 intended effect”精确定义为 idempotency，并讨论它为什么不能只靠 payload equality 推断。这里先记住更基础的事实：**repetition semantics 也必须被 specification 决定**，不能等到 retry 出现后再让 implementation 临时猜。
 
@@ -180,28 +184,23 @@ FinishedJob(...)
 
 ### 4.4 State machine 把 lifecycle protocol 拉成可 review artifact
 
-当一个 lifecycle 已经不断出现 `if status == ...`，继续加 branch 以前先画状态转换，通常更容易暴露遗漏：
+当一个 lifecycle 已经不断出现 `if status == ...`，继续加 branch 以前先画状态转换，通常更容易暴露遗漏。只看 public `status` 这一维，当前候选至少允许：
 
 ```text
-            reserve
- queued  ------------> running
-   |                     |   \
-   | cancel              |    \ fail
-   v                     |     v
-cancelled                |   failed
-                         |
-                         | finish
-                         v
-                      succeeded
+queued  --reserve----------> running
+queued  --cancel-----------> cancelled
+running --finish-----------> succeeded
+running --fail-------------> failed
+running --cancel complete--> cancelled
 ```
 
 然后明确 terminal set，并逐条问 transition：谁能触发？是否需要 atomic？返回前需要 durable 到什么程度？并发 transition 怎样 resolve？crash 在中间发生时 caller 能知道什么？state machine 的价值不是“画过图”，而是把散落在很多 `if` 中的 protocol contract 拉到同一个可 review artifact 上。
 
-这里还要防止另一种过度承诺：一张 state-machine 图只描述它选择建模的 state dimension。当前候选 `cancel` contract 中，running job 的取消不会改变 public `status`，而是持久化 `cancellation_requested = true`，所以在这张只画 status 的图里不会出现一条 `running -> ...` cancel edge。如果这个 flag 会改变后续允许的 transition，就必须把它作为 transition annotation 或新的 state dimension 纳入模型。**State machine 是 contract 的一种视图，不是完整 contract 本身。**
+这里还要防止另一种过度承诺：一张 state-machine 图只描述它选择建模的 state dimension。当前候选 `cancel` contract 中，**API request 被接受这一刻**不会改变 public `status`，而是持久化 `cancellation_requested = true`；因此不能把 `cancel()` success 画成 `running -> cancelled`。上图里的 `running --cancel complete--> cancelled` 是后续 completion edge：只有 worker 确认执行已经按 cancellation 停止时才可能发生。如果 `cancellation_requested` 还会改变其他 transition 的合法性，就要把它作为 transition annotation 或新的 state dimension 纳入模型。**State machine 是 contract 的一种视图，不是完整 contract 本身。**
 
 ### 4.5 Durable invariant：成功承诺可以跨 crash
 
-如果 API 对 caller 明确确认“cancellation request 已 durable 接受”，那么 daemon crash/restart 后这个 request 不能凭空消失。
+如果 API 对 caller 明确确认“cancellation request 已 durable 接受”，那么 daemon crash/restart 后这个 request 不能凭空消失。这个 durable invariant 保护的是 **acceptance promise**；它本身并不承诺 worker 最终一定能完成 cancellation。
 
 这个 invariant 把 API contract 与 persistence 连接起来，也说明很多 architecture decision 最后都可以还原成同一个问题：系统准备在哪里、用什么机制保持某些关键事实？
 
@@ -277,8 +276,10 @@ test 与 implementation 完全一致，却可能一起违反需求。测试没�
 - state / durable fact：queued、`running + cancellation_requested=false`、`running + cancellation_requested=true`、各 terminal state、missing；
 - repetition：first call、response 丢失后的 repeat、多次重复；
 - concurrency：cancel 与 reserve / finish 的不同相对顺序；
-- durability：crash 发生在 durable write 前后，以及 success response 之后 restart；
-- failure：storage unavailable、worker unreachable、termination 无法完成。
+- acceptance durability / uncertainty：durable write 前 storage unavailable、write 后 crash、response 丢失导致 caller 不知道 request 是否已 accepted；
+- completion / recovery：request 已 accepted 后 worker unreachable、termination 无法完成，以及系统随后如何暴露或恢复这个状态。
+
+最后一类 evidence 不应该 retroactively 改写已经返回的 acceptance success；它验证的是后续 lifecycle / recovery contract。
 
 这不是要求每个函数都机械做五维笛卡尔积，而是说明测试空间应该由**语义分区**产生。值得测的是会改变 contract outcome 的 distinction。
 
@@ -361,7 +362,7 @@ def list_jobs(db):
 
 ### 10.2 写一个完整的 `cancel` contract
 
-不要照抄本章候选表。自己选择 running、already-cancelled 和 missing 的语义，并写清楚 side effect、durability、concurrency、repetition/error behavior 和 non-goals。最后说明你的设计比另一种候选 contract 强在哪里，又限制了哪些 implementation freedom。
+不要照抄本章候选表。自己选择 running、already-cancelled 和 missing 的语义，并写清楚 side effect、durability、concurrency、repetition/error behavior 和 non-goals。如果你选择“先接受 request、稍后完成”的 asynchronous contract，还要分别写清 acceptance success 承诺什么、completion 怎样被观察，以及 completion failure 是否会影响已经返回的 acceptance outcome。最后说明你的设计比另一种候选 contract 强在哪里，又限制了哪些 implementation freedom。
 
 ### 10.3 找 invariant 的 enforcement point
 

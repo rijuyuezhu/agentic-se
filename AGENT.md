@@ -77,7 +77,8 @@ M04 pilot 的经验是：reviewer 对 narrative rewind 的 diagnosis 成立，�
 - security/disclosure qualifier；
 - source-backed claim 与 course synthesis 的边界；
 - lab normative contract 与后续模块依赖；
-- 新引入的 contract-relevant state dimension 是否贯穿相关 behavior table / representation / state machine / test partition；如果某个 artifact 只投影一部分 state，必须明确 scope，不能靠读者猜遗漏维度。
+- 新引入的 contract-relevant state dimension 是否贯穿相关 behavior table / representation / state machine / test partition；如果某个 artifact 只投影一部分 state，必须明确 scope，不能靠读者猜遗漏维度；
+- contract 若区分 acceptance / completion / recovery 等 temporal phase，error、state transition、durability 与 test/evidence 必须使用同一时间模型；不要把 downstream completion failure 重新解释成此前 acceptance success 的失败，除非 contract 明确如此。
 
 “概念字符串还存在”不等于教学内容被保留。M04 的 `mask/recover` 就曾 technically present、但对 cold reader 过薄；最终用一个简短 replica fallback 场景恢复了 reasoning，而没有恢复碎片化小标题。
 
