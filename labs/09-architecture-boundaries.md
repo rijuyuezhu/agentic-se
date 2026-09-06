@@ -209,7 +209,7 @@ not yet modeled
 
 1. API/control component 与 worker 可以运行在不同机器；
 2. worker crash 不应让 API 进程一起 crash；
-3. lifecycle transition 必须仍只有一个 semantic authority；
+3. target architecture 的 normal product transition policy 必须收敛到一个明确 semantic authority；current starter 并不满足这一点；
 4. remote worker 不得获得 durable-store direct-write credential；
 5. snapshot v1 compatibility surface 暂时保留；
 6. 一次 worker network timeout 不能自动等价为“job 没执行”；
@@ -342,13 +342,20 @@ B simpler
 reference direction：
 
 ```text
-A1. Only Job Authority accepts lifecycle transitions.
+A1. Normal product transition decisions are routed through Job Authority;
+    named historical/fault-injection paths remain explicit exceptions.
 A2. Remote workers never mutate durable Job state directly.
 A3. Worker timeout does not itself prove execution absence.
 A4. Snapshot remains a derived export in this phase.
-A5. Read/reporting paths cannot become hidden lifecycle writers.
-A6. Worker protocol must support rolling N/N-1 coexistence once independently deployed.
+A5. Read/reporting paths should not acquire lifecycle mutation capability
+    through authority-bearing mutable handles.
+A6. Independently deployed authority/worker versions require an explicit
+    supported coexistence policy/matrix.
 ```
+
+这些是 target/reference properties，不是“做完最小 refactor 就全部被证明”的 acceptance checklist。尤其 A5 比 `no direct state import` 更强：如果 `get()` / `list_jobs()` / `claim_next()` 仍返回 authoritative mutable `Job`，caller 即使不 import `state.py`，也可能经 alias 获得 mutation capability。M02 已经把这类 handle 识别为 authority leak。
+
+本轮最小 implementation **不要求**顺手引入 `JobView`、defensive copy 或其他 observation redesign；因此它只能证明 normal transition logic / direct-state access 的 localization，以及 worker 不再需要 storage knowledge。完整 mutation-capability isolation 是明确的 residual M02 risk / follow-up。A6 同理只要求明确 coexistence policy；`N/N-1` 可以是其中一个合理选择，但不是自动成立的 MUST。
 
 你可以不同意其中某条，但必须给替代模型。
 
@@ -459,7 +466,9 @@ Status: Proposed / Accepted
 
 目标：
 
-> normal product path 不再让 `worker.py` 自己理解和修改 Job representation。
+> normal product transition implementation 不再由 `service.py` / `worker.py` 直接访问和修改 `state` representation；transition policy / direct-state access 收敛到明确 semantic seam，worker 不再需要 storage knowledge。
+
+这不是“所有 mutation capability 都已隔离”的同义词。如果 authority/service 仍把 authoritative mutable `Job` reference 返回给 caller，caller 仍可能绕过 semantic operation 直接改 state。这个 M02 residual risk 本轮明确不靠新增 `JobView` 等机制解决。
 
 推荐做法：
 
@@ -524,8 +533,11 @@ metrics.py
 本实验只要求：
 
 ```text
-semantic authority becomes explicit
+normal transition policy / direct-state access
+becomes localized behind an explicit semantic seam
 ```
+
+不要把这个 structural move 升级成 complete authority isolation。`get()` / `list_jobs()` / `claim_next()` 是否泄漏 authoritative mutable handle 是另一条 capability property；M02 已经定义它，本轮只把它记录为 residual risk，而不扩大 implementation scope。
 
 未来：
 
@@ -543,7 +555,7 @@ in-memory storage
 
 # 14. Architecture Fitness Check
 
-refactor 后写一个小检查。
+refactor 后写一个小检查。它的 scope 是 **direct-state dependency localization**，不是 complete mutation-capability isolation。
 
 例如：
 
@@ -555,6 +567,8 @@ normal product modules:
 
 must not import taskforge.state
 ```
+
+这个 check 能证明 normal modules 不再直接依赖 `state` namespace；它**不能**证明 caller 没有通过 live mutable `Job` alias 获得 write capability。若本轮真的要声称 A5 已被 implementation 满足，就需要额外的 M03-style capability evidence，能够区分 detached/read-only observation 与 authority-bearing handle。本 Lab 刻意不把这项 redesign 加进最小 refactor。
 
 不要检查：
 
@@ -614,6 +628,7 @@ record why no longer applicable
 | M07 fault-injection artifact intentionally preserved | M07 probe |
 | v1 snapshot compatibility preserved | M08 probe |
 | normal product path no direct state import | architecture fitness check |
+| complete mutation-capability isolation | **not established by this minimal M09 refactor**；record as residual M02 risk |
 
 ---
 
@@ -655,7 +670,8 @@ Support claims with file/line evidence.
 Using the confirmed system model, design two architectures for remote workers.
 
 Requirements:
-- one semantic lifecycle authority;
+- normal product transition policy converges on one semantic lifecycle authority;
+- named historical/fault-injection exceptions remain explicit;
 - worker runs on another machine;
 - worker crash isolated from API process;
 - worker has no direct durable-store write credential;
@@ -687,11 +703,14 @@ Do not add infrastructure without tying it to a stated requirement.
 Implement the accepted authority-boundary refactor only.
 Do not add network, database, message queue, framework, DI container, or deployment manifests.
 
-Make normal worker code depend on accepted lifecycle semantics rather than storage representation;
+Localize normal transition policy/direct-state access behind the accepted semantic seam.
+Make normal worker code depend on lifecycle semantics rather than storage representation;
 do not satisfy this by merely wrapping the same storage detail in a new interface.
+Do not claim that this proves detached/read-only Job observation or full mutation-capability isolation,
+and do not add JobView/copying solely to close that residual M02 issue in this phase.
 Preserve existing observable behavior.
 Keep the M07 fault-injection module as an explicit historical exception.
-Add a small architecture fitness test for normal product modules.
+Add a small direct-state architecture fitness test for normal product modules.
 Run core tests and M05-M09 probes.
 ```
 
@@ -703,8 +722,9 @@ reviewer 不看 Agent summary，自己检查：
 
 ## Architecture
 
-- authority 是否真的唯一？
-- storage 是否偷偷泄漏？
+- normal transition policy / direct-state access 是否真的 localize 到 accepted seam？
+- storage knowledge 是否仍从 normal worker path 泄漏？
+- `get/list/claim` 是否仍返回 authority-bearing mutable handle？如果是，是否诚实记录为 residual M02 risk，而不是误称 complete authority isolation？
 - worker 是否只是换了一个名字继续写 representation？
 - snapshot role 是否明确？
 - historical exception 是否 document？

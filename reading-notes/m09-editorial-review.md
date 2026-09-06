@@ -207,9 +207,10 @@ M09 inherits M07/M08 temporal contracts and must not flatten them into topology 
 - effect success + lost finish -> duplicate window remains；authority boundary alone does not produce exactly-once；
 - worker process death -> process isolation, **not** automatic safe requeue；lease/recovery remains future work；
 - authority process death -> lifecycle write outage; current starter memory means restart reconciliation is not solved；
-- process split -> independent version skew, so worker protocol gains a compatibility window / rollout / rollback obligation；
+- process split -> independent version skew, so worker protocol gains an explicit coexistence / rollout / rollback policy obligation；`N/N-1` is one possible policy, not an automatic MUST；
 - snapshot export on disk -> durable artifact, **not** durable lifecycle authority/recovery truth；
-- moving lifecycle code behind one module -> locality, **not** proof that production claim is atomic under concurrency.
+- moving normal transition code/direct-state access behind one module -> locality, **not** proof that production claim is atomic under concurrency or that all mutation capability is isolated；
+- a returned live mutable `Job` can remain an authority-bearing handle even when its caller never imports `state.py`; direct-import fitness evidence cannot close that M02 property.
 
 These qualifiers are repeated in module, Lab and instructor case where normative exercises could otherwise overclaim.
 
@@ -239,6 +240,8 @@ Course synthesis / repo-specific reasoning includes the consequence heuristic, `
 5. **Read-model compression**：first rewrite draft reduced old read-model/writer-authority distinction to one list; restored a compact explicit explanation.
 6. **Risk-register compression**：restored compact risk/mechanism/evidence table so known gaps remain reviewable.
 7. **ADR Markdown hygiene**：fenced ADR examples originally used `#` / `##`, creating false H1/H2 counts in simple structure checks; converted example labels to plain text without changing content.
+8. **PR #14 authority review**：independently reproduced the mutable-`Job` alias capability leak and rechecked M02/M10; narrowed M09 from “single authority established” to normal transition-policy/direct-state localization, while recording complete mutation-capability isolation as a residual M02 risk rather than adding `JobView`.
+9. **PR #14 compatibility review**：independently confirmed module/case already treat `N/N-1` as a policy choice; removed the Lab-only MUST and restored an explicit supported coexistence policy/matrix obligation.
 
 ## 12. Cold-reader / rhythm review
 
@@ -248,7 +251,7 @@ The chapter no longer asks the reader to retain a long architecture vocabulary l
 
 ## 13. Final validation evidence
 
-Final semantic sweep 后实际重新运行：
+Initial rewrite 与 PR #14 authority/compatibility follow-up 后都实际重新运行；以下结果在 follow-up 后再次确认：
 
 ```text
 cd labs/taskforge
@@ -282,10 +285,10 @@ Hygiene / structure：
 - `git diff --check` PASS；
 - changed Markdown fences balanced；
 - changed relative Markdown links resolve；
-- module 429 行、1 个 H1、0 个 page-level `---`；
-- instructor case 398 行、1 个 H1、0 个 page-level `---`；
+- module 442 行、1 个 H1、0 个 page-level `---`；
+- instructor case 410 行、1 个 H1、0 个 page-level `---`；
 - `COURSE_DESIGN.md` M09 core sweep covers architectural significance/reversal consequence、process/network boundary、storage/durability boundary、data ownership、failure domain、control plane/data plane、dependency inversion；
-- current-vs-target overclaim sweep found no stale claim that starter already has Job Authority/durable store/recovery source, or that timeout proves non-execution；
+- current-vs-target overclaim sweep found no stale claim that starter already has Job Authority/durable store/recovery source, that direct-import localization proves complete mutation-capability isolation, that timeout proves non-execution, or that N/N-1 is a universal MUST；
 - Markdown secret scan 无 finding；
 - 无新增 `uv.lock` / temp artifact。
 
@@ -304,6 +307,38 @@ This record is not self-approval. Reviewer should independently test at least:
 - whether worker timeout/effect/lost-finish/authority-crash semantics remain consistent with M07；
 - whether process split correctly inherits M08 version-skew/rollback obligations；
 - whether failure-domain/cell discussion is useful transfer rather than speculative architecture；
-- whether fitness rules distinguish normal product path from historical teaching/repair/migration exceptions；
+- whether fitness rules distinguish normal product path from historical teaching/repair/migration exceptions **and** stay scoped to direct-state localization rather than claiming capability isolation；
+- whether returned mutable `Job` handles are explicitly treated as residual M02 authority risk rather than hidden by import-topology evidence；
+- whether worker protocol requires an explicit supported coexistence policy/matrix without hard-coding N/N-1 as universal support contract；
 - whether read-model replication / writer authority and risk-register semantics survived compression；
 - whether any old M09 qualifier, non-goal or source limitation disappeared in the 1800 -> ~430 line rewrite.
+
+## 15. PR #14 review 后的独立复核
+
+Reviewer 的两条 finding 没有直接照单全收；本轮重新对了真实 starter、M02 authority contract、M10 downstream teaching seam，以及 M08/M09 compatibility chain。
+
+### Authority localization vs mutation-capability isolation
+
+真实 starter 独立复现：
+
+```text
+claimed is service.get(jid) => True
+claimed.status = SUCCEEDED
+service.get(jid).status => succeeded
+```
+
+因此 `Job` 确实是 authority-bearing mutable handle。M02 明确教过：read/observation 不应无意授予 authoritative mutation authority；而 M10 instructor case 又明确把 `service.get()` 继续返回 mutable `Job` 视为既有 M02 issue，并把后续 candidate 的 scope 定义为 authority localization。两者共同说明：M09 不应为了把一句 invariant“做真”而新增 `JobView`，也不应把 `no direct state import` 证据夸成 complete authority isolation。
+
+最终 artifact chain 统一成：
+
+- target architecture 可以要求 normal product transition policy 收敛到明确 semantic authority；
+- M09 minimal refactor 证明 normal transition logic/direct-state access localization 与 worker storage-knowledge removal；
+- historical `concurrent_claim.py` 仍是 named exception；
+- mutable observation/claim handle 可能继续泄漏 mutation capability，明确作为 residual M02 risk / non-goal；
+- 如果未来要声称 A5 已实现，需要 capability-focused evidence（detached/read-only view、defensive copy 或其他机制只是候选，不是本轮强制设计）。
+
+### Compatibility policy
+
+Module 已写“`N/N-1` 是否支持”需要决定并先定义 supported coexistence matrix；instructor case 也明确说 A6 的意义不是喊 `N/N-1`。只有 Lab 把它升级成 MUST，因此这次只修 Lab artifact drift：独立部署带来的 obligation 是**明确支持矩阵/窗口、rollout/rollback 与 unknown-version policy**，而不是默认 N/N-1 一定互通。
+
+本轮没有新增/修改 TaskForge production teaching code，没有引入 `JobView` 或 capability-isolation test，也没有修改 M02/M10。这样既修正 M09 自己的 authority claim，又保留 M10 对同一 residual issue 的后续 review 教学。

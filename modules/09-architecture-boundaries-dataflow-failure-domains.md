@@ -304,13 +304,17 @@ M09 probe 的 direct-import inventory 是 evidence，不是 architecture score�
 
 `concurrent_claim.py` 故意保存 M07 的 unsafe check-then-act 和独立 `claim_owners` registry，供 deterministic race probe 使用。一个 naïve “only one file may import state” refactor 会把历史 teaching evidence 一起抹掉。真实系统里也有 migration tool、repair utility、compatibility shim、test harness 或 emergency admin path；它们必须被 inventory，但未必受 normal product-path rule以相同方式约束。
 
-因此一个可能的 target fitness rule是：
+因此一个和本轮 implementation scope 对齐的 fitness rule 可以是：
 
 ```text
 normal product modules
 (service / worker / metrics / selected reporting path)
-must not bypass the accepted lifecycle authority to mutate state representation
+must not import/use taskforge.state directly for normal lifecycle access
 ```
+
+这条 rule 证明的是 **direct-state dependency / transition implementation 被 localize**，不是“完整 mutation authority 已经隔离”。M02 已经指出：如果 `get()`、`list_jobs()` 或 `claim_next()` 返回的是 authoritative mutable `Job`，caller 即使从未 import `state.py`，仍可能通过 alias 直接改 lifecycle。这样的 read result 是 authority-bearing handle；grep/AST import check 看不见这条 capability edge。
+
+所以 M09 的最小 boundary-enabling refactor 只完成 target architecture 的一部分：normal transition policy 与 storage knowledge 有了明确 seam。若要进一步声称 read/reporting path **不能**成为 hidden writer，就需要 capability-oriented evidence 来区分 detached/read-only observation 与 live mutable authority。M09 刻意不顺手引入 `JobView` 或 defensive copy；这条 M02 residual risk 留给后续 change/review 继续识别。
 
 而不是：
 
@@ -329,7 +333,7 @@ Architecture fitness function 只有同时表达 **invariant + scope** 才有价
 TaskForge 可以为 accepted design 写一个很短的 ADR。若最终选择 reference candidate，它可能是：
 
 ```markdown
-ADR-0001 — Job lifecycle uses one semantic write authority
+ADR-0001 — Normal lifecycle transition logic routes through Job Authority
 
 Status: Accepted
 
@@ -338,18 +342,21 @@ Remote workers are required. Current normal paths mutate shared in-memory Job
 representation directly. Remote workers must not get store write credentials.
 
 Decision:
-Normal lifecycle mutations go through the accepted authority boundary.
-Workers depend on claim/finish protocol semantics, not storage representation.
-The authority may initially share a process with the API.
+Normal product transition implementations and direct state access are routed
+through the accepted authority seam. Workers depend on claim/finish semantics,
+not storage representation. The authority may initially share a process with
+the API. This phase does not claim detached/read-only Job observation or
+complete mutation-capability isolation for returned objects.
 
 Alternatives considered:
 - direct shared-DB writes
 - replicated per-worker lifecycle state
 
 Consequences:
-+ lifecycle policy and storage knowledge are localized
++ normal transition policy and storage knowledge are localized
 + worker privilege is narrower
 - authority availability matters
+- mutable observation handles remain a known M02 authority risk
 - remote protocol creates timeout/version obligations
 
 Revisit triggers:
@@ -365,7 +372,8 @@ ADR 之外，一张短 **architecture risk register** 也能防止图把不确�
 
 | Risk | Mechanism | 当前 evidence / mitigation |
 |---|---|---|
-| authority outage | lifecycle writes converge on one authority | accepted current failure domain；revisit HA on measured objective |
+| authority outage | normal transition implementation converges on one authority seam | accepted current failure domain；revisit HA on measured objective |
+| mutable alias bypass | authority/service may return live authoritative `Job` handles | residual M02 risk；not closed by direct-import fitness rule |
 | worker duplicate/retry | timeout leaves execution outcome uncertain | inherit M07 attempt/effect analysis；future lease/idempotency work |
 | protocol skew | worker/authority independently deploy | define supported coexistence matrix before network rollout |
 | snapshot confusion | durable export 被误当 recovery truth | document current export role；no restore claim |
@@ -379,7 +387,9 @@ Risk register 不是 process bureaucracy，也不是说这些 mitigation 已实�
 
 完整实验见 [Lab 09](../labs/09-architecture-boundaries.md)。实验先做 source classification 与多-view recovery，再设计至少两个 architecture、写 failure walk / ADR，最后才允许一个很小的 implementation phase。
 
-reference implementation direction 是新增一个进程内 `job_authority.py` semantic seam，让 normal product lifecycle path 不再由 `worker.py` 直接理解/修改 Job representation。它仍可以使用当前 in-memory `state.jobs`；这一步**不提供 durability、HA、RPC、lease、worker authentication、production concurrency atomicity 或 exactly-once effect guarantee**。
+reference implementation direction 是新增一个进程内 `job_authority.py` semantic seam，让 normal `service.py` / `worker.py` 的 transition logic 与 direct `state` access 收敛到一个位置，worker 不再需要 storage representation knowledge。它仍可以使用当前 in-memory `state.jobs`；这一步**不提供 durability、HA、RPC、lease、worker authentication、production concurrency atomicity 或 exactly-once effect guarantee**。
+
+它也**不自动提供 complete mutation-capability isolation**。如果 seam 继续返回 current authoritative mutable `Job`，caller 仍可通过 alias 修改 lifecycle；direct-import fitness check 不会发现这条路径。这是 M02 已知 authority risk，也是本轮有意保留的 non-goal，而不是用 `JobView` 等新 abstraction 顺手“修完”的问题。
 
 特别注意：这个 `job_authority.py` **目前不存在于 starter**。它只是 Lab/Instructor reference 的 candidate change。M09 正文不能把 target diagram 写成 current architecture。
 
@@ -389,8 +399,10 @@ reference implementation direction 是新增一个进程内 `job_authority.py` s
 First recover current architecture from real code and probes; do not propose topology yet.
 
 Then compare at least two remote-worker designs against the confirmed requirements.
-If the authority-boundary candidate is accepted, implement only the in-process semantic seam.
-Do not add network, DB, queue, DI framework, deployment manifests, or speculative HA.
+If the authority-boundary candidate is accepted, implement only the in-process semantic seam:
+localize normal transition policy/direct-state access and remove worker storage knowledge.
+Do not claim this proves detached/read-only Job observation or complete mutation-capability isolation.
+Do not add JobView/copying, network, DB, queue, DI framework, deployment manifests, or speculative HA.
 Preserve prior observable behavior and explicit historical teaching exceptions.
 Run core tests plus M05-M09 probes; classify historical harnesses before treating them as gates.
 ```
@@ -402,15 +414,16 @@ Run core tests plus M05-M09 probes; classify historical harnesses before treatin
 Independent reviewer 不应只看 Agent summary，也不应因为 diagram“很像成熟系统”就接受。至少独立检查：
 
 - 当前事实与 target assumption 有没有混写？starter 是否真的有 durable store / restore / lease？
-- 哪个 component 是 semantic authority？是否还有 backdoor writer？
+- normal transition policy / direct-state access 是否真的 localize？是否又把这个证据夸成 complete authority isolation？
+- `get/list/claim` 是否泄漏 authoritative mutable handle；若是，是否明确标成 residual M02 risk，而不是被 direct-import check 掩盖？
 - remote worker 依赖 domain-level contract 还是 storage detail？所谓 DIP 是否只是 interface/DI ceremony？
 - semantic、process、deployment、failure boundary 是否被误当成同一个东西？
 - control/data-plane wording 是否只是有条件的 TaskForge analogy，没有被写成标准 topology 定律？
 - worker timeout / authority crash / effect-finish loss 的 temporal semantics 是否与 M07 一致？
 - failover/retry 是否新增了 capacity dependency 或扩大 blast radius？
 - snapshot 的 export/recovery role 是否明确，是否凭空增加 durability？
-- protocol独立演化后的 compatibility/rollback 有没有继承 M08 的约束？
-- fitness rule 是否包含 scope，是否会误杀 teaching/migration/repair artifact？
+- protocol独立演化后的 compatibility/rollback 有没有继承 M08 的约束；是否把 N/N-1 这类 policy example 偷升成 universal MUST？
+- fitness rule 是否包含 scope，并且诚实说明它只证明 direct-state dependency localization，而不是 capability isolation？
 - alternatives 是否是真实可行方案，而不是为 reference design 服务的 strawman？
 - complexity 是否由当前 requirement 支付，revisit trigger 是否可被未来 evidence 推翻？
 

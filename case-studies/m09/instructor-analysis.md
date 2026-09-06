@@ -137,16 +137,21 @@ C 只有在 offline/multi-master/partition-tolerant writes 等 requirement 出�
 Reference target 写下：
 
 ```text
-A1. Normal lifecycle transitions go through the accepted Job Authority.
-A2. Remote workers request claim/finish; they do not mutate authority storage directly.
+A1. Normal product transition decisions are routed through Job Authority;
+    named historical/fault-injection paths remain explicit exceptions.
+A2. Remote workers request lifecycle operations; they do not receive direct
+    authority-storage mutation responsibility.
 A3. Worker timeout does not prove execution absence.
 A4. Snapshot remains a derived export in this phase.
-A5. Reporting/read paths do not become hidden lifecycle writers.
+A5. Read/reporting paths should not acquire lifecycle mutation capability
+    through authority-bearing mutable handles.
 A6. Independently deployed authority/worker versions need an explicit coexistence policy.
 A7. concurrent_claim.py is an explicit historical teaching exception.
 ```
 
-这些是 **target/reference invariants**，不是 starter 已满足的事实。尤其 A1/A2 需要后面的 boundary-enabling refactor 才开始成立。
+这些是 **target/reference properties**，不是 starter 已满足的事实，也不是后面的最小 boundary-enabling refactor 能全部证明的 acceptance checklist。该 refactor 可以让 normal transition policy / direct-state access 开始收敛，并移除 worker 对 `state` namespace / storage mechanism 的直接知识；但 A5 是更强的 capability property。
+
+如果 `get()` / `list_jobs()` / `claim_next()` 仍把 authoritative mutable `Job` reference 透传给 caller，caller 即使没有任何 `state.py` import，也仍能直接改 lifecycle。M02 已经把这种 read result 定义为 authority-bearing handle。Instructor reference 本轮**不**为此引入 `JobView`、defensive copy 或新的 capability test；它把这条风险保留为 explicit residual / follow-up，以保持 M09 的 architecture-localization scope，也保持 M10 后续 review case 的既有教学前提。
 
 A7 看起来很课程特有，但训练的是一般能力：architecture policy 总有 scope。Migration tool、repair utility、test harness、compatibility shim、emergency admin command 都可能有特殊权限；不能因为 repo grep 发现它们就机械纳入 normal product-path rule。
 
@@ -271,7 +276,7 @@ terminal_count
 reset_for_tests
 ```
 
-它仍使用现有 in-memory `state.jobs` representation。这是刻意的：M09 要验证 semantic authority locality，不是 persistence mechanism。
+它仍使用现有 in-memory `state.jobs` representation。这是刻意的：M09 要验证 normal transition policy / direct-state dependency localization，不是 persistence mechanism，也不是 complete mutation-capability isolation。
 
 Reference 将 normal paths `service.py`、`worker.py`、`metrics.py` 和 `legacy_audit.py` 改为通过 authority/service read path；`concurrent_claim.py` 保持 direct state mutation，因为它是 M07 historical fault-injection fixture。
 
@@ -282,9 +287,11 @@ concurrent_claim   # explicit historical exception
 job_authority      # accepted normal authority implementation
 ```
 
-这体现 fitness rule 必须同时有 invariant 和 scope。
+这体现 fitness rule 必须同时有 invariant 和 scope。但这个 direct-state inventory 还有一个重要 blind spot：它看不见 capability alias。若 `job_authority.get()` / `claim_next()` 返回的仍是 `state.jobs[...]` 中同一个 mutable `Job`，caller 可以在不 import `state` 的情况下修改 authoritative lifecycle state。
 
-这个 refactor**没有**解决：durability、authority HA、production claim atomicity、lease/heartbeat、worker auth、RPC transport、remote version skew、crash recovery、exactly-once effect、multi-tenant isolation 或 cell partitioning。
+因此下面的 reference evidence 只证明：normal transition implementation / direct-state imports 被 localize，worker-facing operation 不需要理解 storage mechanism。它**不证明** detached/read-only observation boundary，也不证明 complete mutation authority isolation。
+
+这个 refactor**没有**解决：mutable-`Job` authority leakage（M02 residual）、durability、authority HA、production claim atomicity、lease/heartbeat、worker auth、RPC transport、remote version skew、crash recovery、exactly-once effect、multi-tenant isolation 或 cell partitioning。
 
 ## 11. Reference evidence：结构变了，prior behavior 仍要重新证明
 
@@ -305,9 +312,11 @@ job_authority      # accepted normal authority implementation
 
 新增 architecture tests 关注：
 
-1. service + worker 通过同一个 authority 完成 submit -> claim -> finish；
+1. service + worker 通过同一个 authority seam 完成 submit -> claim -> finish；
 2. normal product modules 不再 direct import state；
-3. worker-facing semantic operation 不要求暴露 storage representation。
+3. worker-facing semantic operation 不要求理解 storage mechanism。
+
+它们没有测试“returned `Job` 是否 detached/read-only”。所以 9 passed 不能升级成 A5 已满足；这正是为什么本轮把 mutable-handle risk 明确留作 M02 residual，而不是给现有 evidence 一个更强的名字。
 
 但 architecture refactor 不能只证明新 seam 自己能跑。Reference 还重跑了已有 evidence：
 
@@ -325,7 +334,7 @@ M03 `mutation_probe.py` 则是另一个重要例子：它寻找 baseline source 
 一个够用的 record 可以是：
 
 ```markdown
-ADR-0001 — Job lifecycle uses one semantic write authority
+ADR-0001 — Normal lifecycle transition logic routes through Job Authority
 
 Status: Accepted
 
@@ -335,18 +344,21 @@ in-memory Job state directly. Remote workers must not receive store-write
 credentials.
 
 Decision:
-Normal lifecycle transitions use the accepted authority boundary. Workers
-request claim/finish semantics and do not write the authority storage
-representation directly. The authority may initially share a process with API.
+Normal product transition implementations and direct state access are routed
+through the accepted authority seam. Workers depend on claim/finish semantics,
+not storage representation. The authority may initially share a process with
+API. This phase does not claim detached/read-only Job observation or complete
+mutation-capability isolation for returned objects.
 
 Alternatives considered:
 1. Shared DB direct writes.
 2. Per-worker replicated lifecycle state with reconciliation.
 
 Consequences:
-+ lifecycle policy and storage knowledge are localized
++ normal transition policy and storage knowledge are localized
 + worker privilege is reduced
 - authority availability becomes consequential
+- mutable observation handles remain a known M02 authority risk
 - remote protocol needs timeout/retry/version semantics
 
 Revisit triggers:
