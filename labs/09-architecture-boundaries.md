@@ -241,13 +241,13 @@ remote worker
 external effect
 ```
 
-注意：
+注意：`Job Authority` 与 `durable Job Store` 都是 **target-design roles**，不是 starter 已经实现的 component/guarantee。Authority 可以先与 API 同进程；当前 starter 仍只有 in-memory `state.jobs`，不要因为画了 store box 就声称已有 durability。
 
-```text
-API + Job Authority
-```
+再做两个额外检查。
 
-可以先同进程。
+**Dependency inversion check**：remote worker 应依赖哪个层级的 contract？比较 `worker -> jobs table / DB credential / storage schema` 与 `worker -> claim / finish / heartbeat semantics`。如果你的答案只是“加一个 StoreInterface / DI container”，继续说明 low-level storage knowledge 是否真的从 worker 消失。DIP 在本 Lab 中不是 interface 数量指标。
+
+**Control/data-plane lens**：可以把 lifecycle/control authority 与 command execution 看成 control responsibility 和 data/execution-plane-like responsibility，但必须注明这是 TaskForge 的课程映射，不是要求复制网络/AWS topology。说明这个 lens 对 privilege 与 failure analysis增加了什么，以及哪些 dependency 会让两个 plane 仍然一起失败。
 
 你要分析：
 
@@ -315,6 +315,7 @@ sync/event reconciliation
 | Dimension | A | B | C(optional) |
 |---|---|---|---|
 | lifecycle authority clarity | | | |
+| worker dependency on domain contract vs storage detail | | | |
 | worker compromise blast radius | | | |
 | partial failure model | | | |
 | versioning cost | | | |
@@ -514,7 +515,9 @@ metrics.py
 
 ---
 
-# 13. 为什么不直接实现 Store Interface + RPC Interface + Repository？
+# 13. Dependency inversion 也不等于“现在就建十个 Interface”
+
+本章确实要求你理解 dependency inversion 的实际用途：high-level lifecycle/execution code 应依赖 domain-relevant contract，而不是 storage representation。但这**不等于**现在必须实现 Store Interface + RPC Interface + Repository + DI framework。
 
 因为你还没有需要那么多 layers 的 evidence。
 
@@ -682,12 +685,14 @@ Do not add infrastructure without tying it to a stated requirement.
 
 ```text
 Implement the accepted authority-boundary refactor only.
-Do not add network, database, message queue, framework, or deployment manifests.
+Do not add network, database, message queue, framework, DI container, or deployment manifests.
 
+Make normal worker code depend on accepted lifecycle semantics rather than storage representation;
+do not satisfy this by merely wrapping the same storage detail in a new interface.
 Preserve existing observable behavior.
 Keep the M07 fault-injection module as an explicit historical exception.
 Add a small architecture fitness test for normal product modules.
-Run core tests and M05-M08 probes.
+Run core tests and M05-M09 probes.
 ```
 
 ---
