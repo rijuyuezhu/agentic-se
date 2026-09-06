@@ -6,6 +6,8 @@
 
 Software Quality 这个传统领域最值得本课程保留的，不是额外建立一个 QA 流程，而是一个基本纪律：**quality 不是单一分数。先说清楚你关心哪一种可观察性质，再讨论 trade-off 和 evidence。**
 
+M03/M09/M11 已经分别训练 testing evidence、architecture consequence 和 production reliability；本页不再造一条 QA 主线，只在“quality”这个词开始混淆多个 attribute 时提供共同 vocabulary，因此按需阅读就足够。
+
 ## 1. Quality 不等于 Testing
 
 M03 已经把 testing 当作 executable evidence。但测试只是获得 evidence 的一种机制，quality 是被评价的对象。

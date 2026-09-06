@@ -14,6 +14,8 @@ M01 从一个重要事实开始：没有 specification，就无法判断 impleme
 
 Requirements Engineering 研究的正是这段从现实问题到可实现 contract 的距离。
 
+它不进入主线，是因为 M01 已经训练了 specification 形成之后的 contract reasoning，而并非每一次 change 都需要重新做 stakeholder discovery；当 issue 本身的来源、冲突或 product/domain authority 不清楚时，再进入这条上游旁支更合适。
+
 ## 1. Requirement 不是实现愿望的同义词
 
 一个有用的区分是：

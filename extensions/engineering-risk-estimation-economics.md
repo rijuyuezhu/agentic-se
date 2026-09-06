@@ -6,6 +6,8 @@
 
 Software Engineering Management 和 Software Engineering Economics 中最值得本课程保留的，不是项目管理表格，而是这套 decision reasoning。
 
+主线已经要求你比较 design trade-off、migration risk 和 review evidence；本页只在“多个方案都技术可行，但 uncertainty、resource scarcity、future cost 开始主导选择”时提供更一般的经济决策语言，所以不值得为所有学生再增加一章线性必修。
+
 ## 1. 从一个 rewrite 决策开始
 
 假设一个旧 scheduler 越来越难改。两个方案都可行：

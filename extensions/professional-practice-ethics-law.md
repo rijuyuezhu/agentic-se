@@ -4,7 +4,7 @@ Coding agent 能生成一个 patch，不能回答一个更根本的问题：**�
 
 软件工程不只是技术能力，也是一种有后果的专业活动。系统会处理用户数据、影响业务决策、控制资源、改变公共服务，有时还会进入医疗、交通、金融等高风险环境。Professional Practice 最值得本课程保留的内容，就是让工程判断不仅对“代码能不能工作”负责，也对风险、沟通、权限和影响负责。
 
-这篇旁支不是法律意见，也不是职业伦理考试。它只讨论几个会直接改变真实 software change 决策的问题。
+这篇旁支不是法律意见，也不是职业伦理考试。相关义务还会随 domain、组织和司法辖区变化，因此没有理由把它扩成每个技术模块都必须经过的线性课程；当 authority、privacy、license、high-impact risk 或责任链真正影响 change 时，再进入这里。它只讨论几个会直接改变真实 software change 决策的问题。
 
 ## 1. Implementation 可以委托，responsibility 不能自动委托
 

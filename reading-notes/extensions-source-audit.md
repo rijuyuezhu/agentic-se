@@ -12,7 +12,7 @@
 
 第一，**knowledge map 不是教学优先级**。SWEBOK 可以证明一个领域在软件工程共同知识里有稳定位置，但不能据此推出它应该占本课程一章。
 
-第二，**当前 curriculum 只能证明仍有人认真教这个问题，不能证明具体教学法最佳**。因此 CMU 当前 MSE 被用作“AI 进入课程以后，Requirements/Management/Quality/Communication 是否仍被保留”的外部 sanity check，而不是作为课程权威。
+第二，**curriculum 目录只能证明“还在教”，不能证明“怎样教”**。因此这轮除了看 CMU MSE 的 requirements / plan of study，还实际打开当前 Course Offerings 所链接的最近 syllabus，检查 assignment、in-class activity、grading/rubric 和 learn-by-doing 结构。大学课程仍然只作为教学设计 sanity check，不自动升级成课程权威。
 
 第三，**会变化的网页必须记录日期和版本状态**。尤其 NIST SSDF、SWEBOK 和当前 university curriculum，未来同一 URL 可能变化。
 
@@ -27,6 +27,10 @@ https://www.computer.org/education/bodies-of-knowledge/software-engineering
 官方 Topics / Table of Contents：
 
 https://www.computer.org/education/bodies-of-knowledge/software-engineering/topics
+
+官方 v4.0a PDF：
+
+https://ieeecs-media.computer.org/media/education/swebok/swebok-v4.pdf
 
 访问：2026-09-06。
 
@@ -149,18 +153,19 @@ v4 新增独立 Software Security KA，官方介绍强调 security 贯穿 lifecy
 
 #### Software Engineering Economics
 
-当前目录包括：
+这一项没有只看 Topics 页。我们进一步检查了 v4.0a PDF 的 **Chapter 15 — Software Engineering Economics** 正文。
 
-- alternatives / business model；
-- engineering decision-making；
-- multiple-attribute decision-making；
-- estimation；
-- systems thinking；
-- prioritization。
+与旁支直接相关的内容包括：
 
-**课程吸收：** 让 technical design comparison 显式考虑 uncertainty、reversibility、future cost、opportunity cost、value of information。
+- engineering decision-making 明确要求先理解真实问题、识别可行 alternatives、定义 selection criteria、比较并在实施后 monitor outcome；
+- replacement decision 把 sunk cost 列为必须额外考虑的因素；相关概念部分明确区分 sunk cost、opportunity cost，并给出 software TCO 的定义；
+- multiple-attribute decision-making 专门处理不能都换算成 money 的多个 criteria，并区分 compensatory / non-compensatory techniques；
+- estimation 一节明确说 estimate 天生带 uncertainty，质量要求是“足以支持正确 decision”，而不是假装精确；
+- decisions under risk 包含 expected value of perfect information，用来说明信息本身可能有决策价值。
 
-**不照搬：** 不教授完整财务、cash-flow、MARR、EVM 等内容。
+**课程吸收：** sunk cost、opportunity cost、TCO、multiple criteria、estimation uncertainty 和“信息可能改变 decision”都有直接来源依据。`reversibility → option value`、把 probe 当成轻量 information-buying action，以及把 Agent review capacity 视作稀缺资源，则不是 SWEBOK 原句，会在后面的 claim provenance 中明确标成 course synthesis / adaptation。
+
+**不照搬：** 不教授完整财务、cash-flow、MARR、EVM，也不把 expected-value / AHP 等计算技术变成必修；旁支只保留会改变 software change 判断的部分。
 
 ### 对 SWEBOK 的总体判断
 
@@ -172,9 +177,9 @@ SWEBOK 最有价值的是提醒我们：传统 SE 研究的对象比 coding/desi
 
 ---
 
-## 2. Carnegie Mellon MSE — 当前 AI-oriented curriculum sanity check
+## 2. Carnegie Mellon MSE — 当前 curriculum 与实际教学方式 sanity check
 
-Requirements：
+Program requirements：
 
 https://mse.s3d.cmu.edu/applicants/mse-as/requirements.html
 
@@ -182,38 +187,51 @@ Plan of Study：
 
 https://mse.s3d.cmu.edu/applicants/mse-as/plan.html
 
+Current Course Offerings（页面说明 syllabus 链接指向最近可用版本）：
+
+https://mse.s3d.cmu.edu/applicants/course-offerings.html
+
+本轮实际打开的 syllabus：
+
+- 17-626 Requirements for Information Systems, Fall 2025: https://mse.s3d.cmu.edu/0_documents/syllabi/fa2025/17626.pdf
+- 17-643 Quality Management, Spring 2025: https://mse.s3d.cmu.edu/courses/0_syllabi/17643-quality-management.pdf
+- 17-622 Agile Methods, Fall 2025: https://mse.s3d.cmu.edu/0_documents/syllabi/fa2025/17622.pdf
+
 访问：2026-09-06。
 
-### 实际检查
+### 先检查 curriculum：AI 进 core 后，哪些问题还保留
 
-当前 on-campus MSE 从 Fall 2027 起的 requirements 把以下内容同时列为 core：
+当前 on-campus MSE 从 Fall 2027 起把 Software Engineering with AI 与 Specifications、Requirements、Management、Quality、Architecture/Design、Communications 同时列为 core。Plan of Study 还把 gathering / analyzing / prioritizing requirements from a real-world industrial customer、project management、technical/nontechnical communication，以及 human/AI resources 的组合列入 learning outcomes。
 
-- Software Engineering with AI；
-- Specifications；
-- Requirements；
-- Management；
-- Quality；
-- Architecture/Design；
-- Communications。
+这只能支持一个很窄的判断：把 AI 纳入 core，并没有使 Requirements/Management/Quality/Communication 自动消失。它不能证明这些课程的具体教学法适合我们。
 
-Plan of Study 还明确写出 learning outcome：学生应能 gathering / analyzing / prioritizing requirements from a real-world industrial customer，并有效结合 human and AI resources；同时要能 manage project、communicate with technical/nontechnical audiences，并适应 AI 带来的行业变化。
+### 再检查实际教学：学生到底做什么
 
-### 课程吸收
+**17-626 Requirements** 不是从背 requirement taxonomy 开始。最近公开 syllabus 的学习目标要求学生和潜在用户交互、分析 user/marketing data、识别 requirements conflict/risk，并在 alternatives 间 reconcile。作业让学生从 interview transcript / technical article 中提炼 goals 与 refinements，从 system failure 中识别 obstacles/mitigations，并产出 scenario、persona、activity diagram、use cases；课堂还有 persona/obstacle generation 和 design walkthrough 等活动。也就是说，它训练的是**从不完整 evidence 逐步形成和检验 requirement model**。
 
-这份资料只用来反驳一个过度推论：
+**17-643 Quality Management** 也不是单纯列 quality attributes。最近公开 syllabus 强调 scenario-based critical thinking、engineering judgment 和完整论证；每周 assignment 会让学生实际安装/使用 quality tool，再分析结果、解释 trade-off，并把经验连接到 project-level decision。这里值得借鉴的是 **tool result != conclusion，学生必须解释 evidence 对 engineering claim 的意义**。
 
-> “既然 AI 会写代码，传统 Requirements/Management/Quality/Communication 已经不属于现代 Software Engineering。”
+**17-622 Agile Methods** 明确采用 lecture track + running group assignment 的 learn-by-doing 结构，配合课堂活动、group preparation/results 和 peer evaluation。它证明 process 可以通过实际协作 feedback 来训练，而不是只背方法名；但课程也包含大量 Scrum/Kanban/estimation technique 的具体机制，这些并不因此自动适合本课程主线。
 
-当前一所明确把 AI 纳入 MSE core 的项目仍保留这些领域，说明“AI vs traditional SE”不是必须二选一。
+### 本课程吸收的是教学机制，不是 CMU packaging
+
+这三门课共同支持的教学设计启示是：
+
+- 让学生从不完美输入中提炼模型，而不是先给完整答案；
+- 让 artifact 被实际使用、walk through、分析和 revision；
+- 让工具/diagram/process 产出的结果回到 engineering judgment；
+- 训练 conflict、trade-off 和 evidence interpretation，而不是只检查术语记忆。
+
+这与当前 Extensions 的组织方式相容：旁支仍然从 concrete failure/decision problem 出发，再引入传统术语。
 
 ### 不照搬
 
-- 不采用 CMU 的具体学分结构；
-- 不把 Product Management/Agile Methods 直接加入本课程；
-- 不因为 CMU 这么教就证明这些课程内容天然适合自学；
-- 不把 employment outcome 当课程质量证据。
+- 不采用 CMU 的学分、grading 或课程顺序；
+- 不因为 17-626 使用 persona/use case/activity diagram，就把这些 artifact 变成本课程强制模板；
+- 不因为 17-622 教 Scrum/Kanban/planning practice，就把某个 process framework 升级为默认答案；
+- 不把 university course existence 或学生作业量当成主题本身正确的理论证据。
 
-**状态：curriculum sanity check，不作为理论来源。**
+**状态：curriculum + teaching-method sanity check，不作为理论权威。**
 
 ---
 
@@ -254,54 +272,55 @@ https://www.computer.org/resources/software-configuration-management
 
 ---
 
-## 4. IEEE Computer Society — Software Engineering Management / Economics resources
+## 4. Economics / Risk — 从高层资源继续追到正文与 research framing
 
-Management：
+IEEE Software Engineering Management：
 
 https://www.computer.org/resources/software-engineering-management
 
-Economics：
+IEEE Software Engineering Economics course description：
 
 https://www.computer.org/product/education/software-engineering-economics-course/
+
+SEI real-options architecture report：
+
+https://insights.sei.cmu.edu/library/quality-attribute-based-economic-valuation-of-architectural-patterns/
+
+SEI technical-debt research overview：
+
+https://www.sei.cmu.edu/blog/10-years-of-research-in-technical-debt-and-an-agenda-for-the-future/
 
 访问：2026-09-06。
 
 ### 实际检查
 
-Management resource 当前明确把：
+IEEE Management resource 用来确认 estimation、resource allocation、risk、measurement/monitoring/control 属于 software engineering management 的稳定问题域；Economics course description 则确认这里讨论的是 business context 中的 software engineering decision，而不只是 finance。
 
-- scope / requirements；
-- feasibility；
-- estimation；
-- resource allocation；
-- risk；
-- measurement / monitoring / control
+具体经济概念不再依赖这两个高层页面：sunk cost、opportunity cost、TCO、multiple-attribute decision、estimate uncertainty 和 information value 以前面的 **SWEBOK v4.0a Chapter 15 正文**为主要依据。
 
-放在 software engineering management 中。
+SEI 的 architecture real-options 工作把 architecture pattern 的 future value 解释为 real options：保留未来采取某种 design action 的权利而非义务。它说明“architecture 可以因为保留未来选择而有经济价值”不是本课程凭空发明的方向；但旁支把这个想法简化成 `reversible change → option value`，仍然是**教学性的 course adaptation**，不是要求学生对每个 compatibility bridge 做金融期权定价。
 
-Economics course description 则把 software engineering economics 定位为“在 business context 中做 software engineering decision”，包括 risk/uncertainty、prioritization、estimates 和 economic analysis。
+SEI technical-debt research 则把 debt 的核心 consequence 放在未来 change / evolvability cost，而不是“代码不漂亮”。旁支进一步把它具体化成 future change/review/incident cost，是对本课程 M05/M08/M10/M11 语境的 adaptation。
 
-### 课程吸收
+### Claim provenance：来源支持与课程 synthesis 的边界
 
-[Engineering Risk、Estimation 与 Economics](../extensions/engineering-risk-estimation-economics.md) 保留：
+**直接有来源框架支撑：**
 
-- alternative 必须按明确 criteria 比较；
-- uncertainty 本身会改变 design value；
-- estimation 先暴露 critical unknown，而不是制造单点 certainty；
-- reversibility 可以理解为保留 future option；
-- Agent 让 implementation cost 下降时，review/product/security attention 仍可能是稀缺资源。
+- sunk cost / opportunity cost / TCO / multiple criteria / estimation uncertainty：SWEBOK Chapter 15；
+- information can have decision value：SWEBOK decisions-under-risk / EVPI；
+- architecture can retain future option value：SEI real-options framing；
+- technical debt should be discussed through future change/evolution consequence：SEI technical-debt research。
 
-### 课程 synthesis，不归因给来源的部分
+**课程 synthesis / operationalization：**
 
-以下表述是本课程把 M05/M08/M10/M12 与 economics 连接后的 synthesis，不应伪装成 IEEE 原句：
-
-- “review capacity 可能成为 Agent 时代 bottleneck”；
-- “value of information 可以用 probe 是否会改变 decision 来判断”；
-- “technical debt 应解释成 future change/review/incident cost，而不是 aesthetic label”。
+- “reversibility 是 option value”：把 SEI 的 architecture-level real-options reasoning 压缩成 change-engineering heuristic；
+- “先跑一个便宜 probe，看它是否会改变 decision”：把 information-value 概念接到本课程 evidence loop，不是正式 EVPI 计算；
+- “Agent 让 implementation 便宜后，human review / product / security attention 可能成为 bottleneck”：来自 M10/M12 与 process 旁支的系统性推论，不归因给 IEEE/SEI；
+- “technical debt 应优先写成 future change/review/incident cost”：是本课程把 technical-debt future-cost frame 落到 review/change engineering 的表达方式。
 
 ### 不照搬
 
-没有进入 finance、cash-flow、MARR、EVM、完整 portfolio/project economics。
+没有进入 finance、cash-flow、MARR、EVM、完整 portfolio economics，也不要求 real-options valuation 或 formal EVPI/AHP。这里保留的是 decision frame，而不是经济学计算课程。
 
 ---
 
@@ -556,7 +575,67 @@ Security/Configuration 旁支用它支持：
 
 ---
 
-## 11. ACM Code of Ethics and Professional Conduct
+## 11. Security controls / Agent security — 把 threat model 继续落到 permission surface
+
+NIST SP 800-53 Rev. 5, AC-6 Least Privilege：
+
+https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final
+
+OWASP Authentication Cheat Sheet：
+
+https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+
+OWASP Authorization Cheat Sheet：
+
+https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
+
+OWASP Secrets Management Cheat Sheet：
+
+https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
+
+OWASP LLM Prompt Injection Prevention Cheat Sheet：
+
+https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html
+
+OWASP AI Agent Security Cheat Sheet：
+
+https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html
+
+访问：2026-09-06。
+
+### 实际检查
+
+NIST AC-6 的稳定核心是：用户/进程只获得完成 assigned organizational tasks 所必要的 authorized access。旁支据此使用 least privilege，不把“Agent 不是恶意用户”当成扩大权限的理由。
+
+OWASP Authentication / Authorization 两份 cheat sheet 明确把“确认 identity”和“决定该 identity 可访问什么”分开；Authorization guidance 还强调 least privilege / deny-by-default / 每次 request 验证权限。旁支因此可以可靠地区分 authentication 与 authorization。
+
+Secrets Management 把 secret 看成有 lifecycle 的敏感资产，而不是普通 config value，覆盖 creation、storage、access、rotation/revocation 等问题。旁支据此讨论 repo/prompt/log 中的 credential 暴露、scope、expiry 和 revocation。
+
+LLM Prompt Injection Prevention 与 AI Agent Security 则把间接 prompt injection、untrusted external content、tool misuse、excessive permission、sensitive-data exposure 和 high-impact action controls 放在同一个 Agent security surface 上。AI Agent guidance 特别要求工具/权限保持最小化，并强调不能只依赖模型“自觉遵守”安全意图。
+
+### Claim provenance：来源支持与课程 synthesis 的边界
+
+**直接有来源框架支撑：**
+
+- least privilege / narrow permission：NIST AC-6 + OWASP Authorization；
+- authentication != authorization：OWASP Authentication / Authorization；
+- secret 需要 storage/access/rotation/revocation lifecycle：OWASP Secrets Management；
+- untrusted content 可通过 prompt injection 驱动 Agent misuse tools：OWASP LLM Prompt Injection / AI Agent Security；
+- tool boundary 应自行 enforce authorization、high-impact action 需要额外 controls：OWASP AI Agent Security，并与 M12 已审计的 Agent-tool guidance 相互印证。
+
+**课程 synthesis / terminology：**
+
+- `capability / permission / engineering authority` 三层模型来自 M12；上述安全资料直接支撑前两层以及 tool boundary，但不会把“谁有权改变 SLO/public contract”命名成同一套 engineering-authority taxonomy；
+- “prompt injection 的共同本质之一是把 data 当成 authority-bearing instruction”是本课程用 M12 context/precedence 模型解释 injection 的教学表述，不是 OWASP 原句；
+- “sandbox 开着 != 系统安全”是把 process isolation、tool authorization、credential scope 和 semantic authority 合并后的课程结论。
+
+### 不照搬
+
+不把 OWASP/NIST controls 当成 security proof，也不扩展成完整 IAM、cryptography、AppSec 或 penetration-testing 课程。这里的目标只是在普通 software change 中建立足够强的 trust/permission reasoning。
+
+---
+
+## 12. ACM Code of Ethics and Professional Conduct
 
 官方页面/PDF：
 
@@ -599,7 +678,7 @@ https://www.acm.org/code-of-ethics
 
 ---
 
-## 12. GitHub Docs — Licensing a repository
+## 13. GitHub Docs — Licensing a repository
 
 URL：
 
@@ -625,7 +704,7 @@ GitHub Docs 不是法律意见，也不能覆盖具体 license compatibility。�
 
 ---
 
-## 13. C4 Model — official site
+## 14. C4 Model — official site
 
 首页：
 
@@ -678,7 +757,95 @@ Review checklist 强调：title、diagram type、scope、element meaning、relat
 
 ---
 
-## 14. 为什么没有为每个旁支找一本“主教材”
+## 15. OMG UML 2.5.1 — UML 本身到底提供什么
+
+OMG formal specification page：
+
+https://www.omg.org/spec/UML/
+
+Normative UML 2.5.1 PDF：
+
+https://www.omg.org/spec/UML/2.5.1/PDF
+
+访问：2026-09-06。
+
+当前 OMG formal version 是 **UML 2.5.1（2017-12）**。版本较旧并不构成问题：这里检查的是 UML language 本身的稳定 scope，而不是当前工具生态。
+
+### 实际检查
+
+规范不是一张“图标表”。它把 UML 定义成有 formal syntax/semantics 的 modeling language，并把规范主体组织成 structure、behavior，以及 use cases、deployments、information flows 等不同 modeling concern；behavior 部分进一步包含 state machines、activities、interactions 等模型。
+
+这足以支持旁支中最窄的事实性 claim：UML 确实提供 structural / behavioral 的多种 view，sequence/state-machine/component/deployment/class 等 notation 可以在相应问题上表达有用信息。
+
+### 课程吸收与 synthesis 边界
+
+**来源支持：** UML 有丰富的 structural / behavioral modeling vocabulary；不同 diagram/model element 有定义过的语义，而不只是任意 boxes-and-arrows。
+
+**课程 synthesis：** “只学能解决当前 engineering question 的小子集”“如果 prose/code 已更清楚就不要为了规范画图”“model 必须与 source/runtime evidence 交叉验证”都是本课程的 modeling discipline，不是 OMG 要求。
+
+### 不照搬
+
+不要求掌握完整 UML metamodel，不要求统一 notation，也不把 UML artifact 自动视为 source of truth。课程仍然允许 state table、ASCII sequence、dependency graph、C4 view 或其他更适合当前问题的表示。
+
+---
+
+## 16. Claim provenance — 八个旁支的 normative frame 从哪里来
+
+本节不是逐句 bibliography。它记录的是**会改变学生工程判断的主要 normative frame**到底来自已审计来源，还是来自 M00–M13 与这些来源重新组合后的 course synthesis。具体 TaskForge/Agent 例子只是教学实例，不需要伪装成外部事实。
+
+### Requirements / Stakeholders
+
+**Source-backed frame：** 正文 §1–§3、§5–§8 的 requirement/source/stakeholder/elicitation/conflict/validation/traceability/evolution 主要来自 SWEBOK Requirements；当前 CMU 17-626 syllabus 进一步证明这类能力可以通过 interview evidence、goal/refinement、obstacle、scenario/use-case 和 walkthrough 实际训练。
+
+**Course synthesis：** 正文 §4 的 `OBSERVED / REQUESTED / DECIDED` 三分法，以及 §9–§10“先 review issue 是否把 solution 偷换成 requirement，再委托 Agent”的 workflow，是把 M01/M10/M12 的 evidence/authority discipline 移到 requirements 上游。
+
+### Configuration / Baseline / Release
+
+**Source-backed frame：** 正文 §1–§3、§5–§7 的 configuration item、baseline、change tracking/status accounting、release composition/recreation 来自 IEEE SCM；release component provenance 与 secure lifecycle 由 NIST SSDF 支撑。
+
+**Course synthesis：** 正文 §4 把 mixed-version system 写成一组 artifact/version state，§8 把 reproducibility 限定为“先说清要复现什么 property/provenance”，§9–§11 把 rollback/review 问题改写成“哪些 configuration item 真正可逆、证据基于哪个 baseline”，都是 M08/M10/M13 reasoning 的延伸，而不是 IEEE SCM 原句。
+
+### Engineering Risk / Estimation / Economics
+
+**Source-backed frame：** 正文 §2、§4–§11 的 sunk cost、opportunity cost、TCO、multiple-attribute decision、uncertain estimates、information value 主要来自 SWEBOK Chapter 15；architecture future option 来自 SEI real-options；technical debt 的 future change/evolution cost 来自 SEI technical-debt research。
+
+**Course synthesis：** 正文 §3 的 reversible-change option-value heuristic、§7 的 probe-as-information-buying operationalization、§12 的 Agent estimation/attention boundary、§13 的 lightweight decision-record shape，以及 review/product/security attention 可能成为 bottleneck，已在本 audit §4 分开标注。
+
+### Process / Feedback / Team Coordination
+
+**Source-backed frame：** 正文 §2 的 iterative/frequent feedback 来自 Agile Manifesto/Principles；§3 的 small batch 对 review/rollback/feedback 的价值来自 Google Small CLs；§4、§6 以及 §10 中 Kanban/Agile 的基本 reasoning 来自已审计 Kanban/Agile sources。CMU 17-622 只作为“通过 running group work 训练 process feedback”的教学法证据。
+
+**Course synthesis：** 正文 §1 的“process 是 feedback architecture”，§5 的 bottleneck 会移动，§7–§9 的 Agent parallelism/handoff/ownership，§10 把 Waterfall/Scrum/Agile/Kanban 都降为“mechanism 改善什么 feedback/coordination problem”的比较框架，以及 §11–§13 对 metric gaming、small Agent team 和 ceremony 的判断，是把 M10/M12 的 review/coordination constraints 系统化；其中把 Agent-generated PR inventory 当作 WIP 也是这一 synthesis 的具体应用。
+
+### Software Quality
+
+**Source-backed frame：** 正文 §1–§2、§7 中“quality 不等于 testing”、多维 product-quality vocabulary、product/process quality distinction 由 ISO/IEC 25010 与 SWEBOK Quality 支撑；CMU 17-643 syllabus 提供 tool-use → result analysis → engineering judgment 的实际教学例子。
+
+**Course synthesis：** 正文 §3–§6 的 `quality attribute → local scenario/contract → evidence`、trade-off/“model 不是 scoring formula”的教学处理，以及 §8–§9“quality gate 应保护 claim 而不是格式”的 review frame，是把 ISO vocabulary 接到 M01/M03/M09/M11 的 contract/evidence loop。
+
+### Security Engineering
+
+**Source-backed frame：** 正文 §1–§5 的 security-through-lifecycle、asset/trust-boundary/threat-model frame 来自 SWEBOK Security、NIST SSDF 与 OWASP Threat Modeling；§6–§11 的 least privilege/AuthN/AuthZ/secrets/prompt injection/Agent tool security 来自本 audit §11 的 NIST/OWASP sources。
+
+**Course synthesis：** 正文 §7 中 engineering authority 作为 authentication/authorization 之外的第三层、§11 的 `data != authority-bearing instruction` 解释，以及 §12–§14 将 threat-aligned evidence/trade-off/review 接回 M11/M12 Agent harness，是课程自己的组合；这些不会伪装成 OWASP/NIST taxonomy。
+
+### Professional Practice
+
+**Source-backed frame：** 正文 §1–§7、§9、§11 的 responsibility/honesty/risk communication/privacy/confidentiality/intellectual-work/public-good frame 来自 ACM Code；“public repository visibility 不自动授予复制/修改/分发许可”由 GitHub licensing guidance 支撑。
+
+**Course synthesis：** 正文 §1、§8、§10、§12–§13 中“implementation delegation 不自动转移 merge/release/risk-acceptance responsibility”、generated-code provenance awareness、把 disagreement/risk limitation 写成 durable engineering artifact、以及 Agent professional-review boundary，是把 M10/M12 的 acceptance authority 扩展到 professional practice；它们不是对具体法律义务的断言。
+
+### Models / Notation / UML
+
+**Source-backed frame：** 正文 §3–§6 的 structural/behavioral view 与 UML vocabulary 由 SWEBOK/OMG UML 支撑；C4 为 architecture view 的 scope/abstraction/relationship clarity 提供具体实例。
+
+**Course synthesis：** 正文 §1–§2、§7–§12 的 question-first model selection、model 不是天然 source of truth、与 source/runtime evidence 相互校验、current-state/target-state 分离，以及 Agent/model review checklist，是本课程用于防 stale/ceremonial documentation 的规则，而不是 OMG/C4 mandate。
+
+这层 provenance 的目的不是消灭 synthesis。恰恰相反：**允许课程提出自己的 synthesis，但必须让读者知道哪里是来源支持的 frame，哪里是我们基于前面模块作出的教学性组合。**
+
+---
+
+## 17. 为什么没有为每个旁支找一本“主教材”
 
 本轮刻意没有做：
 
@@ -697,7 +864,7 @@ Process -> 一本经典书
 
 ---
 
-## 15. 本轮明确拒绝的推论
+## 18. 本轮明确拒绝的推论
 
 材料审计后，课程仍然**不接受**下面这些推论：
 

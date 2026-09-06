@@ -6,6 +6,8 @@
 
 Software Process 值得保留的核心，不是记住某个方法有几个角色、几个会议，而是理解：**我们怎样组织 work，使高信息量的 feedback 尽早到来，同时控制 WIP、handoff 和 shared-state coordination cost。**
 
+M00–M13 关心的是一次 software change 怎样被正确理解和验证；团队 workflow 则高度依赖人数、ownership 和组织约束。只有当 work 开始在多人/多 Agent 之间排队、handoff 或冲突时，这套 flow reasoning 才成为主要问题，因此放在旁支更合适。
+
 ## 1. Process 是 feedback architecture
 
 M00–M13 本身已经隐含了一套 process：先理解，再写 change contract，再实现，再建立 evidence，再独立 review。这个顺序不是仪式，而是因为后一步的成本依赖前一步是否正确。

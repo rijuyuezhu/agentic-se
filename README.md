@@ -95,7 +95,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 这些内容收在 [`extensions/`](extensions/index.md) 中，按需要阅读，不进入 M00–M13 的线性学习顺序。当前旁支包括 Requirements/Stakeholders、Configuration/Baseline/Release、Risk/Estimation/Economics、Process/Feedback/Team Coordination、Software Quality、Security Engineering、Professional Practice，以及 Models/Notation/UML。
 
-为什么只补这些、而没有再写一套传统 Architecture/Testing/Maintenance/Operations，见 [`traditional-se-gap-map.md`](reading-notes/traditional-se-gap-map.md)；所有新增 normative claims 的实际材料审计见 [`extensions-source-audit.md`](reading-notes/extensions-source-audit.md)。
+为什么只补这些、而没有再写一套传统 Architecture/Testing/Maintenance/Operations，见 [`traditional-se-gap-map.md`](reading-notes/traditional-se-gap-map.md)；新增 normative frames 的来源、实际教学材料核查，以及哪些表述属于 course synthesis，见 [`extensions-source-audit.md`](reading-notes/extensions-source-audit.md)。
 
 ---
 

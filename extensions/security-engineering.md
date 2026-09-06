@@ -6,7 +6,7 @@ Security Engineering 把这些问题放进一个更强的假设里：**系统不
 
 一旦加入 adversary，很多“方便”的设计会改变性质。一个 debug endpoint 不再只是多一个维护面；一个可以读取任意 workspace 的 Agent tool 不再只是功能强；一个来自 dependency 的 build script 不再只是自动化。
 
-这篇旁支不试图把你训练成安全工程师。它只补一套足以让普通 software change 不忽略安全边界的 reasoning。
+这篇旁支不试图把你训练成安全工程师。Security 本身足以成为完整专业方向，把它塞进 M00–M13 会稀释 change-engineering 主线；只有当 trust、credential、untrusted input、tool permission 或 adversarial behavior 开始影响当前 change 时，再进入这里。它只补一套足以让普通 software change 不忽略安全边界的 reasoning。
 
 ## 1. Security requirement 不是“最后做一次扫描”
 

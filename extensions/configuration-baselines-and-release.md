@@ -6,6 +6,8 @@
 
 Software Configuration Management（SCM）研究的核心并不是 Git 命令，而是一个更基本的问题：**一个会持续变化的软件产品由哪些受控 artifact 构成，我们怎样知道某一时刻真正生效的是哪一组，以及改变它们需要什么 authority 和 evidence？**
 
+M08/M13 已经把 compatibility、migration 和 rollback 的核心语义放进主线；只有当 build/release/deployment 由多种可独立变化的 artifact 共同决定时，才需要这层更完整的 configuration identity，因此它适合作为按需旁支而不是新的必修模块。
+
 ## 1. Version control 只是 SCM 的一个机制
 
 Git 很重要，但它主要擅长回答 source tree 的版本历史。真实 release 往往还包含：
