@@ -109,7 +109,7 @@ https://google.github.io/eng-practices/review/reviewer/looking-for.html
 
 页面明确要求 human reviewer 判断 tests 本身的 validity。
 
-还明确要求在一般情况下理解所有 human-written lines；如果 reviewer 对某部分缺乏 security/concurrency/privacy 等专业资格，需要确保有合适 reviewer 覆盖该部分。
+还明确要求在一般情况下理解自己被分配 review 的所有 human-written lines；如果 reviewer 只负责部分 files/aspects，应明确披露 partial scope；如果对 security/concurrency/privacy 等专业部分缺乏资格，需要确保有合适 reviewer 覆盖该部分。
 
 ## M10 采纳
 
@@ -170,7 +170,7 @@ https://google.github.io/eng-practices/review/reviewer/navigate.html
 
 ## M10 采纳
 
-课程将其重构成 **review funnel**：
+课程将其重构成 **risk-first review funnel**：
 
 ```text
 Should this change exist?
@@ -183,8 +183,14 @@ What is the semantic core of the diff?
         ↓
 Does evidence discriminate correct from incorrect implementations?
         ↓
-Only then line-level maintainability / nits
+Review the remaining assigned implementation + code health
+        ↓
+Separate mandatory findings from true nits / optional polish
 ```
+
+这里的 `risk-first` 是 **prioritization, not sampling**。先看 main part 可以更早发现会推翻整份 CL 的问题；当 broad design 可接受时，仍要完成自己承担的其余 human-written review scope。Partial review 要明确披露；specialist area 要有 qualified reviewer 覆盖。
+
+同时，maintainability / readability / understandability 属于 code-health judgment，不天然是 nit。只有 non-mandatory polish 才应被降为 nit。
 
 这样避免：
 
@@ -520,14 +526,16 @@ Independent reviewer model
    ↓
 Contract / invariant / authority / failure / compatibility impact
    ↓
-Diff mechanics
+Risk-first semantic review
    ↓
-Evidence quality
+Remaining assigned implementation + code-health review
    ↓
-Residual risk
+Evidence quality + residual risk
    ↓
 Decision + precisely scoped comments
 ```
+
+课程自己的 severity authority 仍来自 `COURSE_DESIGN.md`：canonical 教学三档是 `Blocker / Medium / Nit`。平台可使用其他 wording；例如 `Important / Should fix` 可映射到 Medium，而 `Optional / FYI` 是额外 comment intent，不应悄悄替换 canonical severity contract。
 
 核心句：
 
