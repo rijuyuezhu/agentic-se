@@ -263,3 +263,26 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/m07_interleaving_p
 - baseline 里是否还有某个重要 qualifier 虽“提到了”但教学解释已经压得太薄。
 
 因此 Draft PR 应继续要求 semantic review + cold-reader/editorial review；本文件不构成 approve。
+
+## 15. Issue #2 closure pass — instructor-case regrouping
+
+2026-09-07 closure review 认为 M07 module 与 technical reasoning 已经闭环，但 instructor case 仍保留初版 `Reference 结论 -> 19 个逐题解释` 的 answer-key节奏。这里不需要再次改 M07 design；只把已有 evidence / reasoning 重组为连续 engineering analysis，并让 final judgment 放回证据之后。
+
+本轮只重组 `case-studies/m07/instructor-analysis.md`。新 spine 是：two-success history -> atomic semantic decision / linearization -> deterministic instrumentation + progress -> effect/record failure window -> effect-owner authority -> timeout/retry load -> cancellation transfer -> rejected fixes -> Review Agent -> instructor judgment。
+
+Semantic preservation 特别复核：
+
+- two success receipts / final-state masking 仍是第一条 history-level counterexample；
+- reference short lock + re-check 仍只是 candidate mechanism，mutex/CAS/conditional update/single-owner handler 的 legal set 保持开放；
+- Herlihy-Wing qualifier 仍是“存在 legal sequential explanation并保持 real-time precedence”，同一个 history 可以有多个 valid linearizations；具体 reference 才定位自己的 candidate atomic region；
+- `after_observe` 放 lock 外继续只服务 deterministic teaching fixture，避免 barrier-under-lock deadlock，不推广成 production rule；
+- loser `continue` 仍保护 current first-eligible/insertion-order progress semantics；
+- `concurrent_claim.py` 仍是 teaching isolation，不是多个 production claim authority 的推荐；
+- `completed_jobs` 仍是 in-memory set，`SimulatedCrash` 仍是 same-process failpoint；probe 不声称真实 restart recovery；
+- record-first reasoning 仍明确需要额外 durable-record assumption，并且只把 duplicate window 换成 loss window；
+- idempotent sink guarantee 仍只覆盖 sink-owned logical effect ID，不扩张成 whole-job / arbitrary external exactly-once；
+- request identity 与 effect identity/authority 继续分开；27/64 retry-amplification wording 保留；
+- `CANCELLING` 与 orthogonal cancellation-request representation 继续作为 alternatives；current `worker.finish()` 没有 claimant-identity contract，owner-bound finish 仍只作为 future protocol candidate；
+- attempt/retry policy 与 external-effect guarantee 继续是两个不同 proof obligations。
+
+Canonical validation 重新得到 core `6 passed`，M07 probe 仍稳定重放 double claim、final-state masking、effect-before-record duplicate 与 record-first loss trade-off。Historical `9 passed` 继续只表示临时 instructor reference 的 3 个 focused tests，而不是 canonical starter acceptance oracle。
