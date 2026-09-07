@@ -1,206 +1,80 @@
-# M11 Instructor Analysis — Production、Observability 与 Reliability
+# M11 Instructor Reference — 从 false-green dashboard 到 reliability learning loop
 
-> 这是教师参考，不是学生第一遍实验时应该直接照抄的答案。
+> 教师参考。它描述一条可接受 reference reasoning，不是要求学生照抄唯一 telemetry schema、SLO 参数或 mitigation policy。
 
----
+## 1. Baseline 不是 performance benchmark，而是一个 measurement contradiction
 
-# 1. Baseline 最重要的事实
-
-M11 starter 没有引入真实 wall-clock benchmark。
-
-它用 deterministic synthetic timeline 表达一个 production workload：
+`production_signals.py` 用 deterministic synthetic timeline 构造 12 个几乎连续提交的 jobs，由单 worker 顺序 claim/finish。所有 jobs 最终 `SUCCEEDED`，ending queue depth 回到 0，所以 naive summary 是：
 
 ```text
-12 jobs almost at once
-single worker
-1s service time per job
+submitted=12
+success_ratio=1.0
+ending_queue_depth=0
+healthy=true
 ```
 
-所有 job：
+但 submit→first-claim wait 是：
 
 ```text
-最终 SUCCEEDED
-```
-
-最终：
-
-```text
-queue depth = 0
-```
-
-于是 naive dashboard：
-
-```text
-success_ratio = 1.0
-ending_queue_depth = 0
-healthy = true
-```
-
-但 authoritative submit→claim wait：
-
-```text
-job-1   1.00s  good
-job-2   1.95s  good
-job-3   2.90s  bad
+job-1   1.00s   good
+job-2   1.95s   good
+job-3   2.90s   bad
 ...
-job-12  > 10s  bad
+job-12  >10s    bad
 ```
 
-最终：
+因此教学 SLI 得到：
 
 ```text
 good=2
 bad=10
 total=12
-SLI=0.1667
+ratio=0.1667
 ```
 
-这不是“dashboard 计算错误”。
+第一层结论不是“dashboard bug”，而是 **dashboard 回答的问题不足以代表 user contract**。第二层 qualifier 也必须保留：这些 synthetic timestamps 不证明真实 TaskForge capacity，也不应用来估生产 throughput。
 
-它准确计算了自己定义的东西。
+## 2. Reference production contract
 
-问题是：
-
-> **它测的不是用户最重要的 contract。**
-
----
-
-# 2. 这不是 performance benchmark
-
-不要从这个 lab 推出：
+本参考选择的 journey 是：
 
 ```text
-TaskForge 能处理 1 job/s
+accepted submit -> first authoritative claim -> explicit terminal outcome
 ```
 
-synthetic timeline 是教学 fixture。
+Primary SLI 只建模第一段等待，不声称覆盖 completion correctness、durability、cancellation、external effects 或真实 end-to-end client latency。
 
-目的只在于：
+Reference specification：
 
-```text
-all eventual outcomes good
-while user latency bad
-```
+- Total：measurement scope 内每个 accepted submission；
+- Good：first authoritative claim exists 且 wait `<= 2.0s`；
+- Bad：claim exists 且 wait `> 2.0s`；
+- Unknown：accepted 已知，但 evaluation 时没有 first-claim evidence。
 
-真实 capacity 需要真实 benchmark / production measurement。
+Reference summary 使用 `good / total`，所以 unknown 不会被 silent drop 或自动算 good。真实系统可以把 open-window work 先视为 pending，或者另建 telemetry coverage SLI；课程只要求 missingness 显式。
 
----
+## 3. 为什么 denominator 从 accepted submissions 开始
 
-# 3. Reference SLI Specification
+错误版本 `fast_claimed / all_claimed` 会把 never-claimed accepted work 从 denominator 删除。越严重的 backlog 越可能让 SLI 看起来更好，属于典型 survivorship bias。
 
-本参考选择：
+因此 cohort authority 来自 accepted submission，而不是“我们碰巧收到了哪些 claim events”。这和 M01/M03 一致：measurement implementation 不能偷偷改写 specification population。
 
-```text
-Total:
-  every accepted submission observed in the measurement window
+## 4. Reference measurement placement
 
-Good:
-  first authoritative claim_time - accepted_time <= 2.0s
+本参考选择 service accepted event + worker authoritative claim event，因为它：
 
-Bad:
-  authoritative first claim exists, but > 2.0s
-
-Unknown:
-  accepted submission exists but no first-claim evidence is available
-  when the measurement is evaluated
-```
-
-Reference summary：
-
-```text
-ratio = good / total
-```
-
-因此 unknown 不会被自动当 good。
-
-注意：
-
-这不是唯一合理 policy。
-
-一个真实系统可能：
-
-```text
-window not closed yet
-→ pending, not final unknown
-```
-
-或者：
-
-```text
-telemetry coverage gap
-→ separate coverage SLI
-```
-
-关键是不能 silent drop。
-
----
-
-# 4. 为什么 denominator 必须从 accepted submissions 开始
-
-错误版本：
-
-```text
-fast_claimed / all_claimed
-```
-
-如果一个 job：
-
-```text
-accepted
-never claimed
-```
-
-它完全不在 denominator。
-
-越严重的 backlog 反而可能让 SLI 更好看。
-
-所以这次 specification 以：
-
-```text
-accepted submission
-```
-
-作为 cohort authority。
-
----
-
-# 5. Reference Measurement Placement
-
-本参考选择：
-
-```text
-service accepted event
-+
-worker authoritative claim event
-```
-
-原因：
-
-- 能覆盖 queue wait；
+- 覆盖 queue wait；
 - 不依赖 client polling cadence；
-- 与 lifecycle authority 接近；
-- deterministic lab 中容易验证。
+- 靠近 lifecycle authority；
+- 在 deterministic lab 中容易验证。
 
-Blind spots：
+但 blind spots 必须一起写：client→API latency、ingress 前 rejection 不在其中；telemetry loss 会产生 unknown；未来跨主机还需要明确 clock semantics。它不是完美 end-to-end user measurement。
 
-- client→API network delay 不在里面；
-- ingress 前 rejection 不在 accepted-job SLI；
-- telemetry event loss 会造成 unknown；
-- distributed clocks 将来需要处理 clock semantics。
+## 5. Reference implementation direction
 
-因此它不是“真实用户端到端 latency”的完美替代。
+临时 reference working copy 可以新增一个轻量 `production_observability.py`，而不引入 telemetry vendor。
 
----
-
-# 6. Reference Implementation
-
-临时副本新增：
-
-```text
-src/taskforge/production_observability.py
-```
-
-核心类型：
+核心 summary type 可以是：
 
 ```python
 @dataclass(frozen=True)
@@ -212,80 +86,29 @@ class StartLatencySummary:
     ratio: float
 ```
 
-关键价值是：
+Reference tests 首先保护 behavioral semantics：baseline 是 `2/10/0/12`；accepted-but-no-claim 不消失；summary 不改变 canonical TaskForge lifecycle。
+
+名字和具体 API 不是课程 authority。
+
+## 6. Aggregate metric identity 与 diagnostic event 分工
+
+Reference aggregate dimensions 只使用 bounded vocabulary，例如：
 
 ```text
-unknown 是 first-class
-```
-
-而不是被过滤掉。
-
----
-
-# 7. Reference Aggregate Metrics
-
-没有真的接 Prometheus。
-
-我们只验证 metric identity model。
-
-Reference labels：
-
-```text
-outcome = within_target | late
+outcome = within_target | late | unknown
 worker_pool = default
 ```
 
-不含：
+不把 `job_id`、request ID、command 放进 aggregate metric labels。
+
+强 negative control：
 
 ```text
-job_id
-command
+12 jobs  -> bounded number of series identities
+120 jobs -> same bounded category identities
 ```
 
-因此 baseline：
-
-```text
-12 jobs
-→ 2 series identities
-```
-
-扩大：
-
-```text
-120 jobs
-→ still 2 series identities
-```
-
-这是一条很强的 negative control。
-
----
-
-# 8. 为什么不测试源码里没有字符串 job_id
-
-这种 test：
-
-```python
-assert "job_id" not in source
-```
-
-是错的。
-
-因为 diagnostic event 正应该保留 `job_id`。
-
-真正 contract 是：
-
-```text
-aggregate metric label identity
-不得随 individual job identity 增长
-```
-
-所以用行为层 cardinality test 更合理。
-
----
-
-# 9. Diagnostic Event
-
-Reference：
+而 diagnosis event 可以保留：
 
 ```json
 {
@@ -297,514 +120,180 @@ Reference：
 }
 ```
 
-这里 `job_id` 很有用：
+所以 `job_id` 高 cardinality 不能推出 `job_id` 没 telemetry value。真正 contract 是：individual identity 不应让 aggregate series count 随 workload 线性增长。
+
+## 7. Sensitive data 与 telemetry compatibility
+
+Reference event 不记录 command、headers、tokens、arbitrary user content。TaskForge command 未来可能携带 path、credential misuse、business/user data，不能默认进入 telemetry backend。
+
+如果已有 consumer 依赖 `job_claimed.outcome`，改名为 `status` 就是 compatibility change。Reference 可用 M08 风格：producer 暂时同时支持 old/new 或 reader 支持两者 → migrate dashboards/alerts/queries → contract/remove old。是否需要完整 migration 取决于 consumer/risk，不是每个 debug log 都必须永久兼容。
+
+## 8. SLO 与 error-budget reference
+
+教学 SLO 是：
+
+> 99% applicable accepted jobs 的 first authoritative claim 在 2 秒内发生。
+
+这只是 fixture target。Reference explanation 必须补 measurement window、traffic scope、missing policy、owner、review cadence。
+
+若 observed bad ratio 为 `10/12 ≈ 0.8333`，SLO 允许 bad ratio 是 `0.01`，则 instantaneous burn-rate intuition 约 `83.33x`。如果这种状态持续 1 小时，而假设 30-day window，window fraction 是 `1/720`，budget consumption 约 11.6%。
+
+这个 calculation 很严重，但 reference 不硬编码“一定 page”。Page 还取决于 persistence、traffic representativeness、service criticality、operator action 和 window design。课程刻意不复制固定 14.4x/6x threshold。
+
+## 9. Symptom、cause 与 action contract
+
+Reference classification：
+
+- start-latency SLI：direct user symptom；
+- queue depth：主要是 internal saturation/cause signal；
+- queue oldest age：比 depth 更接近 user pain，但仍通常是 queue-internal；
+- CPU / worker utilization：cause/capacity signal；
+- retry rate：cause/amplifier，也可能反映 caller distress；
+- submit error ratio：可能直接是 user symptom。
+
+Reference page 不写 `queue_depth > 10`。更合理的 action contract是：urgent sustained start-latency error-budget threat → TaskForge on-call；先查 oldest age、arrival/service rate、worker availability、recent rollout、dependency latency、retry attempts；mitigation 可包括 rollback scheduler、restore worker capacity、按 public capacity contract throttle/reject new work、降低 retry amplification；当 short-window symptom recovery 且 long-window burn 受控时 stop。
+
+Capacity headroom 长期下降但当前无 SLO threat 更适合 ticket。
+
+## 10. Retry storm probe：第二个 failure model
+
+新增 teaching-only `m11_retry_storm_probe.py` 不修改 TaskForge 产品代码。它稳定表达一个 overload feedback loop：每轮 8 个新 logical requests，downstream capacity 4；所有 timeout attempts 下一轮立即 retry。
+
+Reference naive attempts：
 
 ```text
-incident query
-correlate submit/claim/finish
-investigate one job
+8, 12, 16, 20, 24, 28
 ```
 
-因此：
+Reference bounded retry-budget comparison：
 
 ```text
-job_id high cardinality
+8, 10, 10, 10, 10, 10
 ```
 
-不能推出：
+这里的课程结论只有：**retry consumes capacity and can amplify overload**。不要从 probe 推出具体 timeout/backoff/retry-budget 参数。
+
+需要继续保留 M04/M07 semantics：timeout 不证明原 attempt 未执行；backoff/jitter 不提供 exactly-once；retry budget 不创造 capacity。若 operation 可能有 external effect，还需要 logical request/effect identity 和 dedup contract。
+
+## 11. Overload alternatives 没有 universal winner
+
+Reference comparison：
+
+### Accept all / unbounded queue
+
+优点是 immediate rejection 少、接口简单；代价是 wait latency/resource/stale work 可以无界增长。Baseline 就展示了“availability 看起来好，只是把 failure 变成 latency”。
+
+### Bounded queue + explicit rejection/load shedding
+
+优点是资源有界、保护已有 work、overload explicit；代价是 public rejection/retryability contract 必须设计，caller retry 又可能放大 load，SLI cohort interpretation 也会改变。
+
+### Scale workers
+
+提高 service rate，但有 cost、startup lag、dependency bottleneck、concurrency/failure complexity；扩容速度可能赶不上 retry amplification。
+
+Reference 不宣布某个方案“架构更干净”。Decision 取决于 product semantics、capacity、deadline、cost、blast radius 和 caller behavior。
+
+## 12. Incident reference：先重建 impact/timeline，再找 cause
+
+教学 incident 可以这样组织，但不要伪造人物戏剧。
+
+### Impact
+
+Accepted-job start latency 大量超过 2s，baseline cohort 10/12 bad。Naive eventual-success/ending-depth dashboard 没显示这个 history-level harm。
+
+### Timeline
+
+一个合理教学 timeline：
 
 ```text
-job_id has no telemetry value
+T0    burst / downstream pressure starts
+T1    first accepted jobs exceed start-latency target
+T2    naive retry policy begins amplifying attempts
+T3    SLO symptom + retry/saturation evidence cross action threshold
+T4    operator limits new/retry load or restores capacity
+T5    start-latency symptom recovers
 ```
 
-只是说明 signal placement 不同。
+这些是 failure-model timestamps，不是 production incident 事实。
 
----
+### Plausible hypotheses
 
-# 10. Sensitive Data
+- arrival rate burst；
+- worker capacity loss；
+- dependency timeout；
+- recent scheduler rollout；
+- retry amplification；
+- telemetry/query defect。
 
-Reference event 明确没有：
+每个 hypothesis 都要绑定 discriminating evidence，而不是由 temporal correlation 自动升成 root cause。
+
+## 13. Blameless but technically precise postmortem reference
+
+Reference postmortem 应覆盖：summary/impact、timeline、detection、response、trigger、root/contributing conditions、amplification、what went well/poorly、residual risk、follow-up actions。
+
+一个不合格 root cause 是：
 
 ```text
-command
-headers
-user content
-tokens
+operator forgot to disable retries
 ```
 
-因为 TaskForge command 未来可能包含：
+更完整的 analysis 要继续问：为什么 retry policy 没有 budget/backoff；为什么 overload/retry signal 没进入 action contract；为什么 naive dashboard 只看 final success/depth；为什么 rollout/review 没暴露这一 assumption；为什么一个普通 configuration/implementation mistake 能扩大 blast radius。
 
-```text
-paths
-credentials passed poorly
-user input
-business data
-```
+Reference action items 应可验证，例如：
 
-不能默认进入 telemetry backend。
+| Action | Purpose | Done evidence |
+|---|---|---|
+| define retry budget/backoff contract for this boundary | Prevent/Mitigate | deterministic + integration failure evidence shows bounded amplification |
+| add start-latency SLI + missingness policy | Detect | accepted cohort cannot silently disappear; alert evaluation uses it |
+| add retry-attempt/saturation diagnostic context | Detect/Diagnose | incident query can distinguish demand, capacity, retry amplification |
+| document overload rejection/retryability semantics | Prevent | M04 boundary tests + caller contract updated |
+| add rollout stop condition for latency burn | Mitigate | canary exercise demonstrates stop/rollback decision |
 
----
+“以后更小心”不是 system change；“alert every timeout”也不是 automatically actionable。
 
-# 11. Missing Claim Test
+## 14. Reference test evidence
 
-构造：
+在临时 working copy 中，最小 observability implementation 可以用 5 个 tests 覆盖：
 
-```python
-[JobLifecycleEvent("submitted", 0.0, "job-x")]
-```
+1. baseline burst 得到 `2 good / 10 bad`；
+2. 12 vs 120 jobs aggregate series identity 不随 job count 增长；
+3. diagnosis event 保留 `job_id` 但无 command/sensitive payload；
+4. missing claim 不从 denominator 消失；
+5. optional error-budget/window helper obeys documented semantics。
 
-Reference：
+Canonical repo 不需要因此接 telemetry stack。`production_signals.py` 和两个 probes 是 teaching surfaces；reference implementation 仍可留在学生/教师临时 copy。
 
-```text
-good=0
-bad=0
-unknown=1
-total=1
-ratio=0.0
-```
+## 15. 哪些判断不能被漂亮 dashboard 或 Agent summary替代
 
-这证明 accepted job 没有因为 missing claim 被 denominator 丢掉。
+学生常见错误仍包括：
 
----
+- `100% eventual success -> healthy`：遗漏 latency contract；
+- `queue_depth > threshold -> page`：没有 user impact/action reasoning；
+- `job_id useful -> metric label`：混淆 diagnosis 与 aggregation；
+- missing claim event 直接 filter：survivorship bias；
+- installed OTel -> observability done：工具替代 measurement design；
+- `SLO = current p99 + 10%`：current performance 偷换 requirement；
+- alert every exception：diagnostic event 偷换 urgent action；
+- retry on every timeout：recovery mechanism 偷换成 unbounded load source；
+- postmortem root cause = person error：组织/系统 learning 被截断。
 
-# 12. Error Budget Calculation
+Agent instrumentation review 要独立问：SLI 真的测什么、bad work 能否消失、telemetry failure 能否改善 SLI、labels 是否 unbounded、schema 是否兼容、敏感数据是否泄漏、page 是否 actionable、retry 是否放大 load、instrumentation 本身 cost/failure 是否可接受。
 
-Reference helper：
+## 16. Grading focus
 
-```text
-burn_rate = observed_bad_ratio / allowed_bad_ratio
-budget_consumed = burn_rate × window_fraction
-```
+高分答案不一定有第三方 telemetry stack。真正看：
 
-对 baseline：
+- user contract → SLI 的推导是否成立；
+- placement/denominator/missingness 是否有明确 model；
+- aggregate/cardinality 与 diagnosis correlation 是否分开；
+- SLO/budget 是否驱动 decision 而不是数字 cargo cult；
+- overload/retry/backpressure alternative 是否比较 contract 与 consequence；
+- incident evidence 是否区分 impact、hypothesis、cause；
+- postmortem 是否 blameless 且 technically precise，action item 是否可验证；
+- Agent/author summary 是否经过 independent review。
 
-```text
-bad_ratio = 10/12 ≈ 0.8333
-SLO = 0.99
-allowed_bad = 0.01
-burn ≈ 83.33x
-```
+M11 的结论不是“production 需要更多数据”。更接近的是：
 
-如果这样的状态持续 1h，而 SLO window 是 30 days：
+> Production evidence 的质量取决于 semantic alignment、coverage、placement、aggregation、cost 与 actionability；incident learning 只有在回到 contract/design/test/operation change 时才闭环。
 
-```text
-window_fraction = 1 / 720
-budget consumed ≈ 0.1157
-```
-
-即约 11.6% 整个 30-day budget。
-
-这个数很严重。
-
-但 reference **没有硬编码说一定 page**。
-
-Page policy 还取决于：
-
-```text
-windowing
-persistence
-traffic representativeness
-operator action
-service criticality
-```
-
----
-
-# 13. 为什么不直接复制 Google 14.4x
-
-Google Workbook 给的是成熟实践中的推荐起点。
-
-TaskForge 课堂没有真实：
-
-```text
-30-day traffic distribution
-on-call policy
-business cost
-```
-
-所以本 lab 训练 formula 和 decision relation，而不是 threshold cargo cult。
-
----
-
-# 14. Symptom / Cause Reference
-
-## start-latency SLI
-
-```text
-symptom
-```
-
-因为直接表达 user waiting experience。
-
-## queue depth
-
-```text
-mostly cause / saturation signal
-```
-
-它可以解释 wait，但最终 depth=0 证明它不是完整 symptom history。
-
-## oldest queue age
-
-比 depth 更接近 user pain，但仍然通常是 queue-internal signal。
-
-## CPU
-
-通常 cause / capacity signal。
-
-## submit error ratio
-
-可能直接是 user symptom。
-
-## retry rate
-
-通常 cause/amplifier signal，也可能反映 user retries。
-
----
-
-# 15. Alert Reference
-
-Page 不直接写：
-
-```text
-queue_depth > 10
-```
-
-Reference action contract：
-
-```text
-Trigger:
-  sustained urgent burn of start-latency SLO
-
-User consequence:
-  accepted jobs are not beginning within promised time
-
-Urgency:
-  current burn would consume significant budget before normal business response
-
-Owner:
-  TaskForge on-call
-
-First actions:
-  inspect oldest queue age, arrival/service rate, worker availability,
-  recent rollout markers, dependency latency
-
-Mitigation options:
-  rollback recent scheduler change
-  restore worker capacity
-  throttle/reject new work according to public capacity contract
-
-Stop:
-  short-window symptom recovers and long-window burn is controlled
-```
-
-这比“CPU > 80%”更有 operational meaning。
-
----
-
-# 16. Ticket Reference
-
-例如：
-
-```text
-capacity headroom steadily declining over 2 weeks
-but no current SLO threat
-```
-
-适合 ticket。
-
-因为：
-
-```text
-human action required
-but not now
-```
-
----
-
-# 17. Overload Options
-
-## Infinite Queue
-
-优点：
-
-```text
-few immediate rejections
-simple semantics
-```
-
-缺点：
-
-```text
-unbounded latency
-memory/storage growth
-stale work
-```
-
-## Bounded Queue + Rejection
-
-优点：
-
-```text
-bounded resource use
-explicit overload
-protect existing work
-```
-
-缺点：
-
-```text
-public rejection contract needed
-caller retry may amplify
-availability SLI interpretation changes
-```
-
-## Scale Workers
-
-优点：
-
-```text
-higher service rate
-```
-
-缺点：
-
-```text
-cost
-startup lag
-external dependency may become bottleneck
-concurrency/failure complexity
-```
-
-没有 universal winner。
-
----
-
-# 18. Backpressure 的关键不是 queue library
-
-正确问题：
-
-```text
-capacity information 如何向 producer/caller 传播？
-```
-
-如果 API 永远 accepts：
-
-```text
-availability metric 可能很好
-```
-
-但实际只是把 failure 变成 latency。
-
-这正是 baseline 的教学价值。
-
----
-
-# 19. Telemetry Compatibility
-
-如果已有 consumer 依赖：
-
-```text
-job_claimed.outcome
-```
-
-改名必须像 M08 一样推理：
-
-```text
-Expand:
-  produce old + new / reader supports both
-
-Migrate:
-  update dashboards/alerts/queries
-
-Contract:
-  remove old
-```
-
-具体是否值得这么做取决于 consumer 数量和风险。
-
----
-
-# 20. Reference Test Results
-
-临时副本：
-
-```text
-6 core tests
-5 M11 tests
------------
-11 passed
-```
-
-5 个 M11 tests 分别验证：
-
-1. deterministic burst 得到 `2 good / 10 bad`；
-2. 12 vs 120 jobs aggregate series identity 不增长；
-3. diagnostic events 保留 job_id，但不带 command；
-4. missing claim 不消失；
-5. error-budget consumption calculation 与 window semantics 连接。
-
----
-
-# 21. 为什么 Reference 没修改 Canonical TaskForge
-
-和前几章一样，本章的真正目标是：
-
-```text
-学生设计 measurement contract
-```
-
-而不是把仓库快速演化成完整 production framework。
-
-因此 canonical baseline 只增加：
-
-```text
-production_signals.py
-m11_production_probe.py
-```
-
-它们是教学 workload + flawed instrumentation surface。
-
-reference solution 留在 instructor analysis，不提交正式实现。
-
----
-
-# 22. Student 常见错误
-
-## 错误 1
-
-```text
-success ratio 100%
-→ no problem
-```
-
-遗漏 latency contract。
-
-## 错误 2
-
-```text
-queue depth > threshold
-→ page
-```
-
-没有 action/impact reasoning。
-
-## 错误 3
-
-```text
-job_id useful
-→ metric label
-```
-
-混淆 correlation 与 aggregation。
-
-## 错误 4
-
-```text
-missing claimed event
-→ filter out
-```
-
-产生 survivorship bias。
-
-## 错误 5
-
-```text
-OpenTelemetry installed
-→ observability done
-```
-
-工具替代 measurement design。
-
-## 错误 6
-
-```text
-SLO = current p99 + 10%
-```
-
-current performance 偷换 user requirement。
-
-## 错误 7
-
-```text
-alert every exception
-```
-
-把 diagnostic event 误当 urgent action。
-
----
-
-# 23. Agent Review Checklist
-
-Agent instrumentation patch 必须独立问：
-
-```text
-Does the SLI measure user outcome?
-Can bad work disappear from denominator?
-Can telemetry failure improve the SLI?
-Are labels bounded?
-Does cardinality scale with requests/users/jobs?
-Are secrets or user content recorded?
-Did metric/event names change existing consumers?
-Are pages actionable?
-Did the Agent invent arbitrary SLO thresholds?
-Did instrumentation itself add meaningful load?
-```
-
----
-
-# 24. 一个非常重要的 M11 结论
-
-```text
-production evidence
-!=
-more data
-```
-
-Production evidence 的质量取决于：
-
-```text
-semantic alignment
-coverage
-placement
-aggregation
-cost
-actionability
-```
-
-所以 observability 是 software design 的延伸。
-
----
-
-# 25. 评分时真正看什么
-
-高分答案不一定有任何第三方 telemetry stack。
-
-最重要的是：
-
-```text
-能不能从 user contract 推导 measurement
-能不能识别 blind spot
-能不能控制 cardinality
-能不能解释 missing data
-能不能把 alert 连接到 action
-能不能独立 review Agent instrumentation
-```
-
-如果学生接了漂亮 Grafana dashboard，但这些问题答不出来，不应高分。
-
----
-
-# 26. M11 到 M12 的桥
-
-M12 会进一步问：
-
-> 当 Agent 可以自己运行 tests、读取 logs、查询 metrics、修改代码、重新部署时，谁决定 observation 的语义？谁决定何时 stop？谁拥有 rollback / production action authority？
-
-M11 的答案已经提供基础：
-
-```text
-Agent can collect and analyze evidence
-but human/system policy must still define
-what counts as acceptable service and authorized action
-```
+M12 会进一步讨论当 Agent 可以自己收集这些 evidence、运行工具甚至修改系统时，tool authority 与 acceptance authority 应怎样分离。

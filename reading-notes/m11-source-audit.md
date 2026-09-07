@@ -288,7 +288,42 @@ TaskForge 的 production lab 会用这个差异作为主场景。
 
 ---
 
-## 7. Prometheus — Instrumentation Best Practices
+
+## 7. Google SRE — Addressing Cascading Failures / Retry Amplification
+
+Primary sources:
+
+- https://sre.google/sre-book/addressing-cascading-failures/
+- https://sre.google/sre-book/service-best-practices/
+
+实际检查：
+
+- retries 会把已经存在的 overload 放大成更多 traffic；
+- automatic retries 需要 randomized exponential backoff 等机制来降低同步放大；
+- overload 时不能把 retry 当成“免费恢复动作”，因为 retry 自己也消耗 downstream capacity；
+- graceful degradation、load shedding 与 upstream traffic reduction 都可能是从 cascading failure 中恢复的手段；
+- 具体 retry 次数、timeout、backoff 参数取决于 service contract、capacity、deadline、idempotency 与 failure semantics。
+
+### 本课程采用
+
+M11 把 retry 看成 **load-producing reliability mechanism**。如果新请求持续到达，而每个 timeout 都立即 retry，那么 attempts 可以在 downstream capacity 不变时持续增长；这正是 `m11_retry_storm_probe.py` 要稳定复现的 failure shape。
+
+课程要求学生比较：
+
+- naive immediate retry；
+- bounded retry budget；
+- backoff / jitter / caller throttling 等候选 mitigation；
+- rejection / load shedding 与 retryability contract 的关系。
+
+### 不升级成课程规则
+
+- 不把某个固定 backoff base、retry count 或 jitter algorithm 写成 universal answer；
+- 不声称“所有 timeout 都应该 retry”；
+- 不声称 backoff 本身能创造 capacity 或解决 non-idempotent duplicate effects；
+- 不把教学 probe 的离散 round 当成 TaskForge 真实 throughput benchmark。
+
+---
+## 8. Prometheus — Instrumentation Best Practices
 
 Primary sources:
 
@@ -348,7 +383,7 @@ Prometheus 文档里的具体 cardinality 数字只作为该生态的 guideline�
 
 ---
 
-## 8. OpenTelemetry — Logs Data Model / Semantic Conventions
+## 9. OpenTelemetry — Logs Data Model / Semantic Conventions
 
 Primary sources:
 
@@ -395,7 +430,7 @@ Primary sources:
 
 ---
 
-## 9. Prometheus — The Zen of Prometheus
+## 10. Prometheus — The Zen of Prometheus
 
 Primary source:
 
@@ -424,7 +459,41 @@ but choose signal shape deliberately
 
 ---
 
-# 10. 交叉验证后的 M11 核心模型
+## 11. Google SRE — Postmortem Culture / Incident Learning
+
+Primary sources:
+
+- https://sre.google/sre-book/postmortem-culture/
+- https://sre.google/workbook/postmortem-culture/
+
+实际检查：
+
+- postmortem 是 incident 的书面记录，覆盖 impact、mitigation/response、root/contributing causes 与 follow-up actions；
+- blamelessness 的重点是分析允许失败发生和扩大的 system/process conditions，而不是把“某个人犯错”当技术 root cause；
+- 高质量 action item 应有可验证的完成状态，并面向 prevention / mitigation，而不是只要求“以后更小心”；
+- incident learning 不只修 immediate trigger，也会反哺 detection、mitigation、coordination、communication、training 与 architecture；
+- 写完文档不是闭环，action-item closeout 才把 learning 变成 system change。
+
+### 本课程采用
+
+M11 要求一份 **blameless but technically precise** postmortem。最低应恢复：
+
+- user impact 与时间线；
+- SLI/SLO 或其他 production evidence 如何显示影响；
+- trigger、root/contributing conditions 与 retry/overload amplification；
+- 哪些 detection / mitigation / review assumptions 失败；
+- 可验证的 follow-up actions 与 owner/evidence。
+
+### 不升级成课程规则
+
+- 不要求每个轻微 bug 都写正式 postmortem；
+- 不要求使用 Google 的组织流程或模板；
+- blameless 不等于技术描述含糊，也不等于不讨论 decision/process failure；
+- postmortem 不能把 correlation 自动写成 root cause，也不能用“operator error”结束分析。
+
+---
+
+# 12. 交叉验证后的 M11 核心模型
 
 这些来源共同支持一个比“装监控工具”更稳定的 model：
 
@@ -435,15 +504,17 @@ SLI specification
         ↓
 measurement implementation
         ↓
-telemetry model
-        ↓
-aggregation / window
+telemetry model / aggregation / missingness
         ↓
 SLO / budget / threshold
         ↓
-notification policy
+notification + action contract
         ↓
-human or automated action
+overload / retry / mitigation behavior
+        ↓
+incident evidence
+        ↓
+postmortem learning + verifiable follow-up
 ```
 
 每一层都可能错。
@@ -474,11 +545,11 @@ human or automated action
 = cardinality incident
 ```
 
-所以 observability 是 **semantic design + measurement design + operational action design**。
+所以 M11 的 reliability model 不止是 observability：它把 **semantic design + measurement design + operational action + failure amplification + incident learning** 连成一个 loop。
 
 ---
 
-# 11. 本模块刻意不依赖的内容
+# 13. 本模块刻意不依赖的内容
 
 以下材料可能有价值，但本轮不把它们当 authority：
 
@@ -495,19 +566,20 @@ human or automated action
 
 ---
 
-# 12. 对 TaskForge M11 的直接影响
+# 14. 对 TaskForge M11 的直接影响
 
-M11 starter 应体现：
+M11 starter / teaching probes 应体现：
 
-1. **所有 tests 可以继续绿；**
-2. 所有 jobs 最终甚至可以 `SUCCEEDED`；
-3. final queue depth 可以回到 0；
-4. 但 burst workload 中很多 job 的 `submit → claim` 已经超过用户容忍阈值；
-5. naive dashboard 因为只看 final success / ending queue depth，会判断 healthy；
-6. user-centered SLI 会判断明显 degraded；
-7. naive metrics 若把 `job_id` 作为 label，会制造 workload-proportional cardinality；
-8. useful logs/events 可以保留 `job_id` 作为 diagnosis correlation key；
-9. page 不应直接由 `queue_depth > N` 这种 cause threshold 定义，除非它确实对应紧急、可行动的 user impact。
+1. **所有 core tests 可以继续绿；**
+2. 所有 jobs 最终甚至可以 `SUCCEEDED`，final queue depth 也可以回到 0；
+3. 但 burst workload 中很多 job 的 `submit → claim` 已经超过教学 latency target；
+4. naive dashboard 因为只看 final success / ending queue depth，会判断 healthy；
+5. user-centered SLI 会判断明显 degraded；
+6. naive metrics 若把 `job_id` 作为 label，会制造 workload-proportional cardinality；
+7. useful logs/events 可以保留 `job_id` 作为 diagnosis correlation key；
+8. page 不应直接由 `queue_depth > N` 这种 cause threshold 定义，除非它确实对应紧急、可行动的 user impact；
+9. retry-storm teaching probe 要稳定展示 retries 如何在 capacity 不变时增加 attempts，同时明确它不是 production benchmark；
+10. Lab 要把 overload/retry evidence 延伸到 incident timeline 与 blameless/technically precise postmortem，而不是停在 dashboard design。
 
 这使 M11 能自然复用：
 
@@ -519,7 +591,7 @@ M11 starter 应体现：
 
 ---
 
-# 13. Module-level claims 与来源边界
+# 15. Module-level claims 与来源边界
 
 本模块会使用下列课程综合术语，它们不是某一个来源的逐字定义：
 
@@ -530,6 +602,8 @@ signal placement
 telemetry schema as interface
 operational action contract
 production evidence chain
+retry amplification teaching model
+reliability learning loop
 ```
 
 这些是对上述一手材料的课程级 synthesis。
