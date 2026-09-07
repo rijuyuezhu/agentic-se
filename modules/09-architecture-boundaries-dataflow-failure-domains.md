@@ -1,1804 +1,442 @@
-# M09 — Architecture：边界、数据流、Authority 与 Failure Domain
+# M09 — Architecture：哪些边界值得上升到系统级
 
-> 这一章不从“微服务 / 分层 / 六边形 / CQRS / Event Sourcing”名词开始。
->
-> 我们先回答一个更基础的问题：**一个 design decision 什么时候重要到值得被称为 architecture？**
+前八章一直在处理局部 engineering contract：状态归谁写、边界怎样翻译错误、并发 history 怎样才合法、旧数据和新 reader 怎样共存。M09 不突然切换成“背架构模式”。我们给 TaskForge 加一个需求，然后看哪些局部选择被迫变成系统级决定。
 
-前八章已经分别训练了：
+需求很简单：**job 要能在另一台机器上执行。** API/control component 和 worker 可以分居两台机器；worker crash 不能带着 API 一起 crash；remote worker 不能拿 durable-store direct-write credential；一次 network timeout 也不能被解释成“command 一定没有执行”。系统仍然很小，没有 multi-region、million-QPS 或把 metrics/audit 独立扩容的要求。
 
-```text
-M01 contract / invariant
-M02 state ownership
-M03 executable evidence
-M04 boundary / error / retry
-M05 evolutionary change
-M06 legacy takeover
-M07 concurrency / crash / failure
-M08 compatibility / migration
-```
+这组条件看起来像 deployment work。真实 starter 很快告诉我们，它首先是 architecture work。
 
-M09 要把这些局部 reasoning 重新组合成 system-level model。
+## 1. 把 `worker.py` 搬走以后，第一条调用就失效了
 
----
-
-# 1. Architecture 不是“大盒子图”
-
-很多 architecture discussion 一上来就是：
-
-```text
-Frontend
-  ↓
-API Gateway
-  ↓
-Service A / B / C
-  ↓
-Database
-```
-
-图本身没有错。
-
-问题是它可能完全没有回答：
-
-- 谁拥有 lifecycle truth？
-- 谁能修改状态？
-- crash 后什么还存在？
-- snapshot 是 source of truth 还是 export？
-- worker failure 会影响几个用户？
-- old consumer 可以和 new producer 共存多久？
-- external effect 如何 deduplicate？
-- 哪条 dependency 是长期 contract，哪条只是 local implementation？
-
-如果这些问题没有答案，再漂亮的图也只是 topology illustration。
-
-SEI 对 software architecture 的一个核心 framing 是：
-
-> architecture 是**为了对系统进行推理而需要的 structures**；这些 structures 由 elements、relations 和它们的 properties 构成。
-
-这给我们一个很实用的判断：
-
-> **一张图值不值得画，取决于它是否帮助回答一个重要 engineering question。**
-
-而不是图上 box 越多越 architecture。
-
----
-
-# 2. 什么决定具有 architectural significance？
-
-Martin Fowler 总结 Ralph Johnson 时有一句很有用的话：
-
-```text
-Architecture is about the important stuff.
-```
-
-“important”不能靠职位或直觉定义。
-
-本课程用下面七个 consequence 作为 heuristic。
-
-如果一个决定在多个维度上都很高，就更值得上升成 architecture concern。
-
-## 2.1 Blast radius
-
-错了影响多大？
-
-```text
-一个 formatter 的局部 bug
-```
-
-通常不是 architecture。
-
-```text
-所有 worker 都能直接写 shared lifecycle rows
-```
-
-很可能是。
-
-因为错误会跨多个执行主体传播。
-
----
-
-## 2.2 Reversal cost
-
-这个决定以后能多容易撤销？
-
-```text
-rename private helper
-```
-
-很容易。
-
-```text
-把 durable format 从 v1 切成 v2 并写了三个月数据
-```
-
-很难。
-
-M08 已经看到：
-
-```text
-binary rollback
-!=
-system rollback
-```
-
-一旦 decision 改变 durable state 或 long-lived protocol，它的 architecture significance 通常上升。
-
----
-
-## 2.3 Coordination cost
-
-改变它要协调多少独立 actor？
-
-```text
-same module
-same owner
-same deployment
-```
-
-通常较低。
-
-而：
-
-```text
-three teams
-four repos
-offline clients
-rolling deployment
-```
-
-明显更高。
-
----
-
-## 2.4 Failure consequence
-
-它会改变 failure 怎样传播吗？
-
-例如：
-
-```text
-cluster B down
-→ route all traffic to A
-→ A overload
-→ A down
-```
-
-一个看起来“提高 availability”的 failover policy，可能实际上把 local failure 变成 global failure。
-
-Google SRE 的 cascading-failure 讨论正是在强调这种 mechanism interaction。
-
----
-
-## 2.5 Authority consequence
-
-它会改变谁有资格决定 truth 吗？
-
-例如：
-
-```text
-API service writes Job.status
-worker writes Job.status
-scheduler writes Job.status
-recovery script writes Job.status
-```
-
-这不是普通 code organization 问题。
-
-这是 semantic authority 问题。
-
----
-
-## 2.6 Long-lived contract
-
-这个决定会活多久？
-
-```text
-private Python call
-```
-
-可能随着一次 refactor 消失。
-
-```text
-snapshot schema
-remote worker protocol
-public error code
-config file
-```
-
-可能比当前 implementation 活得久得多。
-
----
-
-## 2.7 Unknown-consumer risk
-
-你能不能枚举所有依赖者？
-
-如果可以：
-
-```text
-3 call sites
-same repo
-```
-
-变更风险容易控制。
-
-如果是：
-
-```text
-old binary
-offline tool
-external script
-third-party client
-```
-
-architecture significance 上升。
-
----
-
-# 3. Architecture 是 Consequential Boundaries
-
-把前面浓缩成一句：
-
-> **Architecture 关注那些会跨局部边界放大 consequence 的结构。**
-
-常见 consequential boundary 有：
-
-```text
-Knowledge boundary
-Authority boundary
-Durability boundary
-Compatibility boundary
-Failure boundary
-Security boundary
-Team / ownership boundary
-```
-
-它们可以重合。
-
-但不应该被默认认为重合。
-
----
-
-# 4. Semantic Boundary ≠ Process Boundary
-
-这是 M09 最重要的区分之一。
-
-假设我们有：
-
-```text
-JobAuthority
-```
-
-它负责：
-
-- create job；
-- validate transition；
-- claim；
-- finish；
-- cancel；
-- expose read model。
-
-它可以首先只是：
-
-```text
-same Python process
-same repository
-one module
-```
-
-但已经形成很强的 **semantic boundary**。
-
-另一个系统可能有：
-
-```text
-API Service
-Worker Service
-Scheduler Service
-```
-
-三个独立 process。
-
-但它们都直接写：
-
-```text
-shared jobs table
-```
-
-此时虽然有三个 deployment boundary，semantic authority 仍然是 split 的。
-
-所以：
-
-```text
-more processes
-!=
-stronger architecture
-```
-
----
-
-# 5. 四种 boundary 不要混在一起
-
-## 5.1 Semantic boundary
-
-谁负责什么 concept / invariant？
-
-## 5.2 Process boundary
-
-哪里需要 IPC / network / serialization？
-
-## 5.3 Deployment boundary
-
-什么可以独立 rollout / rollback / scale？
-
-## 5.4 Failure boundary
-
-一个 component 挂掉时，什么还能继续工作？
-
-它们有时应该重合。
-
-例如 remote worker：
-
-```text
-worker crashes
-```
-
-你可能希望：
-
-```text
-API + other workers remain available
-```
-
-此时 process boundary 确实帮助形成 failure isolation。
-
-但 metrics function 没有这种需求，就没必要为了“architecture purity”做成网络服务。
-
----
-
-# 6. Process Boundary 是昂贵的
-
-把一个 function call：
+当前 `worker.py` 的 claim 并不是通过某个远程 contract 完成的。它直接遍历进程内的 `state.jobs`：
 
 ```python
-job = authority.claim(worker_id)
+for job in state.jobs.values():
+    if job.status == JobStatus.QUEUED:
+        job.status = JobStatus.RUNNING
+        return job
 ```
 
-变成 network call 后，新增的不是一行 RPC client。
+`finish()` 也直接取出同一个 mutable `Job`，检查它当前是 `RUNNING`，然后写 `exit_code` 和 terminal status。`service.py` 同样直接分配 ID、插入 job、执行 cancel；M07 的 `concurrent_claim.py` 则故意保留另一条 direct mutation path，用于重现 race。
 
-新增的是：
+M09 的 baseline probe 把这个事实压成一份 inventory：
+
+```bash
+cd labs/taskforge
+PYTHONPATH=src uv run --with pytest --no-project python tools/m09_architecture_probe.py
+```
+
+当前输出包括：
 
 ```text
-serialization
-partial failure
-timeout
-retry
-idempotency
-authentication
-authorization
-version skew
-observability
-capacity
-backpressure
-rollout compatibility
+[DIRECT STATE DEPENDENCIES] concurrent_claim, legacy_audit, metrics, service, worker
+[LIFECYCLE MUTATORS] concurrent_claim, service, worker
+[ARCHITECTURE PRESSURE] semantic authority is not aligned with module/process boundaries
 ```
 
-所以 network boundary 应该有明确收益来支付这些成本。
+最后一句不是说 probe 已经证明了目标 architecture。它只提醒我们：今天“谁可以决定 lifecycle transition”并没有和一个清楚的 semantic boundary 对齐。
 
-典型收益包括：
+把 `worker.py` 原样复制到另一台机器时，它当然看不到另一个 Python process 的 `state.jobs`。一个很自然的补丁是：把 `state.jobs` 换成共享数据库，让 API 和 worker 都直接更新 rows。这样 remote access 问题似乎解决了。
 
-- independent failure isolation；
-- independent scale；
-- remote hardware/location；
-- privilege/security isolation；
-- independent ownership/deployment；
-- heterogeneous runtime。
+但新需求又立刻否掉了这条 shortcut：remote worker **不得获得 durable-store direct-write credential**。而且即使我们放宽这个安全要求，API、worker、scheduler 各自解释 lifecycle rule、再共同写一个 `jobs` table，也只是把“shared representation + multiple semantic writers”从内存搬到了数据库。数据库 transaction 可以解决某些原子更新问题，却不会自动决定完整的产品 lifecycle semantics。
 
-没有这些需求时，process split 可能只是 complexity tax。
+于是我们真正需要先回答的不是“RPC 用什么框架”，而是：
 
----
+- 谁有资格接受或拒绝 `claim / finish / cancel`？
+- worker 为了执行工作究竟需要知道什么？
+- 哪些东西应该跨 machine boundary，哪些 representation 不应该跨？
+- worker、authority、storage、external sink 分别失败时，谁会一起受影响？
 
-# 7. Monolith 与 Microservice 不是成熟度等级
+这些问题开始具有 **architectural significance**，因为答案会长期约束多个模块、机器、failure path 和 future migration。
 
-Fowler 的 `Monolith First` 文章最有价值的不是“所有系统必须 monolith first”。
+## 2. 这才是 architecture：为高后果问题保留可推理的 structure
 
-而是提醒：
+SEI 对 software architecture 的一个重要 framing 是：architecture 包含**为了对系统进行推理而需要的 structures**，而不是某张固定层级图。Fowler 总结 Ralph Johnson 时用 “the important stuff” 来强调类似方向：重要性不是由 box 大小或“architect”职位赋予的，而要回到 consequence。
 
-> service decomposition 需要真正稳定的 boundary，而 service 本身有额外 premium。
+在 TaskForge 里，一个 formatter helper 怎么命名通常不需要 architecture discussion。下面这些决定则很可能需要：
 
-本课程把系统选择看成：
+- 谁拥有 Job lifecycle truth；
+- remote worker 是否知道 storage schema；
+- snapshot 是 derived export 还是 recovery source；
+- worker 和 authority 是否独立部署、怎样 version；
+- 一个 worker / authority / store failure 会扩散到哪里；
+- execution host 拥有哪些 privilege。
+
+课程用 blast radius、reversal cost、coordination cost、failure consequence、authority consequence、long-lived contract 和 unknown-consumer risk 作为**定性 review heuristic**。它不是一个打分公式，也不是说“难改的设计就是好 architecture”。Accidental coupling 本身也会让 change 很难。
+
+更有用的压缩是：**architecture 关注那些会让局部决定跨边界放大 consequence 的 structure。**
+
+这也解释了为什么 M09 不把 architecture 等同于 microservices、top-level folders 或 UML。一个进程内 module 可以形成强 semantic boundary；三个独立 service 也可能通过 shared database、backdoor reads 和 synchronized rollout 保持高度耦合。
+
+## 3. 先把几种 boundary 分开，否则“拆服务”没有可验证含义
+
+回到 remote-worker case。这里至少有五种不同问题：
+
+| Boundary | 问的问题 | TaskForge 当前压力 |
+|---|---|---|
+| semantic / authority | 谁负责 concept 与 invariant，谁能决定 truth？ | claim/finish/cancel 的 rule 分散在多个 writer |
+| process / network | 哪里开始需要 IPC、serialization、timeout？ | remote worker 必然跨 machine/process |
+| storage / durability | 哪份 state 只是 representation，什么在 crash 后应继续存在？ | current `state.jobs` 是 memory；target store/durability 尚未实现 |
+| deployment / compatibility | 谁可以独立 rollout/rollback/version？ | authority 与 worker 未来可能 version skew |
+| failure / security | 一个 component 或 credential 出问题会拖谁下水？ | worker crash/compromise 不应等于 authority/store failure |
+
+这些 boundary **可以**重合，但不能默认重合。
+
+例如我们可以先把 lifecycle operations 聚合进一个明确的 `Job Authority` semantic boundary，而它仍和 API 位于同一个 Python process。这样还没有新增 network failure，却已经减少了 lifecycle knowledge 和 storage representation 的泄漏。等 remote worker 真正出现时，再在 authority 与 execution worker 之间建立 process/network boundary。
+
+反过来，如果现在创建 `API Service / Worker Service / Scheduler Service` 三个 process，却都拿着 shared DB write credential 并直接修改相同 rows，deployment box 变多了，semantic authority 并没有更清楚。
+
+一个 process call 变成 network call 还有真实成本：serialization、partial failure、timeout、retry、authentication、authorization、version skew、observability、capacity、backpressure 与 rollout compatibility。只有 independent failure isolation、remote hardware/location、privilege separation、独立 scale/deploy 等真实需求，才有理由支付这些成本。
+
+这也是 Fowler `Monolith First` 在本章的用途：不是推出“所有系统必须 monolith first”，而是反驳“service 数量 = architecture maturity”。
+
+## 4. Remote worker 应该依赖什么？这时 dependency inversion 才有实际意义
+
+现在假设我们同意：worker 不应直接写 storage。一个机械式“分层”修法可能只是创建 `StoreInterface`，然后把 DB connection 通过 Dependency Injection 塞给 worker。代码出现了 interface，dependency 仍然指向 persistence detail：worker 还是得知道 rows、columns、transaction 或 storage errors。
+
+Brett Schuchert 在 *DIP in the Wild* 对 Dependency Inversion Principle 的解释很适合这里：高层 policy 不应依赖低层 detail，dependency 应朝更接近 domain 的 abstraction 指向；同时，DIP 不是 Dependency Injection / IoC 的同义词，也不是“所有东西都做 interface”。Abstraction 自身有成本，必须由 context 支付。
+
+对 TaskForge，问题可以写得很具体：
 
 ```text
-Architecture requirement
-        ↓
-Which boundary needs independent process/deployment/failure isolation?
-        ↓
-Choose mechanism
+bad dependency shape
+remote worker
+  -> jobs table / DB credential / storage representation
+
+better candidate dependency shape
+remote worker
+  -> claim / finish / heartbeat semantics
+  -> lifecycle authority hides storage detail
 ```
+
+这里 dependency inversion 的真实用途是：**让 execution-side code 依赖 job lifecycle contract，而不是依赖某个持久化 mechanism。**
+
+这不会自动证明“Central Job Authority”一定是唯一正确 architecture。它只是告诉我们，如果 remote worker 的职责是执行 job，那么 `claim(job semantics)` 比 `UPDATE jobs SET status=...` 更符合它真正需要依赖的 abstraction level。是否采用这个 boundary，还要继续比较 availability、failure、security、implementation cost 和 future partitioning。
+
+这也给 M02 的 information hiding 一个 system-scale版本。隐藏的不只是 private field，而是“谁必须知道 persistence representation、transition rule、retry semantics”。一个 stable boundary 的价值，是让这些 knowledge 不必沿着 machine boundary 扩散。
+
+## 5. 设计至少两次：`Job Authority` 是 reference candidate，不是 starter 已经拥有的事实
+
+到这里我们才有足够 criterion 比较 architecture。下面的 Design A 是本课程 reference direction，但不是由术语自动推出的唯一答案。
+
+### Design A — Central semantic authority + remote worker protocol
+
+```text
+client / API
+     |
+     v
++----------------+
+| Job Authority  | ----> storage mechanism (future durable store candidate)
++-------+--------+
+        |
+        | claim / finish / heartbeat protocol
+        v
++----------------+
+| remote worker  |
++-------+--------+
+        |
+        v
+ external effect
+```
+
+第一阶段 `Job Authority` 可以与 API 同 process。它的核心是 semantic invariant，而不是 service topology：normal product lifecycle transitions 经过同一个 authority；remote worker 请求 transition，不直接修改 authority 的 storage representation。
+
+它的真实好处包括 lifecycle knowledge locality、worker privilege 收窄，以及 storage 从 memory 演化到 SQLite/Postgres 等 mechanism 时不必把 schema 泄漏给 worker。代价同样真实：authority 成为 lifecycle write-path availability dependency；worker protocol 增加 timeout/retry/version/auth semantics；未来 throughput 或 blast-radius 目标可能要求 partition。
+
+注意图里的 “storage mechanism” 是**target architecture 的 placeholder**。当前 starter 只有进程内 `state.jobs`，并没有 durable Job Store contract。M09 不能画一个 database box 就假装 durability 已经实现。
+
+### Design B — Shared DB direct coordination
+
+```text
+API --------\
+scheduler ----> shared jobs table
+worker ------/
+```
+
+这不是 strawman。数据库 transaction 可以提供 atomic claim primitive；少一层 explicit service protocol；同一个小团队、同 deploy/trust domain 下可能非常实用。
+
+但它把 schema 变成跨组件 integration API，并把 DB credential 暴露给 worker。除非 lifecycle semantics 能被一个清楚的 shared authority（例如被明确设计的 DB-side constraints/procedure）承担，否则 rule 仍可能复制到多个 process。对**本题**而言，`remote worker 不得获得 durable-store direct-write credential` 已足够使“worker 直接写表”版本的 Design B 不满足 requirement。
+
+这比“shared database 是反模式”精确得多。换一个 requirement set，B 可能是正确答案。
+
+### Design C — replicated per-worker state
+
+另一条路线是让 API、worker A、worker B 各自维护 lifecycle state，再做 event sync / reconciliation。它可能支持 offline/multi-master operation，但当前需求没有这些压力，却会引入 conflict resolution、duplicate claim、order/causality 和 recovery complexity。因此 reference 不选它；理由是 complexity 没有被当前 requirement 支付，而不是它“不够 clean”。
+
+设计比较至少要看：authority clarity、worker compromise blast radius、partial-failure model、versioning cost、implementation cost、storage portability、rollback 与 future partitioning。`A cleaner / B simpler` 不是工程判断。
+
+## 6. “Control plane / data plane”可以帮助看 privilege 和 failure，但只能当有条件的 lens
+
+AWS 的 fault-isolation材料沿用网络里的 control plane / data plane 区分：control plane 管理资源、规则和 orchestration；data plane 承担服务的主要功能。TaskForge 不是 router，也不是 AWS service，所以不能因为词很贴切就宣布“worker 就是标准 data plane”。
+
+本课程只做一个显式的 course adaptation：把 lifecycle/control authority 看成 **control responsibility**，把 command execution 与 external-effect interaction 看成 **data/execution-plane-like responsibility**。
+
+这个 lens 在 remote-worker case 里有两个具体价值。
+
+第一是 privilege。Execution worker 需要 shell/host capability，却不因此需要 durable-store direct-write credential；API/control side 需要决定 lifecycle truth，却不应该继承 worker 的任意 host execution privilege。把两类权限放在一个无差别 trust domain 中，会放大 compromise blast radius。
+
+第二是 availability。Authority 暂时不可用时，已经开始的 remote command 可能仍在物理执行；“control side down”与“execution 已停止”不是同一个事实。反过来，一个 worker crash 也不应把 API process 一起 crash。这个区别会直接进入 failure walk。
+
+这个 terminology **不要求**我们把 API 和 authority 拆成独立 process，也不证明两个 plane 能完全独立。若每次 execution 都同步依赖一个单点 control action，或两边共享同一个脆弱 stateful dependency，图上的 separation 仍可能没有形成真正 failure containment。
+
+## 7. Data ownership：storage、semantic authority、snapshot 不要互相冒充
+
+当前 TaskForge 有三类东西容易被混成“state owner”。
+
+`state.py` 保存 `jobs` 与 `next_job_number`，但“数据放在哪里”不等于“谁拥有 lifecycle semantics”。今天真正写 lifecycle 的 normal/historical code 包括 `service.py`、`worker.py` 和 teaching-only `concurrent_claim.py`。所以 baseline 更精确的描述是 **shared representation + multiple semantic writers**，而不是“state.py 是 Job owner”。
+
+`snapshot.py` 又是另一类。当前代码可以把 `service.list_jobs()` 序列化成 JSON，也可以把一个 snapshot 文件 parse 成 `Snapshot` DTO；但它没有 `load snapshot -> reconstruct TaskForge authority` 的 startup/restore path。没有 crash-consistent restore、stale-snapshot reconciliation 或 multi-writer recovery contract。
+
+因此本轮 reference classification 是：**snapshot 是 derived durable export / compatibility surface，不是当前 live coordination source，也不是已经实现的 recovery truth。** 如果未来产品真的把它升级成 recovery source，那么 atomic write、corruption、fsync/durability assumption、stale data、schema migration 和 restore lifecycle 都要重新进入 architecture contract。
+
+同理，external-effect bookkeeping 也有自己的 authority。M07 的 `effect_delivery.completed_jobs` 只是进程内 set，`SimulatedCrash` 是 same-process failpoint；它没有成为 durable exactly-once system。M09 只能问“logical effect identity 和 dedup responsibility 应该落在哪个 effect authority/sink”，不能因为画了 remote worker 就宣称这个问题已经解决。
+
+一个 architecture view 必须标清 `source of truth / storage / replica / snapshot / cache / read model` 的角色；mechanism 名字不能替我们做 semantic classification。
+
+这里还要区分 **read-model replication** 与 **writer-authority replication**。Metrics、dashboard、audit 可以在 contract 允许时消费 read API、snapshot、stream 或 replica；复制一份只读 view 并不自动复制 lifecycle 决策权。相反，让多个 derived/read paths 反向成为 hidden writer，会重新制造 split authority。课程常用的 `one semantic write authority + many derived read models` 是一种 simplification candidate，不是要求所有系统实施 CQRS。
+
+## 8. Runtime flow 要把 control、data 和 failure-path edge 一起看
+
+一个正常路径可以画成：
+
+```text
+client --submit--> lifecycle authority
+                     |
+                     | claim: job_id + execution inputs
+                     v
+                  worker --effect--> external world
+                     |
+                     | finish: job_id + outcome
+                     v
+                lifecycle authority
+```
+
+这张图只说明调用顺序还不够。还要问跨 boundary 的 data 是什么：command、job ID、claim/lease identity、exit code、effect identity；哪些字段是 protocol contract，哪些只是内部 representation。
+
+更重要的是 failure path 会新增正常图没有的 edges。比如 worker 对 authority timeout 后 retry，或 scheduler 把失败 worker 的任务 fail over 到另一 pool。M07 已经证明 retry 可以放大请求；Google SRE 的 cascading-failure案例进一步说明 failover/负载重分配可能把局部 overload 推给健康 cluster，最终扩大 outage。
+
+所以 architecture review 对每个 failure 都应做一次 walk：
+
+```text
+initial failure
+-> first reaction
+-> retry / failover
+-> new dependency or added load
+-> state uncertainty
+-> recovery owner
+-> blast radius
+```
+
+“系统有 retry/failover”不是可靠性结论；它只是另一组需要 capacity、authority 和 isolation reasoning 的 mechanisms。
+
+## 9. 四个 failure walk 会暴露这个 candidate architecture 还没有解决什么
+
+### Worker process dies
+
+如果 worker 已经是独立 process，至少 API process 不必一起 crash。但某个 job 是否可以重新 claim，要依赖未来的 lease/heartbeat/recovery rule。M09 当前 starter 没有这套 production protocol，不能写成“worker dead -> job automatically requeued”。
+
+这里 process boundary 确实形成了一部分 failure isolation，却没有自动解决 lifecycle recovery。
+
+### Network lost after command starts
+
+worker 可能已经执行 command，authority 却收不到 finish。M04/M07 的 temporal lesson 在这里继续成立：timeout 描述 caller knowledge，不证明 downstream non-execution。直接 retry execution 可能重放 external effect。
+
+因此 worker protocol 的 timeout/result semantics 是 architecture concern，不只是 RPC client error string。
+
+### Authority process dies
+
+如果 reference candidate 中 authority 与 API 同 process，那么 lifecycle writes 暂时不可用；远端 worker 可能仍在运行已经 claim 的 command。更关键的是，**当前 starter authority state仍只是 memory**。没有 durable authority state，我们不能严谨承诺 restart reconciliation。
+
+这正是 architecture honesty：把 “not solved in M09” 写出来，比加一个 `Database` box 更有价值。
+
+### External effect succeeds, finish is lost
+
+worker 对外 effect 可能已经成功，随后 finish message 丢失。重试 job 或 effect 都可能重复。M07 的 attempt/effect distinction 必须保留；architecture 只能要求 effect identity 到达真正能 enforce dedup semantics 的 authority/sink，不能把 volatile worker bookkeeping叫 exactly-once guarantee。
+
+这些 failure walk 也解释了为什么一个 target invariant 不能只写“worker 和 API 分进程”。真正有意义的 invariant 应绑定 semantic consequence。
+
+## 10. Failure domain 不是进程数量；要问 scope of impact
+
+AWS cell-based architecture 的可迁移价值不是“TaskForge 现在就要上 cells”，而是把 **scope of impact** 当设计对象。
+
+假设未来很多 tenants 共享一个 worker pool、hot queue 或 effect sink，一个 poisoned workload 可能吃掉所有 capacity，让 unrelated jobs 一起变慢。把 workload 分成 cells/shards 只有在 state、traffic 和 dependency 真正按相同 grain 被隔离时才形成 containment；如果所谓 cells 仍共享同一个 hot mutable coordinator、global lock 或 exhausted pool，cell boxes 只是 topology decoration。
+
+TaskForge 当前没有 large tenant population、regional isolation 或 noisy-neighbor requirement，因此 M09 不实现 cell architecture。它只留下 revisit question：**当一个 authority/worker failure domain 超过产品可接受 blast radius 时，按什么 key partition，哪些 state/dependency 也必须一起 partition？**
+
+同样，process boundary 也不自动等于 fault boundary。两个 process 共享单点 storage 时可能一起不可用；一个 process 内的两个 semantic modules 也可能通过 careful error isolation保持不同 failure consequences。Failure domain 要从实际 dependency/failure propagation判断。
+
+## 11. 独立部署以后，architecture 同时获得了时间维度
+
+一旦 authority 与 worker 可以 independently deploy，就会出现：
+
+```text
+Authority v2 <-> Worker v1
+Authority v1 <-> Worker v2
+```
+
+M08 的 producer/consumer compatibility 问题因此进入 worker protocol。现在要明确 protocol surface、N/N-1 是否支持、rollout order、capability negotiation/deprecation、unknown version如何处理，以及 rollback target 能否与已经部署的另一端共存。
+
+这也是 process split 的隐藏成本之一：一个原本同版本仓库里的 Python call，可能变成长寿命 distributed contract。
+
+不要因此要求“所有组合永远兼容”。和 M08 一样，先写 supported coexistence matrix，再让 deployment policy避免不支持组合。Architecture 与 compatibility 不是两个独立章节；一个 boundary 一旦允许 independent evolution，就创造了新的 compatibility obligation。
+
+## 12. 不要画一张全能图：针对问题选择 view
+
+同一个 TaskForge architecture，至少有几种不同的 useful view：
+
+| View | 要回答的核心问题 |
+|---|---|
+| responsibility / knowledge | lifecycle rule、snapshot schema、effect semantics 分别谁知道？ |
+| authority / state | 哪份 truth authoritative，谁能写，snapshot/read model 是什么角色？ |
+| runtime flow | submit/claim/execute/finish 时 calls 和 data 如何移动？ |
+| failure propagation | worker/store/authority/sink/bad deploy 失败时边如何变化？ |
+| evolution / compatibility | independently deployed producer/consumer 怎样共存与 rollback？ |
+
+一张只画 `Service A -> Service B -> Database` 的图很容易撒谎，因为它省略了：A 是否直接读 B 的 table、谁拿 write credential、timeout 后是否 failover 到 C、cache miss/staleness contract 是什么、worker pool 是否共享同一个 recovery authority。
+
+SEI 的“structures for reasoning”在这里回到实践：**view 的价值取决于它帮助回答哪个 consequential question。** 没有唯一一张 architecture diagram 可以同时忠实表达所有 concern。
+
+团队/ownership boundary 也属于这类 view。Conway's Law 不需要神秘化成 deterministic theorem；更直接的问题是：两个组件如果必须每次一起改、一起 deploy、共享 undocumented state，却由完全独立团队负责，coordination cost 会持续出现。想要独立 ownership，就需要 stable contract、独立 evidence 和清楚 version policy 支撑。
+
+## 13. 把 architecture invariant 变成 evidence，但不要做目录 policing
+
+M09 probe 的 direct-import inventory 是 evidence，不是 architecture score。它同时看到 `service.py`、`worker.py`、`metrics.py`、`legacy_audit.py` 和 `concurrent_claim.py`，而这些文件并不是同一种角色。
+
+`concurrent_claim.py` 故意保存 M07 的 unsafe check-then-act 和独立 `claim_owners` registry，供 deterministic race probe 使用。一个 naïve “only one file may import state” refactor 会把历史 teaching evidence 一起抹掉。真实系统里也有 migration tool、repair utility、compatibility shim、test harness 或 emergency admin path；它们必须被 inventory，但未必受 normal product-path rule以相同方式约束。
+
+因此一个和本轮 implementation scope 对齐的 fitness rule 可以是：
+
+```text
+normal product modules
+(service / worker / metrics / selected reporting path)
+must not import/use taskforge.state directly for normal lifecycle access
+```
+
+这条 rule 证明的是 **direct-state dependency / transition implementation 被 localize**，不是“完整 mutation authority 已经隔离”。M02 已经指出：如果 `get()`、`list_jobs()` 或 `claim_next()` 返回的是 authoritative mutable `Job`，caller 即使从未 import `state.py`，仍可能通过 alias 直接改 lifecycle。这样的 read result 是 authority-bearing handle；grep/AST import check 看不见这条 capability edge。
+
+所以 M09 的最小 boundary-enabling refactor 只完成 target architecture 的一部分：normal transition policy 与 storage knowledge 有了明确 seam。若要进一步声称 read/reporting path **不能**成为 hidden writer，就需要 capability-oriented evidence 来区分 detached/read-only observation 与 live mutable authority。M09 刻意不顺手引入 `JobView` 或 defensive copy；这条 M02 residual risk 留给后续 change/review 继续识别。
 
 而不是：
 
 ```text
-monolith -> beginner
-microservices -> advanced
+no file in repo may import taskforge.state
 ```
 
-TaskForge 当前规模下，如果为了：
+Architecture fitness function 只有同时表达 **invariant + scope** 才有价值。否则 50 行 AST script 也会退化成 grep-driven folder policy。
 
-```text
-metrics
-snapshot exporter
-audit formatter
-```
-
-各自起一个 service，很可能只是把 local dependency 变成 distributed dependency。
-
----
-
-# 8. Authority View：谁拥有 Truth？
-
-TaskForge 当前 baseline：
-
-```text
-state.py
-  jobs: dict
-```
-
-但这不代表 `state.py` 就是 semantic owner。
-
-目前：
-
-```text
-service.py          writes lifecycle
-worker.py           writes lifecycle
-concurrent_claim.py writes lifecycle
-```
-
-因此当前真实模型更接近：
-
-```text
-shared representation
-+
-multiple authorities
-```
-
-M09 要求你明确：
-
-```text
-Job lifecycle authority = ?
-```
-
-一个更强的目标 architecture 可以是：
-
-```text
-             +----------------+
-API -------->|                |
-worker ----->|  Job Authority |----> durable Job Store
-admin ------>|                |
-             +----------------+
-                     |
-                     +----> read views / snapshot export
-```
-
-关键不是 box。
-
-关键是 invariant：
-
-> **只有 Job Authority 有权接受或拒绝 lifecycle transition。**
-
-worker 可以请求：
-
-```text
-claim
-finish
-heartbeat
-```
-
-但不是 authority。
-
----
-
-# 9. Storage Owner ≠ Semantic Owner
-
-M02 已经强调过：
-
-```text
-who stores data
-!=
-who owns state
-```
-
-M09 把它提升到 deployment scale。
-
-例如：
-
-```text
-PostgreSQL stores rows
-```
-
-不意味着：
-
-```text
-PostgreSQL is domain authority
-```
-
-如果三个 service 都根据自己的规则更新 row：
-
-```text
-status='running'
-```
-
-数据库最多执行 structural constraints。
-
-它无法自动知道完整 domain protocol。
-
-反过来，一个 Job Authority 可以使用：
-
-```text
-memory
-SQLite
-Postgres
-DynamoDB
-```
-
-而 semantic boundary 不需要跟着 storage mechanism 改名。
-
----
-
-# 10. Snapshot 是什么？必须选一个答案
-
-TaskForge M08 有：
-
-```text
-snapshot.py
-```
-
-现在它把 current state 序列化成 durable JSON。
-
-Architecture review 必须明确：
-
-## Option A — Export artifact
-
-```text
-Job Authority
-   ↓
-snapshot export
-```
-
-snapshot 用于：
-
-- debugging；
-- offline analysis；
-- transfer；
-- backup artifact。
-
-它不是 live truth。
-
-## Option B — Recovery source
-
-如果 startup 会：
-
-```text
-load snapshot
-→ reconstruct authority
-```
-
-那 snapshot 就进入 durability contract。
-
-此时：
-
-- atomic write；
-- fsync；
-- corruption；
-- schema migration；
-- partial snapshot；
-- stale snapshot；
-
-都会成为 architecture concern。
-
-## Option C — Shared database substitute
-
-多个 process 同时读写 JSON snapshot。
-
-这通常会迅速产生 concurrency / crash / locking 问题。
-
-所以：
-
-> 不要让 mechanism 自己偷偷决定 semantic role。
-
----
-
-# 11. Runtime View：Data Flow 与 Control Flow 分开看
-
-一个 useful view：
-
-```text
-client
-  |
-  | submit
-  v
-Job Authority ----> durable store
-  |
-  | claim
-  v
-worker
-  |
-  | execute
-  v
-external world
-  |
-  | finish
-  v
-Job Authority
-```
-
-这里至少有两种 flow。
-
-## Control flow
-
-谁调用谁？
-
-```text
-client -> authority -> worker
-```
-
-## Data flow
-
-什么 information 在哪里移动？
-
-```text
-command
-job_id
-lease/claim token
-exit_code
-effect id
-```
-
-有些 design bug 不在 call graph 里明显出现。
-
-例如：
-
-```text
-worker never calls DB API directly
-```
-
-但它拿到了 database credential 并自己连 shared DB。
-
-control-flow 图可能看起来干净，authority view 却已经破裂。
-
----
-
-# 12. Read Model 可以分离，但 Writer Authority 不要随便复制
-
-metrics / dashboard / audit 往往不需要 authoritative mutation。
-
-它们可以消费：
-
-```text
-read API
-snapshot
-stream
-replica
-```
-
-这和：
-
-```text
-多个 writer 都可以改 source of truth
-```
-
-是完全不同的问题。
-
-课程常用的一个 architecture simplification 是：
-
-```text
-one semantic write authority
-many derived read models
-```
-
-但这也不是 universal CQRS rule。
-
-如果系统很简单：
-
-```text
-same module query
-```
-
-完全可能足够。
-
----
-
-# 13. Failure Domain：一个失败会拖谁下水？
-
-AWS cell-based architecture 的价值在于把 **scope of impact** 直接当设计对象。
-
-假设 100 个 tenants 全部共享：
-
-```text
-one worker pool
-one hot queue
-one effect sink
-```
-
-一个 poisoned workload 可能：
-
-```text
-consume all workers
-→ queue latency rises globally
-```
-
-另一种设计：
-
-```text
-cell A -> tenants 0..9
-cell B -> tenants 10..19
-...
-```
-
-如果 cell 真正独立：
-
-```text
-cell A failure
-```
-
-不应该把其他 cells 拖下去。
-
-但“画了 cell”不够。
-
-如果 cells 仍共享：
-
-```text
-same stateful coordinator
-same exhausted connection pool
-same global lock
-```
-
-failure boundary 可能是假象。
-
----
-
-# 14. Failure Containment 要检查 Cross-Boundary Dependencies
-
-Architecture review 可以做一个 failure walk：
-
-```text
-Component X fails
-    ↓
-Who waits?
-Who retries?
-Who fails over?
-Who receives extra load?
-Who owns recovery?
-What state becomes unavailable?
-What capacity assumption changes?
-```
-
-例如：
-
-```text
-worker pool B fails
-→ router sends B work to A
-→ A capacity < A+B load
-→ A overload
-→ global outage
-```
-
-这不是“load balancer implementation bug”。
-
-它是 architecture-level capacity/failure assumption 错了。
-
----
-
-# 15. Retry / Failover 会改变 Dependency Graph
-
-M07 已经学过：
-
-```text
-retry
-```
-
-不是 local error-handling detail。
-
-M09 再进一步：
-
-```text
-retry policy
-```
-
-实际上增加了 runtime edges。
-
-正常情况：
-
-```text
-A -> B
-```
-
-failover 后：
-
-```text
-A -> B
-A -> C
-```
-
-这意味着 C 现在也是 A 的 failure-path dependency。
-
-所以 architecture diagram 如果只画 happy-path dependency，可能严重低估真实 coupling。
-
----
-
-# 16. Compatibility Boundary：独立演化才需要 Protocol Discipline
-
-一旦有两个 independently deployed components：
-
-```text
-Authority v2
-Worker v1
-```
-
-你就获得了 M08 的 version-skew 问题。
-
-因此 process split 的 cost 之一是：
-
-```text
-internal function contract
-        ↓
-versioned distributed protocol
-```
-
-这会要求：
-
-- backwards/forwards compatibility；
-- rollout order；
-- deprecation；
-- capability negotiation；
-- rollback model。
-
-所以“拆 service”不仅增加 runtime failure，还增加 **time dimension coupling**。
-
----
-
-# 17. Security Boundary 也可能决定 Process Boundary
-
-有时即使 performance / scale 不要求拆，也可能因为 privilege 拆。
-
-例如 remote worker 可以执行：
+同样，M03 的 historical mutation harness 可能绑定某段旧 source text。未来合法 architecture refactor 移动 mutation site 后，harness 不再适用并不自动等于 product regression。Evidence 工具本身也有适用 baseline 和 architecture scope。
 
-```text
-shell command
-```
-
-而 API/control plane 不应该拥有相同 host permissions。
-
-此时：
-
-```text
-control plane
-  ↓ restricted protocol
-execution worker
-```
-
-可能是一个很有价值的 process/security boundary。
-
-这里的 architecture reasoning 是：
-
-```text
-separate privileges
-reduce compromise blast radius
-```
-
-而不是“微服务更 clean”。
-
----
-
-# 18. Team Boundary：Conway's Law 不需要神秘化
-
-如果两个模块：
-
-```text
-必须每次一起改
-必须一起 deploy
-共享 undocumented state
-```
-
-但由两个完全独立团队负责，coordination cost 会持续出现。
-
-反过来，如果想让两个团队真正独立，需要技术边界支持：
-
-```text
-stable contract
-independent tests
-version policy
-clear ownership
-```
-
-所以 architecture 与 organization 会互相影响。
-
-但课程不把“team topology”当 deterministic law。
-
-先从 concrete coordination consequence 分析。
-
----
-
-# 19. 多 View 比一张全能图更诚实
-
-M09 要求至少五张“小图”。
-
-## View 1 — Responsibility / Knowledge
-
-```text
-component -> unique knowledge
-```
-
-例如：
-
-```text
-Job Authority -> lifecycle rules
-Snapshot Codec -> durable format
-Effect Sink -> external dedup semantics
-```
-
-## View 2 — Authority / State
-
-标出：
-
-```text
-authoritative
-storage
-replica
-snapshot
-cache
-read model
-```
-
-## View 3 — Runtime Flow
-
-```text
-submit
-claim
-execute
-finish
-observe
-```
-
-## View 4 — Failure Propagation
-
-```text
-worker crash
-store down
-sink timeout
-bad deploy
-```
-
-分别追踪 scope。
-
-## View 5 — Evolution / Compatibility
-
-```text
-producer vN
-consumer vN-1
-rollout
-rollback
-```
-
-这些 view 之间如果矛盾，通常就是 architecture bug 的信号。
-
----
-
-# 20. Architecture Diagram 的常见谎言
-
-## 20.1 “Database” 一个 box
-
-但没人标：
-
-- writer；
-- schema owner；
-- transaction boundary；
-- replica lag；
-- migration owner。
-
-## 20.2 “Service A → Service B”
-
-但实际还有：
-
-```text
-A reads B's DB
-A imports B's schema package
-A retries to C when B fails
-```
-
-## 20.3 “Worker Pool”
-
-但 workers 的：
-
-```text
-identity
-lease
-ownership
-recovery
-```
-
-全没画。
-
-## 20.4 “Cache”
-
-但没人说：
-
-```text
-cache miss behavior
-staleness contract
-invalidations
-source of truth
-```
-
-因此 diagram review 最重要的问题通常是：
-
-> **这个 box/arrow 省略了哪些 consequential semantics？**
-
----
-
-# 21. Architecture Decision：Design It Twice
-
-和 M02/M05 一样，architecture 不应该只有一个草图。
-
-假设 TaskForge 现在要求 remote workers。
-
-至少比较：
-
-## Design A — Modular Authority + Remote Worker Protocol
-
-```text
-API / scheduler / persistence
-        ↓
-   Job Authority
-        ↓ protocol
-remote workers
-```
-
-Authority 可以先和 API 同 process。
-
-### 优点
-
-- one lifecycle authority；
-- remote execution boundary 明确；
-- distributed complexity 集中在真正需要 remote 的地方；
-- future storage migration 在 authority 后面。
-
-### 缺点
-
-- authority 可能是 availability bottleneck；
-- 要设计 worker protocol；
-- scale/failure isolation 以后可能需要进一步 partition。
-
----
-
-## Design B — Every Component Owns and Syncs Its State
-
-```text
-API state
-scheduler state
-worker state
-     ↕ sync/event
-```
-
-### 优点
-
-- 每个 process 看起来独立；
-- local reads fast。
-
-### 缺点
-
-- lifecycle truth reconciliation；
-- duplicate claims；
-- conflict semantics；
-- recovery complexity；
-- consistency model 成为系统主问题。
-
-除非业务真的需要 multi-authority / offline operation，否则这个复杂度通常没有被需求支付。
-
----
+## 14. ADR 保存的是为什么选这条 boundary，以及什么时候重开这个决定
 
-## Design C — Shared DB as Integration Contract
+当两个方案都能完成 feature 时，architecture decision真正需要保存的是 forces 与 consequence。Fowler 对 ADR 的总结强调 context/rationale、decision、serious alternatives、consequences、status，并建议 decision 被替代时保留历史而不是重写过去。
 
-```text
-API ------\
-scheduler ---> shared jobs table
-worker ----/
-```
-
-### 优点
-
-- implementation 快；
-- DB transaction 可解决部分 race；
-- 少一个 explicit service protocol。
-
-### 缺点
-
-- schema 变成跨组件 public contract；
-- semantic authority 仍可能 split；
-- DB credential 扩散；
-- independent deployment 受 schema coupling 限制。
-
-这个设计不是“绝对错误”。
-
-如果 components 同 owner、同 deploy、规模小，它可能是 pragmatic choice。
-
-关键是不要把 shared table 误称为 clean service boundary。
-
----
-
-# 22. Architecture Invariant
-
-好的 architecture design 应该能写出几条跨模块 invariant。
-
-TaskForge 例子：
-
-```text
-A1. Only Job Authority may accept a lifecycle transition.
-
-A2. Worker never mutates durable job state directly.
-
-A3. Snapshot is a derived export, not a live coordination channel.
-
-A4. External effect deduplication belongs to the authority that can identify a logical effect.
-
-A5. A worker failure must not make unrelated queued jobs unclaimable forever.
-
-A6. A new worker protocol version must coexist with the supported previous version during rolling deployment.
-```
-
-这些比：
-
-```text
-use repository pattern
-use service layer
-```
-
-更有 architectural value。
-
----
-
-# 23. Architecture Fitness Function
-
-有些 architecture rule 可以变成 executable evidence。
-
-例如：
-
-```text
-production modules other than job_authority.py
-must not import taskforge.state
-```
-
-或者：
-
-```text
-historical snapshot v1 fixture must remain readable
-```
-
-或者：
-
-```text
-worker package must not depend on DB driver package
-```
-
-这种检查常被称作 architecture fitness function / architecture test。
-
-课程不要求引入 framework。
-
-一个 50 行 AST script 就可能足够。
-
-重要的是：
-
-> **只自动化真正稳定且 consequential 的 architecture invariant。**
-
-否则 architecture test 会退化成目录命名 policing。
-
----
-
-# 24. 当前 M09 Probe 说明了什么？
-
-运行：
+TaskForge 可以为 accepted design 写一个很短的 ADR。若最终选择 reference candidate，它可能是：
 
-```bash
-PYTHONPATH=src uv run --with pytest --no-project python tools/m09_architecture_probe.py
-```
-
-baseline 会报告：
-
-```text
-DIRECT STATE DEPENDENCIES
-  concurrent_claim
-  legacy_audit
-  metrics
-  service
-  worker
-
-LIFECYCLE MUTATORS
-  concurrent_claim
-  service
-  worker
-```
-
-这个结果不等于：
-
-```text
-5 direct imports = architecture score 0
-```
-
-它只是 evidence。
-
-你还必须分类：
-
-- 哪些属于 current product path？
-- 哪些是历史 teaching/fault-injection module？
-- 哪些读依赖可以允许？
-- 哪些写依赖违反目标 authority？
-
-这一步非常重要。
-
-**Architecture review 不是 grep-driven refactor。**
-
----
-
-# 25. Historical Teaching Module 也是 Architecture Context
-
-TaskForge 是课程系统，因此源码里有：
-
-```text
-concurrent_claim.py
-```
-
-它故意保留 M07 race。
-
-一个 naïve Agent 可能看到：
-
-```text
-state import
-```
+```markdown
+ADR-0001 — Normal lifecycle transition logic routes through Job Authority
 
-就统一迁移它，结果 M07 deterministic probe 失去教学意义。
+Status: Accepted
 
-因此 M09 还要训练：
-
-> **Architecture scope 必须先定义。**
-
-真实系统里类似情况是：
-
-- migration tool；
-- admin script；
-- compatibility shim；
-- test harness；
-- deprecated endpoint；
-- emergency repair tool。
-
-它们可能不在正常 runtime path，却仍可能拥有高权限。
-
-不能简单忽略，也不能和主 product path 混为一谈。
-
----
-
-# 26. ADR：记录 Why，不只是 What
-
-2026 年 Fowler 的 ADR 总结很适合 M09。
-
-一个 architecture decision record 应该很短。
-
-TaskForge 示例：
-
-```text
-ADR-0001: Job Authority is the sole lifecycle writer
-```
-
-至少记录：
-
-## Context
-
-为什么现在需要决定？
-
-```text
-remote workers are being introduced;
-current service and worker both mutate shared state.
-```
-
-## Decision
-
-```text
-Workers request claim/finish through Job Authority.
-Workers do not receive direct durable-store write access.
-```
-
-## Alternatives
-
-```text
-shared DB writes
-per-worker replicated state
-```
+Context:
+Remote workers are required. Current normal paths mutate shared in-memory Job
+representation directly. Remote workers must not get store write credentials.
 
-为什么没选？
+Decision:
+Normal product transition implementations and direct state access are routed
+through the accepted authority seam. Workers depend on claim/finish semantics,
+not storage representation. The authority may initially share a process with
+the API. This phase does not claim detached/read-only Job observation or
+complete mutation-capability isolation for returned objects.
 
-## Consequences
+Alternatives considered:
+- direct shared-DB writes
+- replicated per-worker lifecycle state
 
-```text
-+ invariant enforcement localized
-+ storage can change behind authority
+Consequences:
++ normal transition policy and storage knowledge are localized
++ worker privilege is narrower
 - authority availability matters
-- remote protocol now needs compatibility policy
+- mutable observation handles remain a known M02 authority risk
+- remote protocol creates timeout/version obligations
+
+Revisit triggers:
+Reconsider partitioning/HA when measured throughput, recovery objectives, or
+failure-isolation requirements exceed one authority domain.
 ```
 
-## Revisit trigger
+它不是“Job Authority 永远正确”的墓碑。Revisit trigger 把当前 assumption 变成可被未来 evidence 推翻的决定。
 
-```text
-one authority cannot meet required throughput/failure-isolation target
-```
+同样，不要每个 library choice 都写 ADR。只有 blast radius、reversal/coordination cost、authority、failure 或 long-lived contract 足够 consequential 的决定，才值得长期保存 reasoning。
 
-这个最后一项很重要。
+ADR 之外，一张短 **architecture risk register** 也能防止图把不确定性藏掉。例如当前 candidate 可以显式记录：
 
-Architecture decision 不是永恒真理。
-
----
-
-# 27. ADR 不要写成墓碑
-
-差的 ADR：
-
-```text
-Decision: Use PostgreSQL.
-Reason: PostgreSQL is robust and popular.
-```
-
-这几乎没有 reasoning value。
-
-更好的：
-
-```text
-We need atomic lifecycle transitions across API and remote-worker requests.
-We require crash recovery on one VPS and do not need multi-region writes.
-Choose PostgreSQL/SQLite/... because ...
-Reject X because ...
-Revisit when ...
-```
-
-重点是 forces 和 trade-offs。
-
-当两个 architecture 都能满足功能要求时，比较往往会继续落到 uncertainty、reversibility、migration/review cost 和 future option；旁支 [Engineering Risk、Estimation 与 Economics](../extensions/engineering-risk-estimation-economics.md) 专门讨论这一层。另一方面，architecture 图也不是越完整越好：如何按问题选择 dependency、state、sequence、data-flow 或 C4-style view，见 [Models、Notation 与 UML](../extensions/models-notation-and-uml.md)。
-
----
-
-# 28. Architecture 与 Evolution
-
-Architecture 不是 project kickoff 产生一次后冻结。
-
-Fowler 明确强调 architecture 应支持自己的 evolution。
-
-课程把 architectural evolution 看成：
-
-```text
-current system model
-        ↓
-new pressure
-        ↓
-identify architectural consequence
-        ↓
-design alternatives
-        ↓
-choose migration path
-        ↓
-preserve compatibility / rollback
-        ↓
-measure whether assumption still holds
-```
-
-M05 的 change topology 和 M08 的 migration window 都在这里重新出现。
-
----
-
-# 29. 不要“未来-proof”所有东西
-
-Architecture 不是：
-
-```text
-为所有未来可能性先抽象
-```
-
-而是：
-
-```text
-对 high-consequence uncertainty 留下合理 reversibility
-```
-
-例如：
-
-你不需要现在实现：
-
-```text
-multi-region active-active Job Authority
-```
-
-但可以保证：
-
-```text
-worker does not know storage representation
-```
-
-这样未来 authority storage 从 memory 变 SQLite/Postgres 时，worker protocol 不必一起重写。
-
-这就是有价值的 option value。
-
----
-
-# 30. Architecture Risk Register
-
-每个 architecture proposal 至少写：
-
-| Risk | Mechanism | Evidence / mitigation |
+| Risk | Mechanism | 当前 evidence / mitigation |
 |---|---|---|
-| authority outage | all writes depend on one authority | restart/recovery + later HA |
-| worker duplicate | retry after timeout | lease/idempotent claim |
-| protocol skew | rolling deploy | N/N-1 compatibility |
-| snapshot confusion | operators restore stale export | explicitly mark export semantics |
-| sink duplicate | crash after effect | effect idempotency key |
+| authority outage | normal transition implementation converges on one authority seam | accepted current failure domain；revisit HA on measured objective |
+| mutable alias bypass | authority/service may return live authoritative `Job` handles | residual M02 risk；not closed by direct-import fitness rule |
+| worker duplicate/retry | timeout leaves execution outcome uncertain | inherit M07 attempt/effect analysis；future lease/idempotency work |
+| protocol skew | worker/authority independently deploy | define supported coexistence matrix before network rollout |
+| snapshot confusion | durable export 被误当 recovery truth | document current export role；no restore claim |
+| sink duplicate | effect succeeds before finish is recorded | carry logical effect identity to actual dedup authority/sink |
 
-不是为了 process bureaucracy。
+Risk register 不是 process bureaucracy，也不是说这些 mitigation 已实现。它只是把 assumption、known gap 与 future evidence owner从 diagram 背后移到 reviewer 能看见的位置。
 
-而是防止 diagram 把不确定性藏掉。
+当多个 architecture 都合理，比较可能继续落到 uncertainty、reversibility、migration cost 与 option value；旁支 [Engineering Risk、Estimation 与 Economics](../extensions/engineering-risk-estimation-economics.md) 专门讨论这一层。需要选择 dependency/state/sequence/data-flow/C4-style 等不同模型时，见 [Models、Notation 与 UML](../extensions/models-notation-and-uml.md)。
 
----
+## 15. M09 Lab 只做 boundary-enabling refactor，不假装已经建成 distributed system
 
-# 31. Architecture Review 的核心问题
+完整实验见 [Lab 09](../labs/09-architecture-boundaries.md)。实验先做 source classification 与多-view recovery，再设计至少两个 architecture、写 failure walk / ADR，最后才允许一个很小的 implementation phase。
 
-## Boundary
+reference implementation direction 是新增一个进程内 `job_authority.py` semantic seam，让 normal `service.py` / `worker.py` 的 transition logic 与 direct `state` access 收敛到一个位置，worker 不再需要 storage representation knowledge。它仍可以使用当前 in-memory `state.jobs`；这一步**不提供 durability、HA、RPC、lease、worker authentication、production concurrency atomicity 或 exactly-once effect guarantee**。
 
-- 这个 boundary 隐藏了什么 knowledge？
-- client 为什么不需要知道 implementation？
-- 是否有 backdoor dependency？
+它也**不自动提供 complete mutation-capability isolation**。如果 seam 继续返回 current authoritative mutable `Job`，caller 仍可通过 alias 修改 lifecycle；direct-import fitness check 不会发现这条路径。这是 M02 已知 authority risk，也是本轮有意保留的 non-goal，而不是用 `JobView` 等新 abstraction 顺手“修完”的问题。
 
-## Authority
+特别注意：这个 `job_authority.py` **目前不存在于 starter**。它只是 Lab/Instructor reference 的 candidate change。M09 正文不能把 target diagram 写成 current architecture。
 
-- 谁拥有 truth？
-- 是否有绕过 authority 的 writer？
-- invariant enforcement 是否和 authority 对齐？
-
-## Data
-
-- durable state 在哪里？
-- cache/snapshot/replica 是否被误当 source of truth？
-
-## Runtime
-
-- normal path 的 calls / data flow 是什么？
-- timeout/retry/failover 时多出哪些 edges？
-
-## Failure
-
-- component down 时谁一起 down？
-- failure 是否扩散到别的 domain？
-
-## Evolution
-
-- independently deployed components 如何 version？
-- rollout / rollback 顺序是什么？
-
-## Operations
-
-- 如何观察这个 architecture invariant 在 production 是否成立？
-
----
-
-# 32. Agent 做 Architecture 时的典型失败模式
-
-Agent 在 architecture task 上最危险的不一定是不会画图。
-
-而是太容易补齐“看起来专业”的模式。
-
-## 失败 1：Pattern autocomplete
-
-Prompt：
+一个谨慎的 Agent implementation contract 应类似：
 
 ```text
-给我设计一个可扩展的 TaskForge architecture
+First recover current architecture from real code and probes; do not propose topology yet.
+
+Then compare at least two remote-worker designs against the confirmed requirements.
+If the authority-boundary candidate is accepted, implement only the in-process semantic seam:
+localize normal transition policy/direct-state access and remove worker storage knowledge.
+Do not claim this proves detached/read-only Job observation or complete mutation-capability isolation.
+Do not add JobView/copying, network, DB, queue, DI framework, deployment manifests, or speculative HA.
+Preserve prior observable behavior and explicit historical teaching exceptions.
+Run core tests plus M05-M09 probes; classify historical harnesses before treating them as gates.
 ```
 
-可能得到：
+这也是 Agent 时代 dependency inversion / architecture reasoning 的实际价值：不是让 Agent autocomplete `API Gateway + Kafka + Redis + Kubernetes`，而是先把 truth、dependency、failure 和 authority 模型恢复出来，再让 mechanism 服从这些约束。
 
-```text
-API Gateway
-Auth Service
-Scheduler Service
-Job Service
-Worker Service
-Event Bus
-Redis
-Kafka
-PostgreSQL
-Kubernetes
-```
+## 16. Review architecture 时，先审 consequence，不审名词密度
 
-每个词都合理。
+Independent reviewer 不应只看 Agent summary，也不应因为 diagram“很像成熟系统”就接受。至少独立检查：
 
-但组合起来不一定有任何需求证据。
+- 当前事实与 target assumption 有没有混写？starter 是否真的有 durable store / restore / lease？
+- normal transition policy / direct-state access 是否真的 localize？是否又把这个证据夸成 complete authority isolation？
+- `get/list/claim` 是否泄漏 authoritative mutable handle；若是，是否明确标成 residual M02 risk，而不是被 direct-import check 掩盖？
+- remote worker 依赖 domain-level contract 还是 storage detail？所谓 DIP 是否只是 interface/DI ceremony？
+- semantic、process、deployment、failure boundary 是否被误当成同一个东西？
+- control/data-plane wording 是否只是有条件的 TaskForge analogy，没有被写成标准 topology 定律？
+- worker timeout / authority crash / effect-finish loss 的 temporal semantics 是否与 M07 一致？
+- failover/retry 是否新增了 capacity dependency 或扩大 blast radius？
+- snapshot 的 export/recovery role 是否明确，是否凭空增加 durability？
+- protocol独立演化后的 compatibility/rollback 有没有继承 M08 的约束；是否把 N/N-1 这类 policy example 偷升成 universal MUST？
+- fitness rule 是否包含 scope，并且诚实说明它只证明 direct-state dependency localization，而不是 capability isolation？
+- alternatives 是否是真实可行方案，而不是为 reference design 服务的 strawman？
+- complexity 是否由当前 requirement 支付，revisit trigger 是否可被未来 evidence 推翻？
 
----
+Architecture 最终不是几个 box，而是一组可以被 failure、change 和 evidence反复检查的 consequential boundaries。
 
-## 失败 2：Topology before semantics
+## 17. 来源边界：哪些是 source-backed，哪些是课程综合
 
-先决定：
+SEI 支撑 architecture 作为用于 reasoning 的 important structures；Fowler/Ralph Johnson 支撑“重要 design elements / evolution”这一 architectural-significance framing。Stanford CS190 支撑 information leakage、knowledge locality 与 simple interface 的 modularity reasoning。
 
-```text
-5 microservices
-```
+AWS cell material支撑 scope-of-impact / real isolation boundary；AWS control-plane/data-plane material支撑该术语的原始 distinction，但 **TaskForge 的 lifecycle control authority vs data/execution plane 映射是课程综合**。Google SRE 支撑 retry/failover/capacity coupling导致 cascading failure 的 reasoning。
 
-再去分 responsibility。
+Fowler `Monolith First` 只作为 service premium / stable-boundary经验材料，不升级成“必须 monolith first”的定律。Schuchert 的 *DIP in the Wild* 支撑 high-level policy 不应依赖 low-level detail、dependency 应朝 domain-relevant abstraction，以及 DIP 不等同于 DI/IoC；**把它具体映射到 TaskForge `worker -> claim/finish -> authority` 是课程应用，不是 source 原始案例。**
 
-正确顺序应该更接近：
+Fowler ADR material支撑短 decision record 的 context、alternatives、consequences、status 等作用；M09 的 consequence heuristic、五种 view、TaskForge target invariants、Job Authority reference direction、fitness-rule scope 与 Agent workflow 都是课程综合或 repo-specific reasoning。
 
-```text
-authority / contract / failure / security requirements
-        ↓
-semantic boundaries
-        ↓
-deployment topology
-```
-
----
-
-## 失败 3：Happy-path diagram
-
-Agent 很容易画：
-
-```text
-A -> B -> C
-```
-
-但不画：
-
-```text
-B timeout
-A retries
-A fails over to D
-C still executes original request
-```
-
-真正的 architecture bug 常在后者。
-
----
-
-## 失败 4：Shared DB hidden coupling
-
-图上是：
-
-```text
-Service A   Service B
-```
-
-代码里却：
-
-```text
-A and B both mutate same tables
-```
-
-Agent 如果只读 README/diagram 会被误导。
-
-所以 architecture reconnaissance 必须 repo-search actual dependencies。
-
----
-
-## 失败 5：Future-proof explosion
-
-Agent 很擅长列未来场景：
-
-```text
-multi-region
-ten million QPS
-plugin marketplace
-arbitrary workflow DAG
-multi-cloud
-```
-
-但 architecture 应优先解决当前已知 high-consequence pressure。
-
----
-
-# 33. 给 Agent 的 Architecture Reconnaissance Contract
-
-第一阶段只读：
-
-```text
-Do not propose a target architecture yet.
-
-1. Identify all lifecycle writers/readers.
-2. Identify durable/long-lived formats and external interfaces.
-3. Trace submit -> claim -> finish control/data flow.
-4. Identify normal-path and failure-path dependencies.
-5. Classify source-of-truth / replica / snapshot / cache.
-6. Identify process/deployment boundaries that actually exist today.
-7. Separate product runtime code from test/migration/teaching/repair code.
-8. List unknowns that materially affect architecture.
-```
-
-先拿到 system model。
-
-再进入 design。
-
----
-
-# 34. 给 Agent 的 Architecture Design Contract
-
-第二阶段：
-
-```text
-Design at least two architectures.
-
-For each:
-- authority model
-- data/control flow
-- deployment boundaries
-- failure domains
-- compatibility consequences
-- security/privilege boundaries
-- migration path
-- rollback path
-- operational evidence
-
-Do not add infrastructure unless tied to a stated requirement.
-```
-
----
-
-# 35. Independent Review 仍不可省
-
-Architecture diff 可能不是 code diff。
-
-但 reviewer 仍要独立检查：
-
-- assumptions 是否真实？
-- alternatives 是否 strawman？
-- blast radius 是否遗漏？
-- failure path 是否画了？
-- authority 是否清楚？
-- migration 是否现实？
-- rollback 是否真的可执行？
-- complexity 是否由真实 requirement 支付？
-
-Agent 的架构输出尤其容易“听起来都对”。
-
-因此必须把判断落到 consequence/evidence。
-
----
-
-# 36. TaskForge M09 Target Architecture
-
-本章不要求你实现完整 distributed system。
-
-本章要求形成一个可以指导 M10–M13 的 architecture baseline。
-
-一个合理 reference direction 是：
-
-```text
-                        +-------------------+
-client / public API --->|                   |
-admin ----------------->|   Job Authority   |<---- snapshot exporter/read models
-                        |                   |
-                        +---------+---------+
-                                  |
-                         durable Job Store
-                                  |
-                claim/finish protocol
-                                  |
-                         +--------v--------+
-                         | remote workers  |
-                         +--------+--------+
-                                  |
-                           external effects
-                                  |
-                         idempotent sink / owner
-```
-
-但注意：
-
-```text
-Job Authority
-```
-
-可以先与 API 在同一个 process。
-
-本章不提前决定它必须是独立 service。
-
----
-
-# 37. 本章实验为什么只做 Boundary-Enabling Refactor
-
-如果 M09 直接实现：
-
-```text
-HTTP server
-Postgres
-message queue
-remote agent
-```
-
-学生会忙于 mechanism。
-
-architecture reasoning 反而被淹没。
-
-所以实验只实现一个很小的 architectural move：
-
-> **让 normal product lifecycle path 通过一个明确 Job Authority，而不是让 worker 直接碰 representation。**
-
-然后验证：
-
-- old behavior 保持；
-- snapshot contract 保持；
-- legacy audit observation 保持；
-- M07 fault-injection module 被明确标为 historical/test-only exception，而不是无意识 backdoor；
-- authority boundary 可以以后换 storage，而 client 不知道。
-
-这一步不是最终 architecture。
-
-它是一个 **architecture-enabling seam**。
-
----
-
-# 38. 你应该保留的最终习惯
-
-以后看到 architecture proposal，不先问：
-
-```text
-用了什么 pattern？
-用了什么云服务？
-几个 microservices？
-```
-
-先问：
-
-```text
-What truth exists?
-Who owns it?
-What crosses this boundary?
-What happens when it fails?
-What survives a crash?
-Who must evolve together?
-How do we roll it back?
-Which assumption would make us redesign this?
-```
-
-如果这些问题有清晰答案，architecture 才真正开始存在。
-
----
-
-# 39. M09 与前面课程的连接
-
-```text
-M01 invariant
-  ↓
-M02 authority / information hiding
-  ↓
-M03 evidence
-  ↓
-M04 boundary semantics
-  ↓
-M05 evolutionary path
-  ↓
-M06 unknown-system takeover
-  ↓
-M07 failure / concurrency
-  ↓
-M08 compatibility / migration
-  ↓
-M09 system-level consequential boundaries
-```
-
-M09 不是突然进入另一个主题。
-
-它只是把前面所有 reasoning 提升到 system scale。
-
----
-
-# 40. 下一章预告
-
-M10 会进入：
-
-```text
-Code Review 与 Change Engineering
-```
-
-因为 architecture 最终仍通过 change 落地。
-
-M10 会问：
-
-> **一个 PR 到底应该提供哪些证据，reviewer 怎样验证 change scope、contract、migration、failure mode 和 architecture invariant，而不是只读 diff 看 style？**
+本章不能从这些来源推出：microservices 更高级、所有 process boundary 都是 fault boundary、所有 shared DB 都错、所有系统都需要 control/data plane services、DIP 要求每层 interface、一个 central authority 永远正确，或 M09 starter 已经具备 durable/HA/recovery guarantee。

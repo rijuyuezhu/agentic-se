@@ -202,6 +202,7 @@ CS190 主要讨论软件 design/modularity，不直接给 distributed failure-do
 实际检查：
 
 - https://docs.aws.amazon.com/wellarchitected/latest/reducing-scope-of-impact-with-cell-based-architecture/what-is-a-cell-based-architecture.html
+- https://docs.aws.amazon.com/whitepapers/latest/aws-fault-isolation-boundaries/control-planes-and-data-planes.html
 
 ## 实际内容
 
@@ -213,9 +214,11 @@ AWS 的 cell-based architecture guidance 将 workload 分成多个独立 cell：
 - failure / bad deployment 可以被限制在某个 cell 的 scope 内；
 - partition key 应与 workload 的 natural grain 对齐，以尽量减少 cross-cell interactions。
 
+AWS 另一份 fault-isolation 文档还明确区分 **control plane** 与 **data plane**：术语来自网络；control plane 负责创建/修改资源与规则、执行 orchestration，data plane 承担服务的主要功能。AWS 强调两者可以有不同的 complexity / availability profile。
+
 ## 本课程吸收
 
-这里最重要的不是“大家应该做 cell architecture”，而是两个 architecture questions：
+这里最重要的不是“大家应该做 cell architecture”，而是几个 architecture questions：
 
 ### 1. Scope of impact 是设计对象
 
@@ -234,6 +237,10 @@ AWS 的 cell-based architecture guidance 将 workload 分成多个独立 cell：
 ### 2. Isolation boundary 需要和 state / traffic grain 对齐
 
 如果你画了多个 cell，却仍共享同一个 hot mutable authority，或每次请求都跨 cell 协调，那么这个 isolation boundary 很可能只是部署上的框。
+
+### 3. Control plane / data plane 是一个有条件的 reasoning lens
+
+TaskForge 不是网络设备，也不是 AWS 服务，因此本课程不会把术语机械套用。课程借它区分两类 responsibility：lifecycle/control authority 负责决定和记录 job 的合法状态变化；remote worker 负责执行 command 与接触 external effect，接近 **data/execution plane**。这个映射属于课程综合。它的用途是检查 privilege、availability 与 failure coupling，而不是规定必须拆成两个 service。
 
 ## 限制
 
@@ -366,7 +373,43 @@ Job Authority
 
 ---
 
-# 7. Martin Fowler — Architecture Decision Record (2026)
+# 7. MartinFowler.com — DIP in the Wild
+
+**状态：主干采用（dependency inversion 的实际用途）**
+
+实际检查：
+
+- https://martinfowler.com/articles/dipInTheWild.html
+
+## 实际内容
+
+Brett Schuchert 对 Dependency Inversion Principle 的概括包括：high-level policy 不应依赖 low-level detail，依赖应指向更接近 domain 的 abstraction。文章特别强调，DIP 不是“有 interface 就完成了”，也不是 Dependency Injection / IoC 的同义词；把一个 JDBC connection 注入 domain code 仍然可能是错误的 dependency shape。文章的实际例子是把数据库 detail 藏到 domain-relevant repository 后面，让 storage mechanism 可以变化而不污染高层 policy。
+
+文章同时有一个重要 qualifier：abstraction 有成本，design principle 应按 context 使用，不能为了原则本身制造 speculative flexibility。
+
+## 本课程吸收
+
+TaskForge 的 remote-worker case 正好给出一个 system-scale application：
+
+```text
+bad dependency shape:
+worker -> jobs table / DB credential / storage representation
+
+better dependency shape:
+worker -> claim / finish / heartbeat semantics
+        -> Job Authority owns storage detail
+```
+
+这里所谓“dependency inversion 的真实用途”不是给每个 class 加 interface，也不是引入 DI framework，而是让 **execution-side code 依赖 domain-level lifecycle contract，而不是低层 persistence detail**。这使 storage migration、privilege separation 和 network boundary 可以在不泄漏 row/schema knowledge 给 worker 的前提下演化。
+
+## 限制
+
+DIP 不自动证明 Job Authority 这个 architecture 一定正确。它只帮助判断 dependency 应朝哪个 abstraction level 指向；是否值得建立该 boundary，仍要由 remote execution、authority、security、failure 与 evolution requirements 支付。
+
+---
+
+# 8. Martin Fowler — Architecture Decision Record (2026)
+
 
 **状态：主干采用（architecture reasoning preservation）**
 
@@ -430,7 +473,7 @@ ADR 本身不会让错误 architecture 变正确。
 
 ---
 
-# 8. Parnas 1972 — 本轮处理方式
+# 9. Parnas 1972 — 本轮处理方式
 
 历史论文：
 
@@ -448,7 +491,7 @@ M02/M09 关于 information hiding 的课程主张已经有 Stanford CS190 / Oust
 
 ---
 
-# 9. 本模块的综合模型：Architecture = Consequential Boundaries
+# 10. 本模块的综合模型：Architecture = Consequential Boundaries
 
 下面是课程综合，不归因于单一来源。
 
@@ -494,7 +537,7 @@ worker 又可以直接修改 authoritative row
 
 ---
 
-# 10. Architecture View 不是“一张全能图”
+# 11. Architecture View 不是“一张全能图”
 
 课程综合采用多-view：
 
@@ -547,7 +590,7 @@ rollback target
 
 ---
 
-# 11. Source audit 之后 M09 可以严谨教授什么
+# 12. Source audit 之后 M09 可以严谨教授什么
 
 可以：
 
@@ -555,6 +598,8 @@ rollback target
 - architectural significance 可从 blast radius / reversal / coordination / authority / long-lived contract 等 consequence 判断；
 - semantic boundary 与 process/deployment boundary 必须区分；
 - information hiding 在系统级仍然是核心；
+- dependency inversion 的实际用途是让 high-level/domain policy 依赖 domain-relevant abstraction 而不是 low-level detail；它不等于 DI framework / interface ceremony；
+- control plane / data plane 可以作为 privilege / availability / failure-coupling lens，但 TaskForge 的 lifecycle-control vs data/execution 映射属于课程综合，不是通用 topology 定律；
 - failure domain / scope of impact 是 architecture property；
 - retry/failover 可能扩大 failure propagation；
 - architecture 需要多个 concern-specific views；
@@ -573,12 +618,12 @@ rollback target
 
 ---
 
-# 12. M09 TaskForge teaching target
+# 13. M09 TaskForge teaching target
 
 TaskForge 前几章已经自然暴露了 architecture pressure：
 
 ```text
-state.py                 mutable lifecycle truth
+state.py                 shared mutable lifecycle representation
 service.py               submit/get/cancel
 worker.py                lifecycle writer
 concurrent_claim.py      competing claim authority
