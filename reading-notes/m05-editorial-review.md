@@ -214,3 +214,23 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/m05_behavior_probe
 - 无 `uv.lock` 等测试临时文件；
 - M05 前置 dependency sweep：§6 前无 `preparatory` canonical term；全文无 M06 `seam / sensing / enabling point` canonical leak；
 - `git status --short` 只包含 M05 module 修改与本 review record 新文件。
+
+## 12. Issue #2 closure pass — instructor-case narrative
+
+2026-09-07 的独立 #2 closure review 认为 M05 module 已完成 case-driven rewrite，但 `case-studies/m05/instructor-analysis.md` 仍保留初版 24 个逐题 reference sections。内容本身正确，问题是 case-study 阅读单位仍像 answer-key，而不是围绕一次 dashboard change 展开 engineering argument。
+
+本轮只重写 instructor case，没有修改 canonical starter、Lab contract、module 或 source audit。新结构围绕同一条 change spine：baseline evidence → direct JSON alternative → normalized-facts candidate → projection/authority → structural-only checkpoint → JSON behavior → `status_text` abstraction test → change topology → evidence limits → direct-vs-preparatory timing → exploration discard → Agent/review → judgment。
+
+Original-vs-rewrite sweep 特别保留：
+
+- direct feature path 的真实低 initial-cost 优势，不把它写成 strawman；
+- `DashboardSnapshot` 只是 read-time projection，不获得 lifecycle write authority；
+- raw `status + exit_code` 与 text-specific `succeeded(0)` 的 abstraction direction；
+- reference 不建立 Renderer hierarchy/registry，原因来自当前 shared knowledge，而不是反 pattern 口号；
+- structural phase 与 JSON phase 分别有独立 proof obligation；即使 `KeyError -> ApiError` 更好，它仍是 caller-visible behavior change，不能混进 pure refactor；
+- behavior probe 只覆盖当前 selected surface，special chars / Unicode title / large list 等 limitation 仍显式保留；
+- differential/golden evidence 只能证明 selected observations 被保持，不能替 desired-contract authority；
+- `First / After / Later / Never`、Design it Twice、exploration patch discard 都保持 conditional workflow，而不是 universal rule；
+- semantic checkpoint / change topology 继续明确属于 course synthesis。
+
+Canonical validation 仍为 core `6 passed`，M05 behavior fingerprints 仍是 `empty=eaadf634b7104332`、`queued=ec17ac5523b4b8bd`、`mixed=1181854b1e08cc1c`。Historical reference 的 `8 passed` 仍只描述临时 instructor implementation 的局部 evidence。
