@@ -194,6 +194,8 @@ Reviewer finding 最终仍需要 adjudication。Reviewer 不是新的 product ow
 
 M12 不需要第二个 implementation candidate。应复用 Phase 11 前冻结的**同一个 pre-review snapshot**，把 read-only review 拆成 public API/compatibility、concurrency/side effect、evidence/oracle 三条 path，并行启动三个独立 Review Agent context。它们拿同一份 base / contract / decision / candidate / raw evidence，不拿前一轮 findings 或 human adjudication，再比较 overlap、disagreement、wall-clock 与 synthesis cost。
 
+因此 Phase 12 的 adjudication 只能是 first-pass closure，而不是整个 candidate 的 final acceptance。Parallel replay 若发现任何新的 material / contract-impacting finding，必须回到 human adjudication；在这些 finding 被裁决前，早先的 `ACCEPT` 仍是 provisional。Duplicate 或已被完整覆盖的 finding 可以不产生新 decision，但 instructor 应要求学生显式说明其 closure，而不能让“parallel experiment”变成 acceptance 之后无人负责的新 evidence。
+
 这个设计既保证 mandatory path 一定有输入，也能区分“parallel review 是否真的带来额外 information”与“只是多跑了三个 Agent”。如果学生只是让三个人同时改 `service.py` 和 `public_api.py`，再展示 Git 能 merge，不应给高分，也不要求把这种 write-heavy experiment 真做一遍。Git conflict 只是 text collision；semantic conflict 还包括 producer/consumer 选择不同 error contract、两个 agent 分别新增 competing state owner、一个改 API 另一个按旧 API 写 consumer。
 
 评分时看：frozen input 是否一致、subtask boundaries 是否清楚、findings 的 overlap/disagreement 是否被真实比较、shared mutable surface 是否被压小、输出是否有 evidence contract、最后 integration authority 是否明确。Agent 数量本身没有分。

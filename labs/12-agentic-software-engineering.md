@@ -414,7 +414,7 @@ Suggested next decision or fix scope
 
 两者都可以减少 correlated failure，而且最好组合使用；但 probe/checker 不能替代 Review Agent，Review Agent 也不能把自己的 finding 升级成 product specification。若 Review Agent 与 implementer 共用 candidate-controlled instructions / tests，也要把这个 trust boundary 写出来。
 
-## 13. Phase 12 — Human adjudication：Reviewer 不是新的 Spec
+## 13. Phase 12 — First-pass human adjudication：Reviewer 不是新的 Spec
 
 对每个 finding 做三步判断：
 
@@ -426,7 +426,7 @@ Suggested next decision or fix scope
 
 反过来，如果 reviewer 能 deterministic 地证明 two admitted contenders 同时 accepted，或 rejection 已经递增 id，则直接命中当前 contract，属于真实 blocker。
 
-记录最终 adjudication：accept / request change / follow-up / new human decision。不要只回复“reviewer is right/wrong”。
+记录这轮 **first-pass adjudication**：accept / request change / follow-up / new human decision。不要只回复“reviewer is right/wrong”。这里的 `ACCEPT` 只表示 Phase 11 findings 已闭环；Phase 13 还会产生新的独立 review evidence，因此此时不能把它当作整个 Lab 的 final acceptance。
 
 ## 14. Phase 13 — Parallel Agent exercise：对同一 frozen candidate 并行问题
 
@@ -445,6 +445,8 @@ Suggested next decision or fix scope
 - disagreement / 互相矛盾的 assumption；
 - synthesis / integration cost；
 - 哪条 path 发现了其它 path 没发现的 semantic risk。
+
+比较完成后，把三条 parallel path 产生的**所有新的 contract-impacting / acceptance-relevant findings**送回 human adjudication。若其中任何一条可能改变 blocker / follow-up / new-decision 结论，则 Phase 12 的 `ACCEPT` 保持 provisional；这些 material findings 被逐条 adjudicate 之前，candidate 不能获得 final acceptance。纯 duplicate、已被前一轮裁决完整覆盖的 finding 可以记录为 no-new-decision，但也要在 comparison 中说明为什么。
 
 最后回答：如果把它们改成三个同时写 code 的 Agent，会新增哪些 shared mutable surface 和 semantic conflict？至少举一个“Git 无冲突但语义冲突”的例子。这个 write-heavy 场景只做分析，不要求再生成三份实现。
 
@@ -494,7 +496,7 @@ Suggested next decision or fix scope
 5. **Candidate Implementation**：只在 human decision 后、只在 disposable workspace。
 6. **Evidence Packet**：按 claim 映射 raw verification evidence 与 limitation。
 7. **Review Agent Findings**：标明 separate Agent context/session，并给出 severity、reproducer、contract impact。
-8. **Human Adjudication**：逐条决定 blocker / follow-up / new decision。
+8. **Human Adjudication Closure**：覆盖 Phase 11 的 first-pass findings，以及 Phase 13 新产生的所有 material / contract-impacting findings；逐条决定 blocker / follow-up / new decision，并明确何时 candidate 才获得 final acceptance。
 9. **Parallel Review Comparison**：同一 frozen snapshot 上三路 review 的 overlap、disagreement、wall-clock、synthesis cost 与 semantic-risk 差异。
 10. **Retrospective**：哪些机械工作 Agent 很强；哪些 judgement 交给 Agent 会 authority drift；哪些重复规则下次应迁移到 durable/executable mechanism。
 
@@ -507,7 +509,7 @@ Suggested next decision or fix scope
 | Authority / escalation judgment | 20 |
 | Implementation discipline | 10 |
 | Verification evidence quality | 15 |
-| Review Agent + human adjudication | 10 |
+| Review Agent + adjudication closure | 10 |
 | Parallel review / semantic-conflict analysis | 5 |
 | Harness/productivity retrospective | 5 |
 

@@ -298,4 +298,10 @@ The first diagnosis was accepted: the rewrite had used `independent review` as a
 
 The second diagnosis was also accepted: the old Phase 13 asked for an unreviewed candidate that the mandatory path did not guarantee, and the parallel exercise had no final proof obligation. The remediation deliberately does **not** restore the merge-base's optional write-heavy multi-agent coding experiment and does not invent a second implementation candidate. Phase 10 now freezes one complete pre-review candidate snapshot; Phase 11 reviews it; Phase 13 rewinds to the same snapshot and launches three read-only Review Agent paths without feeding them the earlier findings/adjudication. A compact `Parallel Review Comparison` is now required in deliverables and rubric.
 
-No TaskForge product contract, `M12-ADMISSION-001` semantics, M11 denominator definition, or external-source claim changed in this refinement.
+## 16. PR #17 follow-up — temporal adjudication closure
+
+A second independent review found one remaining temporal gap. The diagnosis was rechecked against the live Lab, module §10, and instructor analysis before editing: Phase 12 called its decision `final adjudication`, but Phase 13 intentionally generated fresh review findings afterward. That made it possible for a new blocker to appear after an earlier `ACCEPT` without a required authority path to close it.
+
+The remediation keeps the teaching order intact. Phase 12 is now explicitly **first-pass adjudication** over the canonical Review Agent findings. Phase 13 still replays the same frozen pre-review candidate independently; however, every new material / contract-impacting finding must return to human adjudication, and any earlier `ACCEPT` remains provisional until those findings are closed. The Human Adjudication deliverable now covers both Phase 11 and Phase 13 material findings.
+
+No module concept, TaskForge behavior, `M12-ADMISSION-001` semantic, M11 measurement definition, source claim, or rubric total changed in this follow-up.
