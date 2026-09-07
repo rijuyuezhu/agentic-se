@@ -1,963 +1,346 @@
-# Lab 13 — Capstone：Lease Recovery、Compatibility 与 Agent-assisted Change Engineering
+# Lab 13 — Capstone：把 Lease Recovery 做成一份可接受的 Change
 
-这个 lab 是整门课的综合考核。
+这是整门课的综合考核。你会拿到一个已经存在的 TaskForge、一个包含错误 guarantee 的 feature request、一套全部绿色但不完整的 baseline tests、可确定性复现的 failure probe，以及一份只有在 first-pass issue review 完成后才应该读取的 human decision pack。
 
-你不会得到一个已经完全一致的 specification。
+目标不是“实现一个 lease scheduler”。最终要交的是一份可以独立审查、可以重放 evidence、可以解释 migration/rollback，并且没有把 product / compatibility / production authority 偷偷交给 Agent 的完整 change record。
 
-你会得到：
+## 0. Starting point 与不可跨越的边界
 
-- 一个已经运行多个版本的 TaskForge starting point；
-- 一个真实风格但存在错误 guarantee 的 feature request；
-- 一组会全部通过的 baseline tests；
-- deterministic failure probes；
-- 一个只有在你完成 first-pass issue review 后才应该读取的 human decision pack。
-
-你的目标不是“把 lease feature 写出来”。
-
-你的目标是提交一份**可以被独立审查、可以解释 migration/rollback、可以重放 evidence、并且没有把 engineering authority 偷偷交给 Agent 的完整 change record**。
-
----
-
-# 0. Starting Point
-
-目录：
+Starter 位于：
 
 ```text
 labs/taskforge/capstone-starter/
 ```
 
-先读：
-
-```text
-README.md
-ISSUE.md
-```
-
-此时**不要读**：
+第一次进入时只读 `README.md`、`ISSUE.md`、current source、tests、fixture 与 baseline probe。**不要先读**：
 
 ```text
 decision-pack/01-after-issue-review.md
 ```
 
-也不要修改 production code。
+也不要立刻修改 canonical starter。实际实现放在你自己的 branch / disposable working copy 中，并保留一个未修改 baseline 以便重放 fail-before evidence。
 
----
+整个 Lab 必须保持以下边界：
 
-# 1. Baseline Evidence
+1. 原 issue 不是 specification authority；contradiction 必须先被识别并升级。
+2. Human decision pack 是本题 product/system authority；implementation Agent 不能重新定义它。
+3. Legacy public API、worker protocol 与 durable schema 都是 compatibility surfaces，不能只凭“代码能跑”判断兼容。
+4. TaskForge 只可声明自己有 evidence 支撑的 guarantee；arbitrary external command exactly-once 不能仅由 TaskForge 自己的 local lifecycle state 推出来。
+5. Agent 不拥有 merge、release、activation、residual-risk acceptance 或未授权 architecture expansion authority。
+6. `STOP_AND_ESCALATE`、`REQUEST_CHANGES`、`NOT_READY_TO_ROLLOUT` 都可以是正确最终状态。
+
+## 1. Phase 0 — 复现 baseline，而不是先相信绿测试
 
 运行：
 
 ```bash
 cd labs/taskforge/capstone-starter
 PYTHONPATH=src uv run --with pytest --no-project python -m pytest -q
-```
-
-预期 baseline：
-
-```text
-6 passed
-```
-
-然后：
-
-```bash
 PYTHONPATH=src uv run --with pytest --no-project \
   python tools/capstone_baseline_probe.py
 ```
 
-记录输出，不要只截图一句结论。
-
-你的 baseline note 必须至少回答：
-
-1. schema version 是什么？
-2. public submit response 是什么？
-3. concurrent claim history 发生了什么？
-4. final row 为什么可能掩盖 bad history？
-5. operator requeue 后 stale finish 为什么仍能成功？
-6. 哪些 baseline tests 没有检查这些问题？
-
----
-
-# 2. First-pass Issue Review
-
-只根据：
+Canonical starter 当前应得到 `6 passed`，随后 probe 应稳定展示：
 
 ```text
-ISSUE.md
-current code
-baseline evidence
+successful_claims=job-1,job-1
+workers_returned_success=2
+history_is_illegal=true
+
+stale_finish_accepted=true
 ```
 
-写一份：
+保存 raw output。你的 baseline note 至少回答：schema version / columns 是什么；legacy submit response 是什么；为什么两个 claim success 不能被最终单 owner row 抹掉；operator requeue 后为什么旧 completion 仍能成功；现有六个 tests 分别证明了什么、没有证明什么。
+
+这份 evidence 是后面所有 change claim 的 fail-before 基线。
+
+## 2. Phase 1 — First-pass Issue Review：先证明 issue 是否可实现
+
+只根据 `ISSUE.md`、current code 与 Phase 0 evidence，创建：
 
 ```text
 submission/01-issue-review.md
 ```
 
-至少包含四部分。
+至少分成四类：
 
-## 2.1 Requirements
+- **Explicit requirements**：逐条保留原 issue 的实际要求，不先改成你希望的版本。
+- **Existing contracts / compatibility surfaces**：public submit response、SQLite schema、v1 claim response、v1 finish payload、maintenance behavior 等。
+- **Assumptions**：例如 lease expiry 是否意味着旧 process 已停止、requeue 是否意味着旧 execution 不会再产生 effect、additive schema 是否自动意味着任意 old-binary rollback safe。
+- **Contradictions / unresolved decisions**：标成 `IMPLEMENTABLE AS WRITTEN` / `AMBIGUOUS` / `CONTRADICTORY` / `NEEDS AUTHORITY DECISION`。
 
-逐条列出原 issue 的 explicit requirements。
-
-不要自己改写成你希望它表达的需求。
-
-## 2.2 Existing compatibility surfaces
-
-至少检查：
+必须单独分析这一条 failure window：
 
 ```text
-public API
-SQLite schema
-worker claim response
-worker finish payload
-background maintenance behavior
+worker performs external effect
+→ TaskForge does not observe completion
+→ worker disappears / partition persists
+→ timeout recovery executes the job again
 ```
 
-## 2.3 Assumptions
+回答 TaskForge 自己的 SQLite 能否区分“第一次 effect 没发生”和“effect 已发生但 completion 丢了”。如果不能，就不能把原 issue 的 arbitrary-command exactly-once 当成 implementation detail。
 
-对 issue 中每个强 guarantee 问：
+### Gate A — Freeze first-pass reasoning
 
-```text
-这条结论依赖什么假设？
-代码/协议现在真的支持这个假设吗？
-```
+在读取任何答案前，把 `01-issue-review.md` 冻结成稳定 checkpoint（commit、tag、patch artifact 或等价 immutable snapshot）。记录 snapshot id。
 
-## 2.4 Contradictions / unresolved decisions
+这个 gate 是 graded evidence：它保留你在没有 human answer 时真正发现了什么。
 
-必须明确标：
+## 3. Phase 2 — Human Decision 与 decision delta
 
-```text
-IMPLEMENTABLE AS WRITTEN
-AMBIGUOUS
-CONTRADICTORY
-NEEDS AUTHORITY DECISION
-```
-
-不要把 unresolved product semantics 变成 implementation Agent 的自由发挥空间。
-
----
-
-# 3. Gate A — Issue Review Freeze
-
-在继续之前，把你的 `01-issue-review.md` 保存为一个独立 checkpoint。
-
-如果你使用 Git：
-
-```text
-commit / tag / patch artifact
-```
-
-均可。
-
-目的不是流程仪式。
-
-而是让你之后能比较：
-
-```text
-在看 human decision 之前
-你独立发现了什么？
-```
-
----
-
-# 4. 读取 Human Decision
-
-现在读：
+现在读取：
 
 ```text
 decision-pack/01-after-issue-review.md
 ```
 
-写：
+创建：
 
 ```text
 submission/02-decision-delta.md
 ```
 
-分三类：
+对 D1–D7 至少标记 `I FOUND IT` / `I PARTIALLY FOUND IT` / `I MISSED IT`，并解释差异。必须覆盖：
 
-```text
-I FOUND IT
-I PARTIALLY FOUND IT
-I MISSED IT
-```
+- arbitrary-command exactly-once 被撤回，automatic recovery 是 at-least-once；
+- legacy submit 保持原 response，默认 manual recovery；
+- 新 opt-in `automatic_at_least_once` surface；
+- monotonic attempt identity 与 fenced heartbeat / finish；
+- v1 finish 只能完成 legacy attempt；
+- existing claim race 必须在 mixed rollout 前修复；
+- Expand → protocol migration → activation gate → later Contract；
+- post-v2 state 下不再承诺任意 old-server binary rollback。
 
-至少覆盖：
+不要把“我和答案不同”自动算错。真正需要解释的是：你的 first-pass reasoning 是证据不足、遗漏 authority、还是选择了 human decision 未授权的 guarantee。
 
-- exactly-once guarantee；
-- manual vs automatic recovery；
-- attempt identity；
-- existing claim race；
-- mixed-version activation gate；
-- rollback boundary。
+## 4. Phase 3 — 恢复 system model 与 contract
 
-这份 delta 是 graded artifact。
-
-因为它能区分：
-
-```text
-真正独立 reasoning
-```
-
-和：
-
-```text
-读完答案后觉得“我本来就知道”
-```
-
----
-
-# 5. System Model
-
-创建：
+接下来创建三份相互引用但职责不同的 artifact：
 
 ```text
 submission/03-system-model.md
-```
-
-至少包含五个 view。
-
-## 5.1 Responsibility / knowledge
-
-至少包括：
-
-```text
-api.py
-service.py
-db.py
-remote_worker.py
-maintenance.py
-external command/effect owner
-```
-
-## 5.2 Authority / state
-
-明确：
-
-```text
-job lifecycle authority
-current attempt authority
-worker identity
-recovery policy
-lease expiry
-external effect dedup authority
-```
-
-## 5.3 Runtime protocol
-
-至少画出：
-
-```text
-submit
-claim
-heartbeat (future)
-finish
-expiry
-requeue
-new claim
-stale finish
-```
-
-## 5.4 Durable / compatibility
-
-至少列：
-
-```text
-schema v1/v2
-server v1/v2
-worker v1/v2
-legacy/default recovery policy
-```
-
-## 5.5 Failure / rollback
-
-至少包含：
-
-```text
-worker crash
-partition
-late finish
-late heartbeat
-server rollback
-schema expanded but semantics inactive
-semantics activated
-```
-
----
-
-# 6. Contract Inventory
-
-创建：
-
-```text
 submission/04-contracts.md
+submission/05-design-memo.md
 ```
 
-建议使用：
+### System model
+
+至少恢复五个 view：
+
+| View | 必须能回答的问题 |
+|---|---|
+| Responsibility / knowledge | `api.py`、`service.py`、`db.py`、`remote_worker.py`、`maintenance.py` 与 external effect owner 各知道什么？ |
+| Authority / state | 谁拥有 job lifecycle、current attempt、worker identity、recovery policy、lease state、external-effect dedup？ |
+| Runtime protocol | submit / claim / heartbeat / finish / expiry / requeue / new claim / stale message 如何交错？ |
+| Durable / compatibility | schema v1/v2、server v1/v2、worker v1/v2、legacy/default policy 如何组合？ |
+| Failure / rollback | worker crash、partition、late finish/heartbeat、expand-only、semantic activation、server rollback 会怎样？ |
+
+不能用一张 deployment diagram 代替这些问题。尤其要分别回答“谁知道 current attempt？”与“谁知道 external effect 是否已经发生？”
+
+### Contract inventory
+
+建议表格：
 
 | Surface | Existing contract | New contract | Must remain | Explicit non-guarantee |
 |---|---|---|---|---|
 
-至少覆盖：
+至少覆盖 legacy submit、v2 opt-in submit、v1 claim、v1 finish、v2 claim、v2 heartbeat、v2 finish、automatic recovery、schema migration、rollback。
 
-- v1 public submit；
-- v2 opt-in submit；
-- v1 worker claim；
-- v1 finish；
-- v2 claim；
-- v2 heartbeat；
-- v2 finish；
-- automatic recovery；
-- schema migration；
-- rollback。
-
-必须有一行明确写：
+必须明确写出：
 
 ```text
-arbitrary command external effect exactly-once is NOT guaranteed
+TaskForge does NOT guarantee exactly-once external effects
+for arbitrary commands.
 ```
 
-如果你决定提供更强 guarantee，必须说明 external effect owner 如何参与，并获得额外 authority；不能靠 TaskForge DB 自己宣称。
+如果你要提出更强 guarantee，必须说明 effect owner 如何参与，并取得额外 product/architecture authority；不能只在 TaskForge DB 中增加一个字段。
 
----
+### Design memo
 
-# 7. State Machine / Attempt Model
+至少回答 current problem、desired semantics、preserved semantics、non-goals、claim atomicity、attempt/fencing design、recovery policy、schema evolution、protocol compatibility、activation gate、rollback boundary、external-effect residual risk 与 rejected alternatives。
 
-画出至少：
+比较至少两个真正 plausible implementation shape，例如 jobs-table attempt columns vs separate attempts table，或 conditional update vs explicit transaction。Reference shape 不是规范；荒谬 strawman 也不算 design comparison。
+
+## 5. Phase 4 — State machine 与 compatibility matrix
+
+把 current execution 明确建模。Human decision 之后，一条最小 conceptual state path 是：
 
 ```text
 queued
   ↓ claim attempt=1
 running(a1)
   ├─ finish(a1) → terminal
-  └─ lease expires
-        ↓
-      queued(attempt history preserved)
-        ↓ claim attempt=2
-      running(a2)
+  └─ lease expires / authorized recovery
+       ↓
+     queued
+       ↓ claim attempt=2
+     running(a2)
 ```
 
-然后明确：
+对 `finish(a1)` 或 `heartbeat(a1)` 在 a2 成为 current 后到达的情况，写出 machine-checkable acceptance predicate。可以采用不同 representation，但不能只说“忽略 stale worker”。
 
-```text
-finish(a1) after a2 starts
-heartbeat(a1) after a2 starts
-```
-
-必须发生什么。
-
-不要只写：
-
-```text
-“应该忽略 stale worker”
-```
-
-要写 machine-checkable condition。
-
-例如 conceptual form：
-
-```text
-accepted transition requires:
-job.status == running
-AND job.current_attempt == payload.attempt
-AND job.current_worker == payload.worker_id
-```
-
-实现不要求完全照这个表达。
-
----
-
-# 8. Design Memo / ADR
-
-创建：
-
-```text
-submission/05-design-memo.md
-```
-
-至少回答：
-
-1. current problem；
-2. desired semantics；
-3. non-goals；
-4. attempt/fencing design；
-5. claim atomicity design；
-6. recovery policy design；
-7. schema change；
-8. protocol compatibility；
-9. activation gate；
-10. rollback boundary；
-11. external effect residual risk；
-12. rejected alternatives。
-
-至少比较两种 implementation shape，例如：
-
-```text
-A. attempt columns on jobs
-B. separate attempts table
-```
-
-或者：
-
-```text
-A. CAS claim
-B. explicit transaction claim
-```
-
-不要为了“design it twice”故意写一个荒谬 strawman。
-
----
-
-# 9. Compatibility Matrix
-
-创建：
+随后创建：
 
 ```text
 submission/06-compatibility-matrix.md
 ```
 
-最少覆盖：
+至少分析：old server + schema v1；new server 在 migration 前面对 schema v1；old server + expanded schema；new server + old worker；new server + new worker；mixed workers；以及 **v2 attempt state 已经出现后切回 old server**。最后一行不能因为旧代码能读 column 就直接写 `PASS`。
 
-| Server | Worker | Schema | Recovery active? | Expected |
-|---|---|---|---|---|
-
-至少分析：
-
-```text
-old server + schema v1
-new server + schema v1 before migration
-old server + expanded schema v2
-new server + old worker
-new server + new worker
-old server after v2 attempt has been used
-```
-
-最后一行很重要。
-
-不要只写：
-
-```text
-“旧 binary 能读新列，所以可以 rollback。”
-```
-
-你必须分析旧 binary 对**新语义 state**的理解。
-
----
-
-# 10. Staged Implementation Plan
+## 6. Phase 5 — Staged plan 与 Agent delegation
 
 创建：
 
 ```text
 submission/07-staged-plan.md
-```
-
-每个 stage 至少写：
-
-```text
-Goal
-Allowed scope
-Contract changed?
-Evidence
-Rollback/reversal
-Stop conditions
-```
-
-一个合理但非唯一的 decomposition：
-
-```text
-Stage 0 characterize
-Stage 1 fix v1 claim race
-Stage 2 schema expand
-Stage 3 dual worker protocol + attempt fencing
-Stage 4 opt-in recovery submission
-Stage 5 activation observability/gate
-Stage 6 automatic requeue
-```
-
-你可以不同。
-
-但如果计划只有：
-
-```text
-1. implement feature
-2. test
-3. deploy
-```
-
-视为没有 staged reasoning。
-
----
-
-# 11. Agent Delegation Plan
-
-创建：
-
-```text
 submission/08-agent-plan.md
 ```
 
-至少定义三个角色。
+每个 implementation stage 必须写：Goal、Allowed scope、Changed/preserved contract、Evidence、Rollback/reversal、Stop/escalate conditions。
 
-## Reconnaissance Agent
-
-只读。
-
-输出：
+一种合理但非唯一的 decomposition 是：
 
 ```text
-state writers
-protocol entry points
-DB queries
-compatibility artifacts
+S0 characterize
+S1 fix v1 claim atomicity
+S2 schema expand
+S3 dual worker protocol + attempt fencing
+S4 opt-in automatic_at_least_once submission
+S5 observability + activation gate
+S6 automatic recovery activation
+later: remove v1 protocol (out of scope)
 ```
 
-## Implementation Agent
+不要为了贴合 reference 强制使用相同 commit 数。真正要求是：race fix、representation expand、protocol coexistence 与 semantic activation 可以分别 reasoning 和验证。
 
-每个 stage 单独授权。
+Agent plan 至少定义：
 
-必须给：
+- **Reconnaissance Agent**：read-only，输出 state writers、protocol entry points、DB queries、tests/fixtures、compatibility surfaces。
+- **Implementation Agent**：每个 stage 单独授权 Goal、Allowed write paths、Invariants、Forbidden actions、Evidence contract、Stop conditions。
+- **Review Agent**：与 implementer 使用 separate context/session；重新读取 issue、human decision、candidate diff、raw verification evidence、migration/rollback artifacts，不把 implementer summary 当事实来源。
 
-```text
-Goal
-Allowed write paths
-Invariants
-Forbidden actions
-Evidence contract
-Stop/escalate conditions
-```
+Read-heavy reconnaissance / compatibility / test audit 可以并行；shared-write implementation 只有在 ownership 明确时才拆。Agent 数量本身不评分。
 
-## Independent Review Agent
+## 7. Phase 6 — 一次只实现一个 stage
 
-不得只消费 implementation Agent 的 final summary。
+Implementation 可以使用 Agent，但一个 stage 完成后先保存 raw evidence、自审 diff、记录未解决问题，再决定是否进入下一 stage。
 
-要求它重新读取：
+如果执行中发现必须改变 human decision、扩大 architecture、改变 legacy response、放宽 activation gate、删除 v1 support、重新声称 exactly-once 或取得 merge/deploy 权限，先 `STOP_AND_ESCALATE`。不要用“顺手做掉”把 staged plan 变成事后文档。
 
-```text
-issue
-human decision
-current code
-diff
-tests
-migration artifacts
-```
+## 8. Required Evidence — 八个不能被 full-green 替代的 proof obligations
 
-最终 acceptance 仍由你裁决。
+最终 `EVIDENCE.md` 必须把 claim 映射到 command、observed result、negative control / limitation。以下八组 evidence 都是 mandatory；实现 shape 可以不同。
 
----
+### A. Existing claim race：fail-before / pass-after
 
-# 12. Implementation Rule：一次只做一个 Stage
+Baseline 已稳定得到两个 success receipts。修复后在无额外 DB fault 的 deterministic interleaving 中，应只有一个 caller 成功 claim 该 queued row；更一般的 safety claim 是同一 queued row **at most one successful receipt**。只展示 final row 一个 worker 不算 pass-after。
 
-你可以使用 Agent 实现。
+### B. Schema Expand + frozen v1 consumer
 
-但每个 stage 完成后先保存 evidence，再进入下一个。
-
-禁止：
-
-```text
-Stage 1 发现顺手可以做 Stage 4
-→ 一起改了
-```
-
-除非重新更新 plan 并解释为什么 change topology 应改变。
-
----
-
-# 13. Required Evidence A — Existing Claim Race
-
-Baseline 已经能 deterministic reproduce：
-
-```text
-one queued job
-+ two v1 workers
-→ two success receipts
-```
-
-修复后必须证明：
-
-```text
-one queued job
-+ two concurrent v1 claim calls
-→ exactly one success receipt
-```
-
-注意：
-
-```text
-final row only has one worker
-```
-
-不是充分 evidence。
-
----
-
-# 14. Required Evidence B — Schema Expand
-
-你必须实际验证：
+实际验证：
 
 ```text
 v1 DB
-→ v2 expand
-→ old/frozen v1 binary still reads/writes legacy contract
+→ new migration expands schema
+→ frozen v1 code still reads/writes legacy contract
 ```
 
-建议真正复制一份 starter 作为 frozen binary code，而不是在 new code 中写一个 `legacy_mode=True` 模拟。
+至少覆盖 old public submit、old claim、old finish，并确认旧 initializer 不会把 schema version 意外降级。不要用 new code 的 `legacy_mode=True` 冒充真正 frozen artifact。
 
-至少验证：
-
-```text
-old public submit works
-old worker claim works
-old finish works
-schema version does not get accidentally downgraded
-```
-
----
-
-# 15. Required Evidence C — Attempt Fencing
+### C. Attempt fencing
 
 构造：
 
 ```text
 attempt 1 claim
-lease expires
-requeue
-attempt 2 claim
-attempt 1 finish arrives
+→ lease expires / recovery requeues
+→ attempt 2 claim
+→ attempt 1 finish
+→ attempt 1 heartbeat
 ```
 
-必须：
+两条 stale message 都必须被拒绝，current attempt 不得被覆盖。
 
-```text
-stale finish rejected
-current attempt remains authoritative
-```
+### D. Legacy finish compatibility
 
-再测：
+Migration window 中，v1 `job_id + exit_code` completion 仍可完成 legacy attempt；同一个 handler 不得完成已经进入 v2 attempt protocol 的 row。否则 compatibility path 会绕过 fencing。
 
-```text
-attempt 1 heartbeat arrives
-```
+### E. Recovery policy
 
-也必须拒绝。
+证明 legacy/default `manual` job 即使 lease expired 也不会被 automatic sweeper requeue；只有显式 opt-in automatic job 才能按授权 policy requeue。
 
----
+### F. External-effect negative control
 
-# 16. Required Evidence D — Legacy Finish Compatibility
+主动构造两个 attempts 各自产生一次 external effect，同时 stale finish 仍被正确 fence。这个 test/probe 的期望结果是“duplicate effect 仍可能发生”。它验证的是 non-guarantee，不是要求你把它修成 exactly-once。
 
-在 migration window：
+### G. Activation gate
 
-```text
-v1 worker
-```
-
-仍要能完成：
-
-```text
-legacy attempt
-```
-
-但 old payload 不能完成：
-
-```text
-v2 attempt
-```
-
-否则 fencing boundary 可以被 compatibility handler 绕过。
-
----
-
-# 17. Required Evidence E — Recovery Policy
-
-Human decision 规定：
-
-```text
-legacy submit → manual
-```
-
-所以必须证明：
-
-```text
-manual job lease expires
-→ automatic sweeper does not requeue it
-```
-
-新 opt-in automatic job 才允许：
-
-```text
-lease expires
-→ requeue
-```
-
-这检查你有没有为了实现 feature 偷改 legacy semantics。
-
----
-
-# 18. Required Evidence F — Exactly-once Negative Control
-
-必须主动构造：
-
-```text
-attempt 1 executes external effect
-lease expires
-attempt 2 executes same external effect
-```
-
-然后展示：
-
-```text
-TaskForge can reject stale finish
-BUT
-external effect can already have happened twice
-```
-
-这是一个**必须通过的 negative-control test/probe**。
-
-它的目的不是暴露你实现错误。
-
-而是证明：
-
-```text
-你没有对 system guarantee 说谎
-```
-
----
-
-# 19. Required Evidence G — Activation Gate
-
-设计可观察 gate。
-
-至少包括：
+至少让 gate 依赖：
 
 ```text
 legacy_worker_count == 0
 running_legacy_attempt_count == 0
-stale-attempt evidence passed
+stale-attempt rejection evidence passed
 post-activation rollback semantics reviewed
 ```
 
-你可以增加条件。
+测试任一 blocker 存在时 gate closed，全部满足时 gate 才 **may open**。最终 activation 仍属于授权 decision，不是 bool 自动赋予 release authority。
 
-必须测试：
+### H. Rollback boundary
 
-```text
-任何 blocker 存在 → gate closed
-全部满足 → gate may open
-```
+做两组真实实验：
 
-不要直接把：
+1. Expand-only：frozen v1 code → v1 DB → new expand → frozen v1 code again，验证这一阶段的 old-binary compatibility。
+2. v2 attempt semantics 已使用后：new system 写入/claim v2 attempt → 切回 frozen old server → old finish payload，观察旧 server 是否会接受 unfenced transition。
 
-```text
-enable_recovery = true
-```
+如果第二组证明旧 server 不理解 fencing，就把 `simple old-binary rollback unsafe` 写进 rollout plan；不要用 schema readability 覆盖这个 counterexample。
 
-写进配置然后靠 runbook 人肉记忆。
-
----
-
-# 20. Required Evidence H — Rollback Boundary
-
-实际做两组实验。
-
-## 20.1 Expand-only
-
-```text
-old binary
-→ v1 DB
-→ new migration expands DB
-→ old binary runs again
-```
-
-期望：
-
-```text
-compatible
-```
-
-## 20.2 After v2 attempt semantics
-
-```text
-new server creates/claims v2 attempt
-→ switch to frozen old server
-→ send old finish payload
-```
-
-分析旧 server 是否理解 fencing。
-
-如果不理解：
-
-```text
-simple old-binary rollback unsafe
-```
-
-把 evidence 放进 rollout plan。
-
----
-
-# 21. Production Evidence Plan
+## 9. Phase 7 — Production evidence 与 rollout gates
 
 创建：
 
 ```text
 submission/09-production-evidence.md
-```
-
-至少定义：
-
-```text
-legacy_worker_count
-running_legacy_attempt_count
-v1_claim_success_count
-v2_claim_success_count
-stale_finish_rejected_count
-stale_heartbeat_rejected_count
-automatic_requeue_count
-manual_requeue_by_sweeper_count
-```
-
-对每个 signal 写：
-
-```text
-why it exists
-what decision it supports
-metric/event/log?
-cardinality considerations
-```
-
-不要用 `job_id` 作为 aggregate metric label。
-
-它可以留在 diagnostic event。
-
----
-
-# 22. Rollout / Rollback Plan
-
-创建：
-
-```text
 submission/10-rollout.md
 ```
 
-至少写：
+Production evidence plan 至少定义：legacy worker inventory、running legacy attempts、v1/v2 claim success、stale finish / heartbeat rejection、automatic requeue、manual-policy violation，以及 recovery gate state。对每个 signal 写清它支持哪个 decision、适合 metric/event/log 哪一种表示、有什么 cardinality 风险。
 
-## Phase A Expand
+`job_id / attempt / worker_id` 可以保留在 diagnostic events 做 correlation；不要把 `job_id` 当 aggregate metric label。
 
-```text
-change
-entry condition
-exit condition
-rollback
-```
+Rollout plan 至少写三阶段：Expand、Protocol Migration、Activation。每阶段写 entry condition、exit condition、failure action 与 rollback/reversal semantics。对 stale rejection spike、legacy worker重新出现、manual job 被自动 requeue、migration partial failure 等 scenario 给 operator action。
 
-## Phase B Protocol Migration
+不要把 activation 写成“星期二十点开开关”。它必须引用 Phase 8 的 observable gate 和当前 rollback boundary。
 
-同上。
+## 10. Phase 8 — Independent Review：reviewer 必须能推翻 author
 
-## Phase C Activation
+Implementation 完成并冻结 candidate snapshot 后，启动 separate Review Agent context/session。Review Agent 第一轮不要先读 implementer 的“全部正确”总结；给它 base/current code、issue、human decision、candidate、raw evidence 与 migration artifacts。
 
-同上。
+Review 至少重建七类问题：
 
-## Failure actions
+| Area | 必查问题 |
+|---|---|
+| Issue / contract | 有没有重新声称 exactly-once？legacy submit/default recovery 是否漂移？ |
+| State authority | current attempt 是否唯一？legacy handler 能否绕过 fencing？ |
+| Concurrency | v1 claim linearization、expiry vs finish、stale heartbeat 是否有 history evidence？ |
+| Migration | Expand 是否真的由 frozen old artifact 验证？mixed-version path 与 gate 是否成立？ |
+| Rollback | 哪个 phase 可 old-binary rollback，哪个 state 之后不能？ |
+| Evidence | 有没有 fail-before、negative control、version-scoped oracle、残余 uncertainty？ |
+| Scope | 是否出现无 authority 的 infrastructure、cleanup、v1 deletion 或 guarantee change？ |
 
-例如：
+Review Agent 给 `APPROVE` / `REQUEST_CHANGES` / `SPLIT` / `NEEDS_AUTHORITY_DECISION` 之一，并让每个 material finding 指向 reproducer / evidence 与 contract impact。
 
-```text
-stale rejection spikes
-legacy worker unexpectedly appears
-automatic requeue affects manual jobs
-DB migration partial failure
-```
+这一步是 **independent review reasoning**；runtime probes、tests、static checks 属于 verification evidence，不能替代 reviewer 的 change-model reconstruction。
 
-对每个写 operator action。
+## 11. Phase 9 — Human adjudication 与 acceptance closure
 
----
+Human/policy authority 逐条 adjudicate Review Agent 的 material findings：事实是否成立、是否命中已承诺 contract、修复是否仍在当前 authority 内、是否需要 split/new decision。把这段 closure 追加到 `submission/11-independent-review.md` 的独立 **Human Adjudication** 小节，并清楚区分 reviewer finding 与最终 authority decision。
 
-# 23. Independent PR Review
+只有 review findings、verification evidence、migration/rollback boundary 与 rollout gate 全部有 closure 后，才能给 candidate 最终 `MERGEABLE` / `NOT MERGEABLE`，以及 `READY_TO_ROLLOUT` / `NOT_READY_TO_ROLLOUT` 判断。Implementation Agent 和 Review Agent 都不能单独赋予这些 authority。
 
-在 implementation 完成后，先冻结 author summary。
+如果 negative control 证明 external duplicate effect 仍可能发生，而 author summary 声称“exactly-once recovery complete”，应以 evidence 推翻 author；不要为了保留一个漂亮结论改 test 或弱化 non-guarantee。
 
-然后做独立 review。
-
-创建：
-
-```text
-submission/11-independent-review.md
-```
-
-至少检查：
-
-### Issue/contract
-
-- 是否重新声称 exactly-once？
-- 是否改变 legacy submit？
-
-### State ownership
-
-- current attempt 是否唯一？
-- compatibility handler 是否绕过 fencing？
-
-### Concurrency
-
-- claim race；
-- expiry vs finish；
-- stale heartbeat；
-
-### Migration
-
-- old binary actual evidence；
-- schema defaults；
-- activation gate；
-
-### Rollback
-
-- expand-only；
-- post-activation；
-
-### Evidence
-
-- fail-before；
-- negative controls；
-- version-scoped tests；
-
-### Scope
-
-- unrelated refactor；
-- new infrastructure；
-- premature v1 deletion。
-
-最后给：
-
-```text
-APPROVE
-REQUEST CHANGES
-SPLIT
-NEEDS AUTHORITY DECISION
-```
-
-之一。
-
----
-
-# 24. Review 必须能够推翻 Author
-
-如果 implementation Agent 说：
-
-```text
-“所有测试都通过，完全实现 exactly-once recovery。”
-```
-
-但你的 negative control 证明 external effect duplicate 仍可能发生，那么 reviewer 必须把 author summary 判为错误。
-
-Capstone 不接受：
-
-```text
-“Agent 自己解释它为什么对，我觉得合理。”
-```
-
----
-
-# 25. Retrospective
+## 12. Phase 10 — Retrospective：判断究竟发生在哪里
 
 创建：
 
@@ -965,42 +348,13 @@ Capstone 不接受：
 submission/12-retrospective.md
 ```
 
-至少回答：
+至少回答：三个最重要的 human/product authority decisions 是什么；哪些 repo/evidence 工作最适合 Agent；Agent 实际最容易在哪里越界；哪些 guardrail 可以从 prompt 迁移到 test/tool/policy/gate；如果重做会不会改变 change topology，以及为什么。
 
-## 25.1 哪三个最重要的 human authority decisions？
+不要把 retrospective 写成“人负责思考、Agent 负责写代码”。真正要回看的是 knowledge、state authority、verification oracle、review independence 与 production decision 分别被放在哪里。
 
-不能回答：
+## 13. Submission layout
 
-```text
-“选变量名”
-```
-
-## 25.2 哪些工作最适合 Agent？
-
-列具体任务。
-
-## 25.3 Agent 在哪里最容易越界？
-
-列实际观察。
-
-## 25.4 哪些 guardrail 可以从 prompt 编译成 code/tool/policy？
-
-例如：
-
-```text
-activation gate
-compatibility test
-schema migration checker
-write scope
-```
-
-## 25.5 如果重做一次，你会改变 change topology 吗？为什么？
-
----
-
-# 26. Submission Layout
-
-最终建议：
+最终至少提交：
 
 ```text
 submission/
@@ -1016,180 +370,43 @@ submission/
   10-rollout.md
   11-independent-review.md
   12-retrospective.md
-```
 
-代码和 tests 保留在你的 working copy / branch。
-
-另附：
-
-```text
 EVIDENCE.md
 ```
 
-记录所有实际执行命令与重要结果。
+`EVIDENCE.md` 至少记录 baseline pytest、baseline probe、race fail-before/pass-after、schema expand + frozen old artifact、stale finish/heartbeat fencing、legacy finish boundary、manual-vs-automatic recovery、external duplicate negative control、activation gate、rollback boundary 与最终 focused/full test commands。不要只写“见 CI”。
 
----
+Instructor analysis 只有完成自己的 submission 后再读：[`../case-studies/m13/instructor-analysis.md`](../case-studies/m13/instructor-analysis.md)。它是一条 reference reasoning path，不是标准实现。
 
-# 27. Evidence.md 最低要求
+## 14. Grading
 
-至少包括：
+M13 占课程总评 30%；以下是 Capstone 内部的 100 分 rubric：
 
-```text
-baseline pytest result
-baseline capstone probe
-race fail-before
-race pass-after
-schema expand test
-frozen old binary test
-v2 stale finish test
-v2 stale heartbeat test
-manual recovery test
-external duplicate negative control
-activation gate tests
-full test result
-```
+| Dimension | Points | High-quality evidence |
+|---|---:|---|
+| Mental model | 20 | ownership / attempt / external-effect boundary、failure history 准确 |
+| Issue / contract reasoning | 15 | 独立识别 contradiction、non-guarantee 与 authority escalation |
+| Change localization | 15 | staged claims/evidence/reversal，避免万能 cleanup PR |
+| Migration / rollback | 15 | version matrix、frozen old artifact、rollback boundary、observable gate |
+| Evidence | 15 | deterministic histories、fail-before/pass-after、negative controls、limitations |
+| Independent review | 10 | separate reasoning path 能否证 author，findings 有 reproducer/root cause |
+| Agent orchestration | 10 | bounded delegation、正确 escalation、human acceptance authority 保留 |
 
-不要只写：
+Automatic deductions 保留 merge-base 的权重：
 
-```text
-“见 CI”
-```
+| Deduction | Trigger |
+|---:|---|
+| -20 | 没有 first-pass issue review 就直接读 decision pack |
+| -20 | 仍声称 arbitrary command exactly-once，且没有 effect-owner idempotency/fencing mechanism 与对应 evidence |
+| -15 | 没有 migration / rollback runtime evidence |
+| -15 | 只检查 final DB state，不验证 concurrent history |
+| -10 | Agent 被授权改 guarantee、merge、deploy 或 activation，但没有明确 human/policy authority |
+| -10 | 为了“更现代”引入大型 infrastructure，却没有证明 current requirements 需要这次 architecture expansion |
 
-需要可重放 command。
+## 15. Final question
 
----
-
-# 28. Capstone Grading
-
-总分 100。
-
-## 20 — Mental Model
-
-优秀：
-
-- ownership / attempt / external effect boundary 准确；
-- failure history 完整；
-- 没把 DB representation 当 domain model。
-
-## 15 — Issue / Contract Reasoning
-
-优秀：
-
-- 独立发现原 issue contradiction；
-- 明确 non-guarantees；
-- 正确升级 authority decision。
-
-## 15 — Change Localization
-
-优秀：
-
-- staged changes 可独立理解、验证、回退；
-- 没有“大 cleanup PR”。
-
-## 15 — Migration / Rollback
-
-优秀：
-
-- frozen old binary actual evidence；
-- version matrix；
-- rollback boundary；
-- observable activation gate。
-
-## 15 — Evidence
-
-优秀：
-
-- deterministic races；
-- negative controls；
-- compatibility evidence；
-- residual risk honest。
-
-## 10 — Independent Review
-
-优秀：
-
-- reviewer 不依赖 author summary；
-- findings 按 root cause；
-- 能否证错误 guarantee。
-
-## 10 — Agent Orchestration
-
-优秀：
-
-- Agent 做了大量 mechanical/recon work；
-- task contracts 有 scope/evidence/escalation；
-- human authority 清晰。
-
----
-
-# 29. Automatic Deductions
-
-以下会显著扣分。
-
-## -20：没有 first-pass issue review 就直接读 decision pack
-
-因为丢失了最关键的 independent reasoning evidence。
-
-## -20：仍声称 arbitrary command exactly-once
-
-除非你真的增加了 external-effect authority mechanism，并证明它覆盖目标 commands。
-
-## -15：没有 migration / rollback runtime evidence
-
-只有文档推断不够。
-
-## -15：只看 final DB state，不测 concurrent history
-
-## -10：Agent 被授权 merge/deploy/改 guarantee，但没有明确 human authority
-
-## -10：为了“更现代”引入大型基础设施，却没有证明必要性
-
----
-
-# 30. Instructor Reference 的用途
-
-完成 submission 之后，才阅读：
-
-[`../case-studies/m13/instructor-analysis.md`](../case-studies/m13/instructor-analysis.md)
-
-Reference 不是标准实现。
-
-你应该比较：
-
-```text
-我的 mental model 和 reference 哪不同？
-我的 guarantee 是否更强/更弱？
-我的 evidence 是否同样能证明 claim？
-我的 migration 是否有不同但合理的 topology？
-```
-
-不要做结构 diff 后把自己代码改成 reference。
-
----
-
-# 31. Final Question
-
-完成所有 artifact 后，只用一页回答：
+最后用一页回答：
 
 > **为什么这次 change 现在应该被 merge / rollout，或者为什么它还不应该？**
 
-不能只写：
-
-```text
-tests pass
-```
-
-你的答案应该自然压缩：
-
-```text
-contract
-architecture
-authority
-migration
-failure model
-evidence
-residual risk
-operational gate
-```
-
-这就是整个课程最后真正要考的能力。
+答案必须自然压缩 contract、system/authority model、migration state、failure history、raw evidence、independent review、residual risk 与 operational gate。`tests pass` 只是其中一个 signal，不是整个结论。

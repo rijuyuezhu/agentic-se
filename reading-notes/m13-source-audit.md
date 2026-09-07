@@ -293,7 +293,7 @@ baseline tests + reference tests = 14 passed
 9. 两个 execution attempt 仍可以各自产生一次外部 effect，证明 state fencing != external exactly-once；
 10. v2 attempt 激活后 frozen old server 仍会接受 unfenced finish，证明 arbitrary old-binary rollback unsafe。
 
-这些结果只证明 reference path 满足经过人类 decision 修正后的 Capstone contract；它们不是“所有 lease scheduler 的通用证明”。
+这些结果只证明 reference path 满足经过人类 decision 修正后的 Capstone contract；它们不是“所有 lease scheduler 的通用证明”。Reference solution 当时存在于临时 solution copy，并没有作为 canonical starter / 可直接复用的学生 oracle 一起发布；因此学生仍必须在自己的 candidate 上重新产生 fail-before / pass-after、compatibility、negative-control 与 rollback evidence，不能把这里记录的 `14 passed` 当作自己的 acceptance evidence。
 
 ---
 
