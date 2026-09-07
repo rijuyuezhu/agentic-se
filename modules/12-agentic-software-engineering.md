@@ -163,13 +163,17 @@ Implementation Agent 在交付前当然应该 self-review：重新看 diff、找
 
 > “Implementer 已经自己 review 过，所以 acceptance 已经独立。”
 
-同一个上下文、同一个错误理解、同一套 candidate-controlled tests 很容易产生 correlated failure。所谓 **independent review**，核心不是“必须换一个模型供应商”，而是让至少一条 acceptance path 不依赖 implementer 的同一套结论。它可以是 fresh-context reviewer、separate agent session、human reviewer、runtime probe、static checker、different model，或者这些组合。
+同一个上下文、同一个错误理解、同一套 candidate-controlled tests 很容易产生 correlated failure。这里先沿用 M10 已经建立的 distinction：**verification 与 review 是不同 signal**。M12 把更宽的目标叫作 **independent acceptance path**——至少有一条用于挑战 candidate 的路径，不完全继承 implementer 的同一 framing。
 
-M12 Lab 的 reviewer 第一轮先拿 base revision、delegation contract、human decision、candidate diff 和 raw evidence；不先拿 implementer 的“我觉得已经正确”的 conclusion summary。原因不是 summary 有毒，而是 anchoring：如果 reviewer 一开始就继承 implementer 的 framing，很容易只验证那套 framing。
+其中，**independent verification** 可以来自 runtime probe、static checker、external fixture 或其它独立 oracle；它回答的是“这些被选中的可执行性质是否成立”。**Independent review** 则需要一条重新恢复 contract / change model、主动寻找遗漏 risk partition 与 counterexample 的 reasoning path；它可以由 human reviewer 或 separate Agent context 承担。换不同 model/vendor 可能增加一种 independence，但不是定义本身；同一模型的新 session 也可以形成 separate review path。
 
-Reviewer 也没有无限 authority。它可以提出“legacy path bypasses admission”这个事实，但在当前 `M12-ADMISSION-001` scope 下，这不是 blocker，因为 legacy bypass 明确是 non-guarantee；若 reviewer因此强行要求改 legacy semantics，它反而越过了 compatibility authority。Review finding 是 evidence-backed challenge，不是新的 specification。
+本章的 canonical Lab 还故意加了一条更具体的 exercise constraint：Implementation Agent 产出 candidate 后，必须由**另一个 Review Agent context/session**做第一轮 review，再由 human 做 adjudication。Human review 在真实工程里当然是合法 review；但在这道练习里，human 的指定角色是 adjudicator，因此不能用“human 看过”或“checker 绿了”跳过第二个 Agent。Runtime probe / static checker 继续是很重要的 independent verification evidence，但不替代这个 Review Agent。
 
-最终仍然需要 adjudication：finding 是否真实？严重度如何？它打中了哪条已承诺 contract？修复需要扩大 authority 吗？**独立 review 减少 self-certification，不等于把 product authority 从 implementer 转交给 reviewer。**
+M12 Lab 的 Review Agent 第一轮先拿 base revision、delegation contract、human decision、冻结的 candidate diff 和 raw evidence；不先拿 implementer 的“我觉得已经正确”的 conclusion summary。原因不是 summary 有毒，而是 anchoring：如果 reviewer 一开始就继承 implementer 的 framing，很容易只验证那套 framing。
+
+Reviewer 也没有无限 authority。它可以提出“legacy path bypasses admission”这个事实，但在当前 `M12-ADMISSION-001` scope 下，这不是 blocker，因为 legacy bypass 明确是 non-guarantee；若 reviewer 因此强行要求改 legacy semantics，它反而越过了 compatibility authority。Review finding 是 evidence-backed challenge，不是新的 specification。
+
+最终仍然需要 adjudication：verification evidence 与 review finding 是否真实？严重度如何？它打中了哪条已承诺 contract？修复需要扩大 authority 吗？**独立 acceptance path 减少 self-certification，不等于把 product authority 从 implementer 转交给 verifier 或 reviewer。**
 
 ## 8. Evaluator、review instructions 与 tool policy 都属于 trust boundary
 
@@ -204,7 +208,7 @@ Progress file 也不能变成第二 authority。它适合记录“已读哪些�
 
 最容易让多 Agent 变成噪声的方式，是让三个 Agent 同时改同一组文件，然后把 Git conflict 当主要协调机制。显式 merge conflict 只是最容易看见的冲突；两个 patch 即使修改不同文件，也可能分别改变 API producer 与 consumer、重复建立 authority、使用不同 error semantics，形成 **semantic conflict**。
 
-更好的起点是先并行**问题**。例如 M12 candidate 出现后，可以让三条 read-heavy path 独立工作：一个 reviewer 看 public API/compatibility，一个看 concurrency/side effects，一个看 evidence/oracle。它们都先不写 candidate，只返回带 file/behavior references 的 findings，再由主流程 adjudicate。
+更好的起点是先并行**问题**。例如 M12 Lab 会在第一轮 review 前冻结同一个 candidate snapshot，再让三个 read-only Review Agent context 从同一份 base / contract / decision / candidate / raw evidence 出发：一个看 public API/compatibility，一个看 concurrency/side effects，一个看 evidence/oracle。它们不继承彼此的 findings，也不修改 candidate，只返回带 file/behavior references 的独立 findings；随后再比较 overlap、disagreement 与 synthesis cost，由主流程 adjudicate。这样 parallelism 有稳定输入，也不会为了“多 Agent”额外制造第二个 implementation candidate。
 
 这与当前 OpenAI subagent 文档给出的经验方向一致：exploration、tests、triage、summarization 等 read-heavy 工作很适合并行；write-heavy parallelism 需要更谨慎，因为 conflict 与 coordination overhead 会增加。Anthropic 的 parallel-agent/long-running harness 经验也展示了 decomposition、verifier 与 shared-artifact coordination 的价值。这里同样不能把某个 16-agent compiler experiment 的规模数字变成通用最佳实践。
 
@@ -260,11 +264,11 @@ unknown / authority gap ? ── yes ──> STOP + durable decision
         ↓
 scoped implementation
         ↓
-claim-specific evidence
+claim-specific verification evidence
         ↓
 self-review
         ↓
-independent review / counterexamples
+separate review reasoning / counterexamples
         ↓
 human or policy adjudication
         ↓

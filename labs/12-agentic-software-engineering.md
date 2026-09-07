@@ -2,7 +2,7 @@
 
 M11 已经给了一个稳定矛盾：TaskForge 接受 12 个 job，12 个最终都成功，ending queue 也回到 0，但只有 2/12 accepted jobs 在教学目标的 2 秒内第一次被 claim。M12 不要求你直接“修性能”；它要求你把下一次 change 组织成一个 Agent 可以快速执行、却不能悄悄接管 product / SLO / compatibility / release authority 的工程流程。
 
-本 Lab 的目标不是比 prompt engineering 技巧，也不是证明“多 Agent 一定更好”。你最终要交的是：一个真实 system model、一份 bounded delegation contract、一次正确 escalation、一个经授权的 candidate、claim-oriented evidence、独立 review 与 human adjudication。
+本 Lab 的目标不是比 prompt engineering 技巧，也不是证明“多 Agent 一定更好”。你最终要交的是：一个真实 system model、一份 bounded delegation contract、一次正确 escalation、一个经授权的 candidate、claim-oriented verification evidence、一个 separate Review Agent 的独立 reasoning、parallel-review comparison 与 human adjudication。
 
 ## 0. 需求与实验边界
 
@@ -19,7 +19,7 @@ M11 已经给了一个稳定矛盾：TaskForge 接受 12 个 job，12 个最终�
 3. 不得为了让结果变绿而重定义 M11 已声明的 start-latency SLI target、accepted-work population 或 measurement semantics。
 4. 不得删除、弱化 failing historical evidence 来制造完成感。
 5. implementation Agent 不拥有 merge、release、deployment 或 credential authority。
-6. 第一轮 independent review 不修改 candidate；它先形成独立 finding。
+6. 第一轮 Review Agent 必须是 separate context/session，不修改 frozen candidate；runtime/static verification 不能替代这条 review reasoning path。
 7. `STOP_AND_ESCALATE`、`UNKNOWN`、`NO_PATCH` 都可以是正确输出。
 8. 本 Lab 的 admission decision 只形成一个 bounded teaching contract，不代表 TaskForge 的最终产品架构。
 
@@ -366,11 +366,13 @@ Historical probes classified inapplicable + why
 
 禁止只写“all tests passed, implementation is robust”。
 
-交给 reviewer 前，implementer 自己再看一次 diff，至少检查：write scope、SLO/evaluator、第二 state authority、legacy compatibility、concurrency scope、untracked files、unexpected generated artifacts。Self-review 是必需 hygiene，但不算 independent acceptance。
+交给 reviewer 前，implementer 自己再看一次 diff，至少检查：write scope、SLO/evaluator、第二 state authority、legacy compatibility、concurrency scope、untracked files、unexpected generated artifacts。Self-review 是必需 hygiene，但不算 independent acceptance。随后把**完整 pre-review candidate state** 冻结并记录稳定标识（例如 disposable workspace 的 commit/hash 或等价 snapshot reference）；snapshot 必须包含本次 candidate 的新增/未跟踪文件。Phase 11 和 Phase 13 都以这一份冻结状态为输入，不在第一轮 review 中边改边审。
 
-## 12. Phase 11 — Independent Reviewer：第一轮不要继承 implementer conclusion
+## 12. Phase 11 — Review Agent：第一轮不要继承 implementer conclusion
 
-Reviewer 第一轮输入按以下顺序准备：
+这一步是本 Lab 的 canonical two-Agent exercise：**Implementation Agent 与 Review Agent 必须是不同 context/session**。可以使用同一个 model 的新 session，不要求更换 vendor。Human reviewer 在真实工程里当然可以承担 review，但本 Lab 的 human 已被指定为下一阶段 adjudicator，因此不能用 human 或 checker 跳过 Review Agent。
+
+Review Agent 第一轮输入按以下顺序准备：
 
 1. base revision；
 2. engineered task；
@@ -378,7 +380,7 @@ Reviewer 第一轮输入按以下顺序准备：
 4. candidate diff；
 5. raw tests/probes/evidence。
 
-第一轮先**不要**给 implementer 的“已经安全/正确”的 conclusion summary。Reviewer 应自己重建 change model，再找 counterexample。
+第一轮先**不要**给 implementer 的“已经安全/正确”的 conclusion summary。Review Agent 应自己重建 change model，再找 counterexample。
 
 至少主动检查：
 
@@ -403,9 +405,14 @@ Suggested next decision or fix scope
 
 不要因为“这是 Agent 写的”而提高 severity，也不要因为“另一个 Agent review 过”就降低 severity。
 
-### Independent 的含义
+### Acceptance path 的 independence：verification != review
 
-Reviewer 可以是不同模型，也可以是同模型的新 session、human、runtime probe、static checker。你要说明你选择的 independence source 在减少哪类 correlated failure。若 reviewer 与 implementer 共用 candidate-controlled instructions / tests，也要把这个 trust boundary 写出来。
+不要把“不是 implementer 自己跑的”都叫 review。这里沿用 M10 的 distinction：
+
+- **independent verification**：runtime probe、static checker、external fixture / oracle 等，检查被选中的可执行性质；
+- **independent review**：一条重新恢复 contract / change model、主动寻找遗漏 risk partition 与 counterexample 的 reasoning path。本 Lab 由上面的 separate Review Agent context/session 承担。
+
+两者都可以减少 correlated failure，而且最好组合使用；但 probe/checker 不能替代 Review Agent，Review Agent 也不能把自己的 finding 升级成 product specification。若 Review Agent 与 implementer 共用 candidate-controlled instructions / tests，也要把这个 trust boundary 写出来。
 
 ## 13. Phase 12 — Human adjudication：Reviewer 不是新的 Spec
 
@@ -421,22 +428,25 @@ Reviewer 可以是不同模型，也可以是同模型的新 session、human、r
 
 记录最终 adjudication：accept / request change / follow-up / new human decision。不要只回复“reviewer is right/wrong”。
 
-## 14. Phase 13 — Parallel Agent exercise：并行问题，不先并行写同一实现
+## 14. Phase 13 — Parallel Agent exercise：对同一 frozen candidate 并行问题
 
-任选一个尚未 review 的 candidate，让三个 read-only reviewer 并行：
+回到 Phase 11 开始前记录的**同一个 pre-review candidate snapshot**。这次不要把 Phase 11 的 findings、Phase 12 的 adjudication 或后续修复结论喂给 reviewer；目标是让三条 first-pass reasoning path 从同一输入独立起跑，而不是寻找第二个 candidate。
+
+并行启动三个 read-only Review Agent context：
 
 - Reviewer A：public API + compatibility；
 - Reviewer B：concurrency + side effects；
 - Reviewer C：evidence / oracle quality。
 
-三个 Agent 不修改 candidate，只返回 findings 与 evidence references。最后由你比较：
+三个 Agent 都拿相同的 base、engineered task、`M12-ADMISSION-001`、frozen candidate 与 raw evidence；都不修改 candidate，只返回 findings 与 evidence references。保存一份简短的 **Parallel Review Comparison**，至少记录 candidate snapshot id，以及：
 
-- 是否真的节省 wall-clock；
-- findings overlap 多不多；
-- 是否产生互相矛盾的 assumption；
-- integration / adjudication cost 多大。
+- wall-clock 是否真的下降；
+- findings 的 overlap；
+- disagreement / 互相矛盾的 assumption；
+- synthesis / integration cost；
+- 哪条 path 发现了其它 path 没发现的 semantic risk。
 
-然后回答：如果把它们改成三个同时写 code 的 Agent，会新增哪些 shared mutable surface 和 semantic conflict？至少举一个“Git 无冲突但语义冲突”的例子。
+最后回答：如果把它们改成三个同时写 code 的 Agent，会新增哪些 shared mutable surface 和 semantic conflict？至少举一个“Git 无冲突但语义冲突”的例子。这个 write-heavy 场景只做分析，不要求再生成三份实现。
 
 ## 15. Phase 14 — Authority ladder：不要把 Human-in-the-loop 当 boolean
 
@@ -467,7 +477,7 @@ Reviewer 可以是不同模型，也可以是同模型的新 session、human、r
 
 ## 17. Phase 16 — Harness simplification 与 productivity measurement
 
-选一个你在本 Lab 用过的 harness component，例如 mandatory plan、独立 reviewer、某个 static checker、progress file。提出一个“删掉/简化它”的小实验：什么 outcome 不变才算可删？哪些 failure mode 要专门观察？cost/token/latency/review burden 怎样比较？一次成功 run 不能证明 component 永远无用。
+选一个你在本 Lab 用过的 harness component，例如 mandatory plan、separate Review Agent、某个 static checker、progress file。提出一个“删掉/简化它”的小实验：什么 outcome 不变才算可删？哪些 failure mode 要专门观察？cost/token/latency/review burden 怎样比较？一次成功 run 不能证明 component 永远无用。
 
 然后设计至少 5 个本地 productivity measure。可从这些方向选：time to first correct system model、time to mergeable patch、review blocker count、rework rounds、scope violations、correct escalations、human decision time、escaped defects、automatically completed evidence work。
 
@@ -475,17 +485,18 @@ Reviewer 可以是不同模型，也可以是同模型的新 session、human、r
 
 ## 18. Deliverables
 
-最终提交九项材料：
+最终提交十项材料：
 
 1. **Baseline + Reconnaissance Brief**：含 base、raw commands、system model、`OBSERVED/SPECIFIED/UNKNOWN`。
 2. **Vague vs Engineered Analysis**：回答哪些 decision space 被 bounded，而不是比较 prompt 长度。
 3. **Authority Matrix**：至少 exploration / implementation / review / human-or-policy 四类 role。
 4. **Stop / Escalation Analysis**：解释 bounded plan 为什么不应继续实现。
 5. **Candidate Implementation**：只在 human decision 后、只在 disposable workspace。
-6. **Evidence Packet**：按 claim 映射 raw evidence 与 limitation。
-7. **Independent Review**：含 severity、reproducer、contract impact。
+6. **Evidence Packet**：按 claim 映射 raw verification evidence 与 limitation。
+7. **Review Agent Findings**：标明 separate Agent context/session，并给出 severity、reproducer、contract impact。
 8. **Human Adjudication**：逐条决定 blocker / follow-up / new decision。
-9. **Retrospective**：哪些机械工作 Agent 很强；哪些 judgement 交给 Agent 会 authority drift；哪些重复规则下次应迁移到 durable/executable mechanism。
+9. **Parallel Review Comparison**：同一 frozen snapshot 上三路 review 的 overlap、disagreement、wall-clock、synthesis cost 与 semantic-risk 差异。
+10. **Retrospective**：哪些机械工作 Agent 很强；哪些 judgement 交给 Agent 会 authority drift；哪些重复规则下次应迁移到 durable/executable mechanism。
 
 ## 19. 评分
 
@@ -495,8 +506,9 @@ Reviewer 可以是不同模型，也可以是同模型的新 session、human、r
 | Delegation contract reasoning | 20 |
 | Authority / escalation judgment | 20 |
 | Implementation discipline | 10 |
-| Evidence quality | 15 |
-| Independent review + adjudication | 15 |
+| Verification evidence quality | 15 |
+| Review Agent + human adjudication | 10 |
+| Parallel review / semantic-conflict analysis | 5 |
 | Harness/productivity retrospective | 5 |
 
 不会因为 prompt 很长、用了很多 Agent、用了最贵模型、Agent 一次写对、tests 全绿、生成很多代码或完全没有人工介入而自动高分。
@@ -509,6 +521,6 @@ Reviewer 可以是不同模型，也可以是同模型的新 session、human、r
 
 > I completed the task, all tests pass, and the system is ready to deploy.
 
-你应该能立即回答：它是 against which contract 完成的？哪些 decision 真被 delegated？哪些仍由 human/policy owner 保留？tests 能区分哪些错误实现？candidate 是否改了自己的 evaluator？谁做了独立 review？哪些 finding 被怎样 adjudicate？哪些 behavior 明确 out of scope？谁拥有 merge/deploy authority？如果真的 rollout，什么 production evidence 才能确认 change hypothesis？
+你应该能立即回答：它是 against which contract 完成的？哪些 decision 真被 delegated？哪些仍由 human/policy owner 保留？哪些是 independent verification evidence，哪些来自 independent review reasoning？candidate 是否改了自己的 evaluator？哪个 separate Review Agent context 审了 frozen candidate？三条并行 review path 的 overlap / disagreement 是什么？哪些 finding 被怎样 adjudicate？哪些 behavior 明确 out of scope？谁拥有 merge/deploy authority？如果真的 rollout，什么 production evidence 才能确认 change hypothesis？
 
 如果你的 workflow 已经让这些答案自然产生，而不是最后靠人从聊天记录里猜回来，才算完成 M12。

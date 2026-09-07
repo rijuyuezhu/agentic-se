@@ -38,8 +38,8 @@ M11 false-green production evidence
     -> unsafe authority drift
     -> bounded plan stops
     -> durable human decision
-    -> authorized candidate/evidence
-    -> independent review + adjudication
+    -> authorized candidate + verification evidence
+    -> separate review reasoning + adjudication
     -> parallelism / durable context / autonomy transfer
 ```
 
@@ -135,7 +135,7 @@ The rewritten module introduces abstractions only after a concrete failure creat
 5. human decision creates the authorized implementation scope;
 6. real TaskForge call/state paths motivate read-broadly/write-narrowly;
 7. candidate-controlled green tests create the evidence/oracle problem;
-8. correlated self-certification creates independent review;
+8. correlated self-certification creates the need for an independent acceptance path, while M10's verification/review distinction determines what kind of path it is;
 9. reviewer configuration creates the trust-boundary discussion;
 10. long-running state creates durable context / scoped instructions;
 11. multiple review questions create multi-agent decomposition;
@@ -190,7 +190,9 @@ Merge-base technical intent retained:
 - negative control + critical-section review + behavior test are complementary evidence;
 - implementation summary is an index, not raw evidence;
 - self-review is valuable but not independent acceptance;
-- independent review does not require a different model vendor;
+- independent acceptance is the broad goal; independent verification and independent review remain distinct signals from M10;
+- runtime probes, static checkers and external oracles can provide independent verification, but they do not themselves reconstruct a review change model;
+- the canonical M12 Lab requires a separate Review Agent context/session after the Implementation Agent; using the same model in a fresh session is sufficient, and a different vendor is not required;
 - reviewer itself has bounded authority and needs adjudication;
 - Agent-generated tests are not discounted merely for being AI-generated, but oracle ownership must be inspected.
 
@@ -201,7 +203,9 @@ The Lab now asks for `claim -> evidence -> observed result -> scope/limitation`,
 The rewrite preserves the original curriculum without turning it into a vendor workflow:
 
 - read-heavy independent questions are the preferred first parallelization exercise;
-- write-heavy shared mutable surfaces receive more caution;
+- the Lab reuses one guaranteed frozen pre-review candidate snapshot for three parallel Review Agent paths, instead of requiring a second candidate that the mandatory workflow never creates;
+- the parallel comparison is now a deliverable/rubric proof obligation covering overlap, disagreement, wall-clock, synthesis cost and semantic-risk differences;
+- write-heavy shared mutable surfaces receive more caution and remain an analysis exercise rather than a required multi-writer implementation;
 - Git text conflict is only one form of conflict; semantic conflict can cross different files;
 - task decomposition itself is engineering work;
 - durable plans/progress reduce hidden context but cannot become a second product authority;
@@ -277,9 +281,21 @@ A reviewer should independently check at least:
 - whether legacy bypass / worker interleaving / admitted-only serialization qualifiers stay visible;
 - whether the accepted-job SLI denominator seam is now semantically correct across module, Lab, case, source audit and fixture;
 - whether candidate-controlled oracle and historical-harness applicability are treated precisely;
-- whether independent review is independent enough to reduce correlated failure without becoming a new specification authority;
+- whether independent verification and independent review remain distinct rather than being collapsed under one reviewer label;
+- whether the canonical Lab necessarily contains Implementation Agent -> separate Review Agent context -> human adjudication, without requiring a different model vendor;
 - whether GitHub/OpenAI/Anthropic current-product claims remain clearly time-sensitive;
 - whether METR study numbers retain their sample/method limitations;
+- whether the parallel exercise has a guaranteed frozen input and a real deliverable/rubric proof obligation while avoiding a gratuitous write-heavy experiment;
 - whether multi-agent parallelism is framed around decomposition and coordination cost, not Agent count;
 - whether authority transfer/autonomy is risk- and policy-based rather than a permanent human-click requirement;
 - whether the rewrite preserved the M13 bridge: implementation authority does not automatically become product-guarantee authority.
+
+## 15. PR #17 review refinement — verification/review boundary and parallel input
+
+The first independent review of PR #17 raised two diagnoses. Both were rechecked against `COURSE_DESIGN.md`, the M10 module, and the live M12 Lab before editing.
+
+The first diagnosis was accepted: the rewrite had used `independent review` as an umbrella that also included runtime probes and static checkers. That erased M10's established `verification != review` distinction and made the canonical M12 assignment's second Review Agent optional in practice. The remediation was **not** to declare only humans or different model vendors to be independent. The broader engineering concept is now `independent acceptance path`; within it, verification evidence and review reasoning remain distinct. The Lab specifically requires a separate Review Agent context/session after the Implementation Agent, while allowing the same model in a fresh session. Human review remains legitimate in real engineering, but the human role in this exercise is adjudication; probes/checkers remain verification evidence rather than substitutes for the Review Agent.
+
+The second diagnosis was also accepted: the old Phase 13 asked for an unreviewed candidate that the mandatory path did not guarantee, and the parallel exercise had no final proof obligation. The remediation deliberately does **not** restore the merge-base's optional write-heavy multi-agent coding experiment and does not invent a second implementation candidate. Phase 10 now freezes one complete pre-review candidate snapshot; Phase 11 reviews it; Phase 13 rewinds to the same snapshot and launches three read-only Review Agent paths without feeding them the earlier findings/adjudication. A compact `Parallel Review Comparison` is now required in deliverables and rubric.
+
+No TaskForge product contract, `M12-ADMISSION-001` semantics, M11 denominator definition, or external-source claim changed in this refinement.

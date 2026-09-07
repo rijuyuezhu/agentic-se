@@ -164,9 +164,13 @@ Instructor reference 中，M03 mutation harness 仍能运行并产生原来的�
 
 “旧测试红了所以一定不能改”与“旧测试红了所以删掉”都是懒惰判断。
 
-## 12. Reviewer 最容易犯的错：把自己的偏好升级成 specification
+## 12. Verification 与 Review 先分开，再谈 Reviewer authority
 
-一个常见 reviewer finding 是：
+M10 已经建立 `machine verification != review`：前者回答某些被选中的可执行问题是否通过，后者还要重新恢复 change model、质疑“这些是否是对的问题”、寻找遗漏 risk partition 与 counterexample。M12 的宽目标因此应叫 **independent acceptance path**，其中既可以有 runtime probe / static checker / external oracle 提供 independent verification，也可以有 human 或 separate Agent context 提供 independent review reasoning；不能把两者重新合成一个词。
+
+本 Lab 还有一个课程层面的特定约束：Implementation Agent 后必须出现 separate **Review Agent context/session**，再由 human adjudicate。使用同一 model 的 fresh session 足够满足这条 exercise boundary，不要求 different vendor。Human review 在现实工程中当然合法，但这里 human 的 mandatory role 是 adjudication；checker/probe 也仍是重要 verification evidence，但两者都不能代替这道 two-Agent exercise。
+
+接下来才讨论 Reviewer authority。一个常见 reviewer finding 是：
 
 > legacy `submit_job()` 可以绕过 admission，因此实现不安全，必须 blocker。
 
@@ -178,9 +182,9 @@ Independent review 的目的不是“找得越多越好”，而是找到**能�
 
 ## 13. Reviewer 的输入顺序也是 independence design
 
-第一轮 reviewer 最好先拿 base、task contract、human decision、candidate diff、raw evidence，而不是先看 implementer summary。这样可以减少 framing/anchoring correlation。
+第一轮 review 前先冻结完整 candidate state，并记录稳定 snapshot id；Review Agent 最好只拿 base、task contract、human decision、该 frozen candidate diff、raw verification evidence，而不是先看 implementer summary。这样可以减少 framing/anchoring correlation，也给后面的 parallel exercise 留下一份可重放的共同输入。
 
-Independent 也不要求必须换模型。Fresh context、separate session、different role、human、runtime probe、static checker 都可以贡献不同 failure path。相反，即使换了模型，如果两边完全继承 candidate-controlled instructions、tests 与 conclusions，也可能高度相关。
+Review independence 不要求必须换模型。Fresh Agent context/session、不同 role framing、与 implementer 不同源的 evidence 都可以降低 correlation；相反，即使换了模型，如果两边完全继承 candidate-controlled instructions、tests 与 conclusions，也可能高度相关。Runtime probe / static checker 在这里应记作 verification path，而不是 reviewer 本身。
 
 当前 GitHub Copilot code review 会从 PR head branch 读取 custom instructions / agent instructions / skills，是一个很好的 product-specific trust-boundary例子：review Agent 的 configuration 本身可能由 candidate branch 影响。Instructor 应把它讲成当前产品机制，不要升级成“AI review 天生不独立”的普遍定律。
 
@@ -188,11 +192,11 @@ Reviewer finding 最终仍需要 adjudication。Reviewer 不是新的 product ow
 
 ## 14. Multi-agent exercise 真正评的是 decomposition
 
-M12 推荐把 read-only review 拆成 public API/compatibility、concurrency/side effect、evidence/oracle 三条 path，因为这些问题有相对独立的 evidence surface。三个 reviewer 可以并行，然后集中 adjudicate。
+M12 不需要第二个 implementation candidate。应复用 Phase 11 前冻结的**同一个 pre-review snapshot**，把 read-only review 拆成 public API/compatibility、concurrency/side effect、evidence/oracle 三条 path，并行启动三个独立 Review Agent context。它们拿同一份 base / contract / decision / candidate / raw evidence，不拿前一轮 findings 或 human adjudication，再比较 overlap、disagreement、wall-clock 与 synthesis cost。
 
-如果学生只是让三个人同时改 `service.py` 和 `public_api.py`，再展示 Git 能 merge，不应给高分。Git conflict 只是 text collision；semantic conflict 还包括 producer/consumer 选择不同 error contract、两个 agent 分别新增 competing state owner、一个改 API 另一个按旧 API 写 consumer。
+这个设计既保证 mandatory path 一定有输入，也能区分“parallel review 是否真的带来额外 information”与“只是多跑了三个 Agent”。如果学生只是让三个人同时改 `service.py` 和 `public_api.py`，再展示 Git 能 merge，不应给高分，也不要求把这种 write-heavy experiment 真做一遍。Git conflict 只是 text collision；semantic conflict 还包括 producer/consumer 选择不同 error contract、两个 agent 分别新增 competing state owner、一个改 API 另一个按旧 API 写 consumer。
 
-评分时看：subtask boundaries 是否清楚、shared mutable surface 是否被压小、输出是否有 evidence contract、最后 integration authority 是否明确。Agent 数量本身没有分。
+评分时看：frozen input 是否一致、subtask boundaries 是否清楚、findings 的 overlap/disagreement 是否被真实比较、shared mutable surface 是否被压小、输出是否有 evidence contract、最后 integration authority 是否明确。Agent 数量本身没有分。
 
 ## 15. Evals 与 productivity：数据只能支持有限结论
 
