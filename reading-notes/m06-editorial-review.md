@@ -395,3 +395,23 @@ socket.gethostname(): lab-host
 - abstraction dependency：formal sensing/separation 在 §5；seam/enabling point 在 §6；§6 前无 canonical seam/enabling-point leak；
 - `linearization / fencing / lease / attempt identity / expand-contract / exactly once` 等 later-module canonical vocabulary 无 finding；
 - 当前 diff 只包含 M06 module、Lab 06、M06 instructor case 与本 review record；没有修改 TaskForge production/probe/test code。
+
+## 12. Issue #2 closure pass — instructor-case regrouping
+
+2026-09-07 closure review 认为 M06 technical reasoning 已经成熟，但 instructor case 仍按“reference conclusion → 逐题解释”切成 16 个 page-level sections。这里不需要重新设计 M06；需要的是让 evidence 先于 final judgment，并把已有 reasoning 收拢成 engineering episodes。
+
+本轮只重组 `case-studies/m06/instructor-analysis.md`。新 spine 是：effect/dependency surface → starter probe + harness limitations → sensing/separation/seam → three design directions → failed-only delta → fixture-authority correction → evidence scope → rejected takeover paths → Agent workflow → instructor judgment。
+
+Semantic preservation 特别复核：
+
+- `scope="all"` 的 broad existing-behavior preservation obligation 仍来自 Lab，characterization 只决定当前 evidence coverage；uncharacterized behavior 仍是 `unproved / remaining risk`，不是 out-of-contract；
+- `datetime` 是 module-local name rebinding，而 `legacy_audit.socket.gethostname` 修改 shared `socket` module attribute；process-wide interference / finally restore / parallel-test risk 继续显式；
+- stdout fingerprint 的 `<ROOT>` normalization 仍保留，避免把 harness nondeterminism 洗成 product behavior；
+- empty/mixed/append concrete observations、append semantics 与 formatting/ordering compatibility surface 全部保留；
+- no-production-seam 是 case-specific reference judgment，`AuditContext` 仍是合法 small candidate，broad provider graph 仍因 current pressure 不足而被拒；
+- `_select_jobs()` 仍是 acceptable-but-not-required；
+- invalid scope 仍要求 filesystem mutation 前失败，但不扩张成 universal no-side-effect-on-error；
+- fixture 必须通过真实 lifecycle 建 state，不能 direct-mutate authority；
+- M07 temporal vocabulary/authority 仍只作为 downstream handoff。
+
+Canonical validation 重新得到 core `6 passed`，M06 probe fingerprints 仍为 `empty=7e90999a594bd448/d114f9f2994a6701`、`mixed=7821f1fa9ec08dd4/3fd157cf98872494`、`append=4e15e48d03660f50/de715a35f8db4b21`。

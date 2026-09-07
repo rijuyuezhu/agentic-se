@@ -410,3 +410,27 @@ This record is not self-approval. Reviewer should independently check at least�
 - Lab reveal-probe ordering 是否仍保护 independent review；
 - grading 是否奖励 evidence/root-cause/scope/code-health judgment，而不是 comment 数量；
 - M11 的 agent orchestration authority 是否没有提前泄漏。
+
+## 13. Issue #2 closure pass — text-fence cleanup
+
+2026-09-07 的独立 #2 closure review 发现：M10 的 semantic spine、authority boundary 与 runnable review case 都已成立，但正文仍保留一批只承担视觉强调的 `text` fence。这个 finding 只授权 presentation cleanup，不授权再次改写 M10 technical contract。
+
+本轮逐个分类所有 `text` fence。移除或改写为 prose / Markdown list 的是普通自然语言 contrast、简单 taxonomy、review funnel 与 summary formula，例如：
+
+- architecture/locality 与 behavior-preservation 两个 proof obligations；
+- `scope / claim / source of truth / evidence / residual risk`；
+- `localization != complete isolation`；
+- root-cause / consequence 的普通自然语言聚合；
+- severity taxonomy、Agent review risks 与 re-review checklist。
+
+继续保留 fence 的是 author-supplied artifact、真实 terminal output、`job-9 -> job-10` boundary fixture、ASCII call/dataflow、finding template、corrected CL topology、reviewer-probe labels 与最终 reusable review sample。判断依据是 `EDITORIAL_GUIDE.md` §3.4，而不是追求 fence 数字下降。
+
+Semantic preservation 复核后，下列 M10 claim 没有变化：author CI 仍真实 `9 passed`；ordering/FIFO/snapshot symptoms 仍归于 lexical job-ID sorting 一个 root cause；unknown cancel 仍因 undeclared behavior change 而 blocking；M09 locality 仍不等于 full mutation-capability isolation；historical-probe lifetime、risk-first-not-sampling、canonical severity 与 independent review authority 均保持原义。
+
+Validation：
+
+- core TaskForge：`6 passed`；
+- M10 author CI：`9 passed`；
+- reviewer probes：`ordering-regression / fifo-regression / undeclared-public-behavior-change / snapshot-order-consequence` 均保持原 observed result；
+- `git diff --check`：PASS；
+- changed-module relative Markdown links：PASS。

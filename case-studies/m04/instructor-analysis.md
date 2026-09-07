@@ -1,47 +1,16 @@
 # M04 Instructor Analysis — TaskForge Public Boundary
 
-> **Spoiler warning**：完成 `labs/04-api-error-boundary.md` 前不要读。
+> **Spoiler warning**：完成 [`../../labs/04-api-error-boundary.md`](../../labs/04-api-error-boundary.md) 前不要读。
+>
+> 这不是唯一正确答案。它记录一条实际实现并验证过的 reference path，用来说明 M04 的 contract 可以在不引入 RPC、数据库或并发框架的前提下闭合；具体 source / course-synthesis 边界见 [`../../reading-notes/m04-source-audit.md`](../../reading-notes/m04-source-audit.md)。
 
-本文件不是唯一正确答案。
+M04 的 reference 不是从“应该定义什么 exception class”开始的。先看 starter，会发现它已经有一个有价值的 public boundary：内部 `Job` 是 mutable authoritative object，但 `public_api._view(...)` 把它投影成 serialization-friendly dict，所以 caller 修改返回值不会直接修改内部 state。问题是，这个 boundary 只隐藏了 representation 的一部分；`KeyError`、`cancelled=False`、invalid input 和 retry uncertainty 仍然把内部机制或未定义语义推给 caller。
 
-它的目的，是证明本 lab 的 contract 可以用一个小而完整的设计实现，并记录 reference design 的真实 trade-off 与未解决问题。
+因此本 Lab 真正要解决的是：**哪些 distinction 应该成为 caller 可以长期依赖的 contract，哪些 complexity 应该被 boundary 吸收。**
 
----
+## 1. 先恢复 starter，而不是先设计新 error model
 
-# 0. Reference validation summary
-
-课程维护者在临时 TaskForge 副本中实现了本文 reference design，并实际运行：
-
-```text
-原有 core tests: 6
-M04 reference tests: 12
-总计: 18 passed
-```
-
-没有修改课程仓库中的 starter `public_api.py` 为答案版本；学生仍然能从有问题的 baseline 开始。
-
-reference test 覆盖：
-
-```text
-blank command → INVALID_ARGUMENT + no side effect
-blank request id → INVALID_ARGUMENT + no side effect
-unknown get → NOT_FOUND
-unknown cancel → NOT_FOUND
-cancel running → FAILED_PRECONDITION(status=running)
-cancel succeeded → FAILED_PRECONDITION(status=succeeded)
-cancel queued → success
-no request id + same command → two jobs
-same request id + same intent → one job
-retry after job becomes running → same job, current view
-same request id + different intent → CONFLICT + no new job
-public JobView frozen/detached
-```
-
----
-
-# 1. Starter 的真实 contract reconstruction
-
-M04 starter：
+M04 starter 暴露四个 public operations：
 
 ```python
 submit_job(command: str) -> dict
@@ -50,336 +19,72 @@ list_jobs() -> list[dict]
 cancel_job(job_id: str) -> dict
 ```
 
-但 signature 没写出的行为很多。
+它们的 signature 很短，但真实行为比 signature 多得多。
 
-## submit
+| Operation | Current behavior | Caller-visible consequence |
+|---|---|---|
+| `submit_job` | 任意 `str` 都接受，包括 `""` 和空白；每次调用都分配新 job ID 并插入 state | same payload twice 会得到两个 jobs；当前没有 retry identity |
+| `get_job` | known ID 返回 detached dict；unknown ID 穿出 `KeyError` | caller 依赖 Python dict missing-key behavior |
+| `list_jobs` | 返回 detached dict views | public read 已经不携带 mutable `Job` authority |
+| `cancel_job` | `QUEUED` 返回 `{"cancelled": True}`；running/terminal 返回 `False`；unknown 抛 `KeyError` | failure 同时使用 exception channel 与 boolean channel |
 
-当前：
+这里有两个容易被错误改写成“bug”的事实。
 
-```text
-任何 str 都接受
-```
+第一，same command twice 创建两个 jobs **不是**天然错误。没有 request identity contract 时，两次 transmission 完全可以代表两个不同 logical requests。真正的问题只在 response 丢失或 timeout 以后出现：caller 没有办法表达“这次发送是在重试刚才那个 logical request，而不是请求再创建一个相同 job”。
 
-包括：
-
-```text
-""
-"   "
-```
-
-side effect：
-
-```text
-分配 id
-插入 jobs dict
-```
-
-没有 request identity。
-
-所以：
-
-```text
-same payload twice
-→ job-1 + job-2
-```
-
-注意这**不应该直接被叫 bug**。
-
-在没有 request identity contract 时，两次调用本来就可以代表两个 distinct logical requests。
-
-问题是：
-
-```text
-如果第一次 response lost，caller 无法表达“这一次是 retry，不是新的 intent”。
-```
-
-## get
-
-known：返回 detached dict view。
-
-unknown：
-
-```text
-KeyError
-```
-
-这个 error 来自：
+第二，starter 也不是“完全没有 boundary”。`public_api._view(...)` 已经把 authoritative `Job` identity 隔离在 public API 后面。下面这种 caller-side mutation 不会修改内部状态：
 
 ```python
-state.jobs[job_id]
-```
-
-所以是 representation-specific failure。
-
-## list
-
-返回 detached dict views。
-
-这里 starter 已经比 core `service.list_jobs()` 更安全：
-
-caller 改 list/dict 不会直接改 authoritative Job。
-
-## cancel
-
-known QUEUED：
-
-```text
-{"cancelled": True}
-```
-
-known RUNNING / terminal：
-
-```text
-{"cancelled": False}
-```
-
-unknown：
-
-```text
-KeyError
-```
-
-因此 boundary 混合了：
-
-```text
-exception channel
-+
-boolean channel
-```
-
-caller 需要知道 service implementation 才能完全解释结果。
-
----
-
-# 2. Starter 不是“完全 shallow”
-
-一个重要教学点：不要二元评价。
-
-starter `public_api._view`：
-
-```python
-return {
-    "id": job.id,
-    "command": job.command,
-    "status": job.status.value,
-    "exit_code": job.exit_code,
-}
-```
-
-它确实隐藏了：
-
-```text
-mutable Job identity
-```
-
-所以：
-
-```python
-view = get_job(id)
+view = public_api.get_job(job_id)
 view["status"] = "succeeded"
+assert public_api.get_job(job_id)["status"] == "queued"
 ```
 
-不会修改 internal state。
+所以这里的诊断不是“boundary 好 / 坏”二选一，而是：它在 mutable representation 上已经比较 deep，在 error identity、input validity、cancel semantics 和 retry uncertainty 上仍然 shallow。
 
-这是一个真实的 boundary improvement。
+## 2. `KeyError` 和 `False` 暴露的是不同类型的边界问题
 
-但它没有隐藏：
+Unknown `get` / `cancel` 最终来自：
 
 ```text
-KeyError semantics
-cancel failure ambiguity
-input validity ambiguity
-retry uncertainty
+public_api
+  -> service
+  -> state.jobs[job_id]
+  -> Python dict KeyError
 ```
 
-所以 boundary 可以：
+如果底层 storage 改成 SQLite，missing row 可能表现为 `fetchone() is None`；换成远端 store 又可能是 RPC `NOT_FOUND`。因此 `KeyError` 不是稳定的 TaskForge domain identity，而是当前 representation 的 accident。
 
-```text
-某些维度 deep
-某些维度 shallow
-```
+`cancelled=False` 的问题不同。它没有暴露 storage mechanism，却 collapse 了 caller 可能关心的不同状态。对于 UI、scheduler 或 admin tool，unknown job、running job 和已经 terminal 的 job 不一定允许相同后续动作。M04 不应先假设“每个 state 都要一个 exception class”，而应先问：**caller 在每种情况下一步需要做什么？**
 
-不要只给 architecture 打一个“好/坏”标签。
-
----
-
-# 3. Reference behavior table
-
-| operation | case | public result | side effect | retry |
-|---|---|---|---|---|
-| submit | blank command | INVALID_ARGUMENT / INVALID_COMMAND | none | retry same input useless |
-| submit | blank supplied request_id | INVALID_ARGUMENT / INVALID_REQUEST_ID | none | fix request |
-| submit | no request_id | new JobView | one new job | unsafe after unknown outcome |
-| submit | new request_id | new JobView, replayed=false | one new job + request record | safe under current in-process assumptions |
-| submit | same id/same command | same job, replayed=true | no additional job | safe |
-| submit | same id/different command | CONFLICT / REQUEST_ID_REUSED | none | caller must choose new id or original intent |
-| get | known | JobView | none | safe |
-| get | unknown | NOT_FOUND / JOB_NOT_FOUND | none | retry only if higher-level creation race expected |
-| cancel | QUEUED | CancelResult(status=cancelled) | one transition | not defined as generic replay-safe API in reference |
-| cancel | RUNNING | FAILED_PRECONDITION / JOB_NOT_CANCELLABLE | none | no blind retry |
-| cancel | terminal | FAILED_PRECONDITION / JOB_NOT_CANCELLABLE | none | no blind retry |
-| cancel | unknown | NOT_FOUND | none | no blind retry |
-
----
-
-# 4. Reference public error model
-
-reference 使用：
-
-```python
-class ApiCode(str, Enum):
-    INVALID_ARGUMENT = "INVALID_ARGUMENT"
-    NOT_FOUND = "NOT_FOUND"
-    FAILED_PRECONDITION = "FAILED_PRECONDITION"
-    CONFLICT = "CONFLICT"
-```
-
-以及：
+这也是 reference error taxonomy 的出发点。它采用 broad code + domain reason + stable metadata + human message：
 
 ```python
 ApiError(
-    code=...,
-    reason=...,
-    message=...,
-    metadata=...,
+    code="FAILED_PRECONDITION",
+    reason="JOB_NOT_CANCELLABLE",
+    message="...",
+    metadata={"job_id": job_id, "status": status},
 )
 ```
 
-这里刻意分两层。
+其中 `code` 表示 broad recovery category，`reason` 表示 TaskForge-specific machine identity，metadata 只保存 caller 需要且可以稳定承诺的 context；internal class、memory address、state-dict index 或 stack trace 都不应因此变成 public compatibility surface。Message 服务人类，不要求 machine client parse 文本；reference tests 固定 `code / reason / required metadata`，只要求 message 非空且有基本 actionable context，而不锁死完整文案。
 
-## code
+Reference 使用四个 broad codes：`INVALID_ARGUMENT`、`NOT_FOUND`、`FAILED_PRECONDITION`、`CONFLICT`。这只是课程本地 vocabulary，不是说 TaskForge 必须复制完整 gRPC status taxonomy；以后真的出现 permission、deadline 或 remote availability pressure 时，再增加相应 distinction 才有理由。同样，`CONFLICT` 这个名字也不是规范本身。真正 invariant 是：**same request identity 不能被重新绑定到 different intent。**
 
-表示 broad caller recovery category：
-
-```text
-INVALID_ARGUMENT
-NOT_FOUND
-FAILED_PRECONDITION
-CONFLICT
-```
-
-## reason
-
-表示 domain-specific stable identity：
-
-```text
-INVALID_COMMAND
-INVALID_REQUEST_ID
-JOB_NOT_FOUND
-JOB_NOT_CANCELLABLE
-REQUEST_ID_REUSED
-```
-
-为什么不直接一个巨大 enum？
-
-因为未来如果换成 RPC：
-
-```text
-code
-```
-
-可以映射到 canonical protocol status。
-
-而：
-
-```text
-reason
-```
-
-保留 TaskForge domain distinction。
-
----
-
-# 5. 为什么不每个 lifecycle state 一个 exception class
-
-一种机械实现可能是：
-
-```text
-JobRunningError
-JobSucceededError
-JobFailedError
-JobCancelledError
-```
-
-reference 没这么做。
-
-原因：对 public `cancel` caller 来说，它们共同表示：
-
-```text
-当前 job 不能进行 QUEUED→CANCELLED transition
-```
-
-caller 如果需要展示具体原因，可以读：
-
-```text
-metadata.status
-```
-
-因此 reference：
+对于 cancel，reference 把 running / succeeded / failed / cancelled 都表示为：
 
 ```text
 code = FAILED_PRECONDITION
 reason = JOB_NOT_CANCELLABLE
-metadata.status = running/succeeded/failed/cancelled
+metadata.status = <current status>
 ```
 
-这样新增 terminal state 时，不一定要新增 exception taxonomy。
+原因不是“exception class 越少越好”，而是这些状态在当前 operation contract 下都表示 `QUEUED -> CANCELLED` transition 不能发生；若 caller 需要展示区别，可以读取 stable `status` metadata。若产品以后把 cancel 的语义改成“确保 job 不再 runnable”，那么 already-cancelled 是否应该成为 success 可以重新设计。M04 reference **没有**预先替未来产品做这个决定。
 
----
+## 3. 输入 validity 要在产生 effect 之前建立
 
-# 6. 为什么 `NOT_FOUND` 不直接保留 KeyError
-
-`KeyError` 的来源：
-
-```text
-Python dict
-```
-
-不是：
-
-```text
-TaskForge domain
-```
-
-如果 storage 未来换成 SQLite，unknown job 可能变：
-
-```text
-fetchone() returns None
-```
-
-甚至远端 store：
-
-```text
-RPC NOT_FOUND
-```
-
-public contract 应保持：
-
-```text
-JOB_NOT_FOUND
-```
-
-所以 reference 只在理解的 domain seam catch：
-
-```python
-try:
-    service.get(job_id)
-except KeyError:
-    raise JOB_NOT_FOUND
-```
-
-而不是：
-
-```python
-except Exception:
-    raise INTERNAL
-```
-
----
-
-# 7. Input parsing reference
-
-reference 用：
+Feature request 要求 whitespace-only command 在 side effect 前失败。Reference 用一个很小的 frozen value type 建立 validation seam：
 
 ```python
 @dataclass(frozen=True)
@@ -393,73 +98,11 @@ class Command:
         return cls(raw)
 ```
 
-为什么保留原字符串，不 `strip()` 后存？
+这里故意保留原始字符串，而不是把 `strip()` 后的结果存进去。Lab 没有 authority 决定 shell command 的 leading/trailing whitespace 是否 semantic-equivalent；它只要求 command 至少包含一个 non-whitespace character。若 caller 显式提供 `request_id`，空字符串同样是 invalid input，并且必须在任何 job/request mutation 前失败；这不是从实现倒推出的 policy，而是 reference contract 明确选择的 validation rule。
 
-因为 lab 不应该顺便决定：
+这也不能被夸成“Python type system 已经证明 invalid Command 不可表示”。Caller 仍然可以直接写 `Command("   ")`。Reference 获得的是更明确的 boundary discipline：public path 经过 `str -> Command.parse -> Command`，下游不需要每层重新解释 primitive string；运行时 invariant 仍然需要 encapsulation 和 tests 支撑。
 
-```text
-shell command whitespace normalization
-```
-
-是不是 semantic equivalence。
-
-reference 只承诺：
-
-```text
-必须至少有一个 non-whitespace character
-```
-
-而不承诺：
-
-```text
-leading/trailing whitespace 被 normalize
-```
-
-这减少 M04 的 scope。
-
----
-
-# 8. 这个 `Command` 真的让 invalid state “不可表示”吗？
-
-严格说：**没有。**
-
-Python caller 仍然可以：
-
-```python
-Command("   ")
-```
-
-所以这里更多是：
-
-```text
-boundary discipline
-+
-precise internal representation
-```
-
-而不是 Haskell/Rust 意义上的完全 static proof。
-
-为什么仍有价值？
-
-因为 public path：
-
-```text
-str → Command.parse → Command
-```
-
-明确建立一个 validation seam。
-
-core code 可以选择只接 `Command`，减少 validate-everywhere。
-
-但 instructor 不会声称：
-
-```text
-Python type system 已证明 invalid Command 不存在
-```
-
----
-
-# 9. Reference JobView
+Public read 则使用 detached / frozen representation，例如：
 
 ```python
 @dataclass(frozen=True)
@@ -470,804 +113,127 @@ class JobView:
     exit_code: int | None
 ```
 
-为什么不用 internal `Job`？
+这里 `status` 用 string 是为了模拟 future serialization boundary；public enum 也是完全合理的替代。真正 property 只是 public representation 不应把 internal mutable object identity 一起交给 caller。
 
-因为 public boundary 不应交出 authoritative mutable handle。
+## 4. Timeout 把问题从“same payload”推进到 request identity
 
-为什么 `status` 用 string 而不是 internal `JobStatus`？
+到这里，input 和 error semantics 已经更清楚，但 retry 仍然没有答案。考虑一次 effectful submit：server 可能已经创建 job，response 却在网络上丢失。Caller 此时不知道 original effect 是否发生。如果它直接重发同样 command，TaskForge 又会创建第二个 job。
 
-这是一个可争论选择。
+这时才需要 request identity。Reference contract 是：
 
-reference 选择 string 是为了模拟：
+| Case | Reference semantics | Additional effect |
+|---|---|---|
+| no `request_id` | 每次调用都是新 logical request | 每次创建一个 job |
+| new ID + intent A | 创建 job，记录 ID → A → job identity | one job + request record |
+| same ID + same intent A | 返回同一 logical job | no additional job |
+| same ID + different intent B | `CONFLICT / REQUEST_ID_REUSED` | no new job；mapping 仍指向 A |
 
-```text
-future serialization boundary
+Reference 把 submit intent 定义成 **exact validated command string**。这也是教学选择，而不是 universal API law；如果未来要 normalize shell command，必须单独说明哪些变化 semantic-equivalent。
+
+最重要的 distinction 是：**same bytes 不等于 same logical request。** 因而下面这种实现应被拒绝：
+
+```python
+request_id = sha256(command.encode()).hexdigest()
 ```
 
-另一合理设计是 public enum。
+问题甚至不主要是 hash collision。同一个 `echo same` 可以是真正两个独立 jobs；只有 caller 显式提供同一个 request identity，才是在声明两次 transmission 属于同一个 logical operation。
 
-重要的是：
-
-```text
-public representation
-```
-
-不要被 internal mutable object identity 绑定。
-
----
-
-# 10. Request identity reference
-
-reference 记录：
+Reference request registry 保存：
 
 ```python
 @dataclass(frozen=True)
 class _RequestRecord:
     command: Command
     job_id: str
-
-_request_records: dict[str, _RequestRecord]
 ```
 
-它 authoritative 地回答：
+它 authoritative 地回答“这个 request ID 对应什么 original intent / job identity”，但不复制 `job.status` 或 `exit_code`。因此 job lifecycle 与 request identity 是两种不同 semantic facts，拥有两个不同 owner 并不构成 duplicated job authority。
+
+## 5. Idempotency 约束 intended effect，不要求 response bytes 永远相同
+
+第一次 `req-1` submit 时 job 可能还是 queued；worker 随后 claim 后，caller 才重试同一个 request。Reference 返回同一个 `job_id` 的**当前 view**，所以 second response 可以显示 `running`，而不是保存第一次 response snapshot。
+
+Reference 选择 current view 的理由很局部：当前 TaskForge 没有历史 response store；caller 真正需要的是 same logical creation / same job identity / no duplicate job；保存旧 response 还会新增一份 lifetime state。另一种“保存第一次 success snapshot”的设计也可以成立，只要 contract 明确并支付相应 state cost。
+
+`replayed=True/False` 同样只是 reference 的教学辅助，让 test 可以直接观察 dedup path。真实 API 如果 caller 不需要知道 first delivery 与 replay 的区别，完全可以不暴露这个字段；一旦暴露，它自己也会成为 compatibility surface。
+
+因此 M04 能声明的是：
+
+> same request ID + same intent 在当前 in-process baseline 下不会创建第二个 `Job`。
+
+它**不能**因此声明 exactly-once command execution。Worker crash、concurrent duplicates、durable request registry、external effects 都还没有解决。
+
+## 6. Evidence 必须观察 side effect，而不只观察 exception 或返回值
+
+Reference validation 在临时 TaskForge copy 中实际得到：
 
 ```text
-request_id 被哪个 submit intent 使用？
-该 logical request 对应哪个 job？
+original core tests: 6
+M04 reference tests: 12
+total: 18 passed
 ```
 
-它**不维护**：
+Canonical starter 没有被替换成答案版本。Reference tests 覆盖：
 
-```text
-job.status
-job.exit_code
-```
+- blank command / blank supplied request ID 在 mutation 前失败；
+- unknown get / cancel 被翻译成 stable `NOT_FOUND`；
+- running / terminal cancel 产生 `FAILED_PRECONDITION` + status context；
+- queued cancel 成功；
+- no request ID + same command 仍创建两个 jobs；
+- same ID + same intent 只创建一个 job；
+- retry after job becomes running 仍引用同一个 job，并允许 current view 变化；
+- same ID + different intent conflict 且不创建新 job；
+- public view frozen / detached。
 
-这些仍由 Job state owner 决定。
+这里最关键的不是 test 数量，而是 oracle 的观察面。
 
-所以没有形成 duplicated job authority。
-
----
-
-# 11. 为什么不用 `hash(command)` 当 request id
-
-因为：
-
-```text
-echo same
-```
-
-两次调用可能真的是：
-
-```text
-two different requested jobs
-```
-
-reference semantics：
-
-```python
-submit_job("echo same")
-submit_job("echo same")
-```
-
-得到：
-
-```text
-job-1
-job-2
-```
-
-这是正确的。
-
-只有 caller 显式：
+只写：
 
 ```python
-request_id="req-1"
+with raises(INVALID_ARGUMENT):
+    submit_job("   ")
 ```
 
-才声明：
+不足以证明 fail-before-side-effect，因为错误实现完全可能先 `service.submit(...)` 创建 ghost job，再抛 exception。Reference 同时检查 `list_jobs() == []`，并确认下一次合法 submit 仍能获得预期第一个 ID。
 
-```text
-这些 transmissions 属于同一个 logical request
-```
+同样，same request ID 的 test 不能只比较两个 response equality。它至少要同时观察 same job identity 和 authoritative job count 仍然为 1。Same ID + different intent 还要确认 mapping 没被第二次 intent 篡改。
 
----
+这也是为什么 `18 passed` 比 coverage percentage 更有意义：即使 branch coverage 100%，如果漏掉 same-ID/different-intent partition，最危险的 semantic dedup bug 仍然可以存活。
 
-# 12. Same request ID + different intent
+## 7. Reference implementation 刻意留下几个 failure window
 
-reference：
+M04 的 reference 是 bounded design，不是提前完成 M07/M08/M09。
 
-```text
-req-1 + "echo A"
-→ job-1
-```
+### Cancel 的 check-then-observe race
 
-然后：
+Reference 先调用现有 `service.cancel(job_id)`；如果它返回 `False`，再读 current job 来构造 status metadata。当前单线程 starter 里这两个动作之间不会变化；并发后可能出现：cancel check 观察一个 state，随后 read metadata 时已经变成另一个 state。
 
-```text
-req-1 + "echo B"
-→ CONFLICT / REQUEST_ID_REUSED
-```
+这是真实 race，但本 Lab 不顺手把 cancel 改成 atomic transition-result API。M07 才负责让 operation 可以原子返回类似 `Cancelled / NotCancellable(observed_state) / NotFound` 的 semantic result。
 
-并验证：
+### Request registry 不是 crash-safe
+
+Reference sequence 近似是：
 
 ```text
-job count 仍然是 1
-job-1 command 仍是 A
+1. create job
+2. write request_id -> intent/job record
 ```
 
-为什么不能直接返回 job-1？
+若 process 在两步之间 crash，job 已创建而 request record 没有持久化；restart 后 retry 仍可能创建 duplicate job。因此 reference 只声称 single-process/no-crash baseline 下的 request dedup semantics。
 
-因为这样会把 caller 的新 intent B 静默解释成 A。
+### Request registry 也不是 concurrency-safe
 
-为什么不能执行 B？
+两个并发 requests 可以同时观察 `request_id` absent，然后分别创建 job，再覆盖 mapping。结果仍可能有两个 jobs。这不是遗漏掉 M04 核心要求，而是明确留给 M07 的 concurrency pressure。
 
-因为这会破坏：
+### Test fixture lifecycle 也多了一个 owner
 
-```text
-one request identity → one logical intent
-```
-
-所以 conflict 是必须保留的 distinction。
-
----
-
-# 13. Retry response：current view，而不是 exact snapshot
-
-第一次：
-
-```text
-req-1 → job-1 queued
-```
-
-worker claim：
-
-```text
-job-1 running
-```
-
-caller retry：
-
-```text
-req-1 + same command
-```
-
-reference 返回：
-
-```text
-job-1 running
-replayed=true
-```
-
-为什么？
-
-因为真正需要的 guarantee 是：
-
-```text
-same logical creation
-same job identity
-no duplicate job
-```
-
-不是：
-
-```text
-response bytes 永远与第一次一模一样
-```
-
-这也避免为了保存旧 response 再增加一个 history state owner。
-
----
-
-# 14. `replayed` 是否必须存在？
-
-不一定。
-
-reference 加：
-
-```python
-SubmitResult(job=..., replayed=True/False)
-```
-
-主要用于教学：让 caller / test 可观察 dedup path。
-
-真实 API 可以选择不暴露它。
-
-问：
-
-```text
-caller 真需要知道它是首次执行还是 retry replay 吗？
-```
-
-如果不需要，暴露 `replayed` 本身就是额外 compatibility surface。
-
-所以 student 不暴露它也可以，只要 idempotency contract 能被证明。
-
----
-
-# 15. Validation order 是 reference 的关键 correctness point
-
-reference：
-
-```python
-parsed = Command.parse(command)
-request_id = validate_request_id(request_id)
-```
-
-然后才：
-
-```python
-service.submit(...)
-```
-
-因此测试：
-
-```text
-blank command
-→ error
-→ list_jobs() == []
-```
-
-以及：
-
-```text
-blank request id
-→ error
-→ list_jobs() == []
-```
-
-都通过。
-
-这比只检查 exception 更强。
-
----
-
-# 16. Cancel reference
-
-流程：
-
-```text
-service.cancel(job_id)
-```
-
-如果 unknown：
-
-```text
-KeyError → JOB_NOT_FOUND
-```
-
-如果 True：
-
-```text
-return cancelled view
-```
-
-如果 False：
-
-```text
-read current job
-→ FAILED_PRECONDITION
-→ metadata.status
-```
-
-这使 public caller 不再看到：
-
-```text
-False = ???
-```
-
----
-
-# 17. Reference cancel 有一个未来 race
-
-当前 TaskForge 单线程，所以：
-
-```text
-cancel() returns False
-      ↓
-get current job
-```
-
-之间不会变化。
-
-未来并发后：
-
-```text
-cancel false
-      ↓
-state changes
-      ↓
-get sees another state
-```
-
-于是 error metadata 可能不严格描述 cancel check 当时的 state。
-
-这是一个真实的 check-then-observe race。
-
-为什么 reference 不现在修？
-
-因为 M04 的 scope 是：
-
-```text
-boundary semantics
-```
-
-不是：
-
-```text
-atomic lifecycle transition API
-```
-
-M07 会把 transition result 改成原子返回：
-
-```text
-Cancelled
-NotCancellable(observed_state)
-NotFound
-```
-
-或者等价结构。
-
-这就是 staged course design：不要提前吃掉后续教学问题。
-
----
-
-# 18. Reference request registry 不是 crash-safe
-
-当前 sequence：
-
-```text
-1. service.submit(command)
-2. _request_records[request_id] = (...)
-```
-
-如果进程在 1 与 2 之间 crash：
-
-```text
-job 已创建
-request record 没写
-```
-
-restart 后 retry：
-
-```text
-可能创建 duplicate job
-```
-
-所以 reference **不能声称 durable idempotency**。
-
-它只证明：
-
-```text
-single-process, no-crash baseline 下的 request dedup semantics
-```
-
-这条限制必须写进 design memo。
-
-M07/M08 后可以考虑：
-
-- same transaction；
-- durable unique request record；
-- recovery；
-- retention。
-
----
-
-# 19. Reference request registry 也不是 concurrency-safe
-
-两个并发请求：
-
-```text
-T1: get(req) → none
-T2: get(req) → none
-T1: create job-1
-T2: create job-2
-T1: write record
-T2: write record
-```
-
-结果：
-
-```text
-two jobs
-```
-
-这破坏 idempotency。
-
-为什么 M04 不解决？
-
-同样因为 concurrency 是 M07。
-
-但 student 必须知道：
-
-> **“dict 里有 request id”不等于并发下完成了幂等性。**
-
----
-
-# 20. Reference reset_for_tests 暴露另一个 ownership lesson
-
-reference 提供：
-
-```python
-def reset_for_tests():
-    service.reset_for_tests()
-    _request_records.clear()
-```
-
-这是因为测试 state 现在跨两个 semantic owners：
-
-```text
-job state
-request identity state
-```
-
-如果测试只调用：
-
-```python
-service.reset_for_tests()
-```
-
-request registry 会残留。
-
-这提醒我们：
-
-```text
-test fixture lifecycle
-```
-
-也是 lifecycle contract。
-
-未来更成熟设计会让 state 实例化而不是 module global。
-
-但 M04 不顺便重构所有 global state。
-
----
-
-# 21. Error metadata reference
-
-例如：
-
-```text
-JOB_NOT_CANCELLABLE
-metadata = {
-  job_id,
-  status,
-}
-```
-
-为什么不放：
-
-```text
-internal Python class
-memory address
-state dict index
-stack trace
-```
-
-因为 public metadata 是 compatibility/security surface。
-
-只暴露 caller 需要且能稳定承诺的 context。
-
----
-
-# 22. Error message 测试策略
-
-reference tests 检查：
-
-```text
-code
-reason
-required metadata
-```
-
-不锁死完整 message。
-
-原因：
-
-```text
-human wording
-```
-
-不是当前 machine contract。
-
-如果未来产品要求 exact localized message compatibility，那才应另建相应 contract/tests。
-
----
-
-# 23. Why exception-oriented reference?
-
-reference 使用 Python exception：
-
-```text
-success return
-failure raises ApiError
-```
-
-理由：
-
-- 和 Python ergonomics 一致；
-- 不需要引入自制 Result framework；
-- public `ApiError` 已把 machine semantics 显式化；
-- later RPC boundary 可以自然 serialize。
-
-但这不是唯一答案。
-
-一个非常合理的替代：
-
-```text
-Result[JobView, ApiError]
-```
-
-尤其如果：
-
-- 项目已有 Result idiom；
-- caller 需要 exhaustive match；
-- language type system 能很好表达 union。
-
-课程不把 exception-vs-Result 变成宗教。
-
----
-
-# 24. Why four broad codes?
-
-reference 没复制全部 gRPC codes。
-
-因为 TaskForge 目前只需要：
-
-```text
-INVALID_ARGUMENT
-NOT_FOUND
-FAILED_PRECONDITION
-CONFLICT
-```
-
-以后出现：
-
-- storage outage；
-- remote worker unavailable；
-- permission；
-- deadline；
-
-才有理由增加：
-
-```text
-UNAVAILABLE
-PERMISSION_DENIED
-DEADLINE_EXCEEDED
-```
-
-不要为了“完整”先建立一个 20-code enum 然后只用 4 个。
-
-这是 YAGNI 与 stable vocabulary 的平衡。
-
----
-
-# 25. `CONFLICT` 是否一定是正确名字？
-
-不一定。
-
-如果未来直接映射 gRPC，可能用：
-
-```text
-ALREADY_EXISTS
-FAILED_PRECONDITION
-ABORTED
-```
-
-或 domain reason。
-
-reference 使用 `CONFLICT` 是课程本地 vocabulary。
-
-真正 invariant 是：
-
-```text
-same request identity cannot be rebound to different intent
-```
-
-具体 protocol code 是 encoding decision。
-
-不要让 status-code naming 掩盖 semantic reasoning。
-
----
-
-# 26. 为什么没有把 cancel already-cancelled 定义成 success
-
-这是一个刻意选择。
-
-可以设计：
-
-```text
-cancel(CANCELLED) → success
-```
-
-这样重复 cancel 更接近：
-
-```text
-ensure cancelled
-```
-
-但当前 TaskForge 原语 `cancel` 的语义更像：
-
-```text
-perform QUEUED→CANCELLED transition
-```
-
-所以 reference 保留：
-
-```text
-already cancelled → FAILED_PRECONDITION
-```
-
-这样更忠实于现有 state machine。
-
-如果产品以后说：
-
-```text
-cancel API 的 postcondition 只是“job not runnable”
-```
-
-就可以 design it twice 并改变 contract。
-
----
-
-# 27. “Define errors out of existence” 在这里怎么用
-
-reference **没有**把所有 error 消掉。
-
-它只考虑：
-
-```text
-是否有些状态可以自然算 operation already satisfied
-```
-
-最后选择没有改 cancel semantics。
-
-这恰好说明 heuristic 的正确用法：
-
-```text
-先问 product semantics
-```
-
-不是：
-
-```text
-错误越少越高级
-```
-
----
-
-# 28. Public view 与 internal model 可以独立演化
-
-reference public：
-
-```text
-JobView
-```
-
-internal：
-
-```text
-Job
-```
-
-以后 internal 可能新增：
-
-```text
-lease_owner
-attempt_count
-created_at
-```
-
-不需要自动成为 public fields。
-
-反过来 public 也可以提供 derived field：
-
-```text
-terminal
-```
-
-而不要求 internal storage 直接存它。
-
-这就是 representation independence 在 API boundary 的应用。
-
----
-
-# 29. Fail-before 应怎样理解
-
-对于全新 API shape，第一次写：
-
-```python
-submit_job(..., request_id="req-1")
-```
-
-starter 会直接：
-
-```text
-TypeError: unexpected keyword argument
-```
-
-这是一个红灯，但信息量有限。
-
-更有价值的 regression-style red test 是：
-
-```text
-blank command does not create job
-```
-
-starter 会：
-
-```text
-创建 job
-测试失败
-```
-
-以及：
-
-```text
-same request identity retry does not duplicate effect
-```
-
-在添加 minimal signature/scaffolding 后，应先看到 duplicate effect，再修。
-
-所以 “fail-before” 不是形式主义：
-
-> 关键是证明 test 的 oracle 能观察到我们真正要修的旧行为。
-
----
-
-# 30. Reference evidence 为什么是 18 tests 而不是 coverage 数字
-
-因为我们想证明的是具体 claims：
-
-```text
-validation order
-error translation
-cancel partition
-request identity
-conflict
-side-effect cardinality
-view authority
-```
-
-即使 coverage 100%，如果没有：
-
-```text
-same id + different intent
-```
-
-这个 test，最危险的 idempotency bug 仍可能存活。
-
-所以 instructor 不把 coverage percentage 当验收结果。
-
----
-
-# 31. 一个应该被 review 拒绝的“看起来很聪明”的实现
-
-```python
-def submit_job(command):
-    request_id = sha256(command.encode()).hexdigest()
-    if request_id in seen:
-        return seen[request_id]
-    ...
-```
-
-问题不是 hash collision。
-
-更根本：
-
-```text
-same bytes
-!=
-same logical intent
-```
-
-这会错误 dedup 两个独立相同 command。
+Reference 提供统一 test reset，是因为 state 现在至少跨 job lifecycle owner 与 request-identity owner。只 reset job state 而不清 request records 会让 tests 相互污染。这提醒学生：fixture lifecycle 本身也需要和 production state ownership 对齐。
 
-这类 bug 很容易由 Agent 生成，因为它把“技术去重”误当“语义去重”。
+这些 limitation 必须写出来。它们不能被一句“request ID makes submit idempotent”盖掉。
 
----
+## 8. 几条看起来合理、但应被 review 拒绝的路径
 
-# 32. 一个应该被 review 拒绝的 catch-all
+**Catch-all translation**：
 
 ```python
 try:
@@ -1276,258 +242,70 @@ except Exception as exc:
     raise ApiError("INTERNAL") from exc
 ```
 
-问题：
+它把 expected domain failure 与 programming bug 混成一个 channel，可能隐藏 defect 并让 operator diagnosis 更难。Reference 只翻译自己理解其 domain meaning 的 failure；真正 RPC entry point 未来仍可以有最后的 INTERNAL safety boundary，但那是另一层 responsibility。
 
-- programming bug 被隐藏；
-- expected domain error 与 unexpected bug 混淆；
-- tests 可能只看到统一 INTERNAL；
-- operator diagnosis 更困难。
+**Every state one exception class**：`JobRunningError`、`JobSucceededError`、`JobFailedError`、`JobCancelledError` 看起来精确，却未必对应不同 caller action。Taxonomy 应由 caller semantics 驱动，不由内部 enum 数量驱动。
 
-应该只翻译：
+**Payload hash as request identity**：它错误地把 same representation 当 same intent，会 dedup 两个本来独立的相同 command。
 
-```text
-你理解其 domain meaning 的 failure
-```
+**“Exactly once jobs”**：reference 没有解决 concurrent duplicate submit、process crash、durable request identity、worker re-execution 或 arbitrary external effects。把 in-process creation dedup 洗成 exactly-once execution 是 guarantee drift。
 
-未知 bug 让它 fail loudly，并在真正 RPC entry point 做最后的 INTERNAL safety translation/logging。
+**为了“完整”一次引入更多 mechanism**：SQLite transaction、unique durable request table、lock、RPC、retry middleware、tracing 都可能在后续成为合理设计，但 M04 当前没有 authority 一次性把它们加进来。那样会让 boundary semantics 淹没在 mechanism 中。
 
----
+## 9. Exception vs Result、cancel replay 等都不是课程宗教
 
-# 33. 一个应该被 review 拒绝的“exactly once”声明
+Reference 使用 Python exception 表达 failure，是因为这符合当前语言 ergonomics，也不需要自制 Result framework；`ApiError` 已经提供 machine-readable semantics，未来可以映射到 RPC wire representation。
 
-reference patch 若写：
+但 `Result[JobView, ApiError]` 也是合理替代，尤其当项目已有 Result idiom、caller 需要 exhaustive match，或 language type system 更适合 union modeling 时。课程评分的是 boundary semantics，不是 exception-vs-Result 阵营。
 
-```text
-TaskForge now guarantees exactly-once jobs.
-```
+同样，reference 没把 `cancel(CANCELLED)` 定义成 success。当前 primitive 更接近“执行 `QUEUED -> CANCELLED` transition”，所以 already-cancelled 仍是 failed precondition。如果产品 contract 以后改成 postcondition-style “ensure not runnable”，就应该重新 design it twice，而不是把 reference choice冻结成 API law。
 
-必须 request changes。
+这正是 “define errors out of existence” 的正确使用方式：它是一个 design question，不是“error 越少越高级”的规则。
 
-它最多做了：
+## 10. 最终 ownership map 比 class diagram 更重要
 
-```text
-same request ID + same intent
-→ in-process duplicate submit does not create a second Job
-```
+Reference path 完成后，可以把关键 facts 压缩成：
 
-它没有解决：
+| Fact | Authority |
+|---|---|
+| raw API input validity | public boundary / parser |
+| job lifecycle | existing TaskForge job state/service owner |
+| request identity → original intent / job | request registry |
+| public error vocabulary | public boundary |
+| public detached representation | public boundary |
 
-- concurrent duplicates；
-- process crash；
-- durable request registry；
-- worker re-execution；
-- external command side effects。
+这里没有要求一个 component 拥有所有 state。重要的是每个 semantic fact 有明确 owner，而且 request registry 不复制 job status。
 
-所以正确 claim 必须窄。
+Public `JobView` 与 internal `Job` 也因此可以独立演化。未来 internal model 可以新增 `lease_owner`、`attempt_count`、`created_at` 而不自动变成 public fields；public boundary 也可以提供 derived field，而不要求 storage 直接保存它。这才是 representation independence 在 API boundary 上的意义。
 
----
+M04 reference 仍然明确留下这些债务：request-registry persistence / retention、concurrent same-ID submit、atomic create+record、cancel observation race、remote serialization、retry backoff/budget。它们分别会在后续 concurrency、compatibility、architecture、production 模块中重新出现。
 
-# 34. Agent Round A 可能出现的典型问题
+## 11. 对 Agent 的判断：任务 contract 比“更聪明的 retry patch”重要
 
-vague prompt：
+如果只给 Agent：
 
 ```text
-Improve error handling and make submit safe to retry.
+Improve TaskForge's public API error handling and make submit safe to retry.
 ```
 
-常见生成模式：
+它很容易产生技术上 plausible 的答案：retry decorator、payload hash、catch-all、很多 custom exceptions，或者只测试返回值而不检查 side-effect cardinality。问题不一定是 Agent 不会编码，而是 task 没有告诉它什么 semantics 才算正确。
 
-1. `@retry` 包住 submit；
-2. payload hash 当 idempotency key；
-3. catch-all Exception；
-4. 10 个 custom error class；
-5. 没有 same-id/different-intent test；
-6. 只 assert return value，不 assert job count；
-7. 文档声称 exactly-once。
+更强的 engineering spec 会先固定这些 obligations：blank input fail-before-side-effect；unknown external error 不依赖 `KeyError`；cancel failure 保留 machine-readable caller context；same request identity + same intent 不产生 duplicate job；same identity + different intent 必须 conflict；public view 不携带 mutable authority；persistence/concurrency/exactly-once execution 都是 non-goal。
 
-这些不是模型“不会写代码”。
+这样 Agent 的任务从“想一个重试方案”缩小成“实现并证明这个 contract”。实现完成后，reviewer 仍应独立检查 request identity 是 caller intent 还是 payload guess、error translation 是否吞 bug、side-effect oracle 是否完整，以及文档有没有把 creation dedup 夸成 execution guarantee。
 
-而是 task specification 没告诉它：
+## 12. Instructor judgment
 
-```text
-什么 semantics 才算正确
-```
+高质量答案不要求复制 reference types 或 status-code naming。它应该能让 reviewer 看见一条完整 reasoning chain：
 
----
+1. 先从 starter 恢复 implemented behavior 与 representation leak；
+2. 从 caller action 设计 stable error semantics；
+3. 在 timeout / unknown outcome pressure 出现后才引入 request identity；
+4. 证明 input failure 在 side effect 前发生，retry 没有 duplicate creation；
+5. 把 request identity 与 job lifecycle authority 分开；
+6. 明确 crash、concurrency 和 external-effect guarantees 的边界；
+7. 不用 framework、pattern 名字或 test count 代替 contract reasoning。
 
-# 35. Agent Round B 为什么更强
+低质量答案通常会反过来：先写 exception classes、catch everything、retry everything、用 payload hash 猜 identity、只测 happy path，最后把一份 in-memory dedup table写成 exactly-once guarantee。
 
-engineering spec 明确：
-
-```text
-same request identity
-same intent
-no duplicate job
-```
-
-以及：
-
-```text
-same identity + different intent = conflict
-```
-
-它把 search space 从：
-
-```text
-“想一个重试方案”
-```
-
-缩小成：
-
-```text
-“实现并证明这个 contract”
-```
-
-这就是 Agent 时代 SE 的核心价值之一。
-
----
-
-# 36. M04 reference 的最终 ownership map
-
-```text
-raw API input
-  owner of validation: public boundary / Command parser
-
-job lifecycle
-  owner: existing TaskForge job state/service
-
-request identity
-  owner: request registry
-
-public error vocabulary
-  owner: public boundary
-
-human diagnostics
-  owner: public boundary + internal logs (future)
-```
-
-这里没有要求一个 component 拥有所有东西。
-
-而是每个 semantic fact 只有清楚 owner。
-
----
-
-# 37. 当前刻意留下的债务
-
-## 37.1 Request registry persistence
-
-没有。
-
-## 37.2 Idempotency retention window
-
-没有。
-
-## 37.3 Concurrent same-ID submit
-
-未解决。
-
-## 37.4 Atomic create + request-record
-
-未解决。
-
-## 37.5 Cancel observation race
-
-未解决。
-
-## 37.6 Remote serialization
-
-未实现。
-
-## 37.7 Retry backoff/budget
-
-未实现。
-
-这些不是遗漏。
-
-它们分别服务后续：
-
-```text
-M07 concurrency/failure
-M08 migration/compatibility
-M09 architecture/process boundary
-M11 production/reliability
-```
-
----
-
-# 38. 为什么课程不现在把这些全修完
-
-如果 M04 直接实现：
-
-- SQLite transaction；
-- unique request constraint；
-- lock；
-- durable registry；
-- remote RPC；
-- retry middleware；
-- tracing；
-
-学生会看到一坨 mechanism。
-
-但本章真正要学的是：
-
-```text
-API semantics
-error ownership
-boundary compression
-request identity
-```
-
-教学系统必须控制 incidental complexity。
-
----
-
-# 39. Instructor grading signals
-
-高质量答案通常会：
-
-- 先写 behavior table；
-- 明确 no-effect guarantees；
-- 不把 KeyError 当 domain contract；
-- 用 caller action 设计 error taxonomy；
-- same payload 与 same intent 分开；
-- explicit request identity；
-- same ID/different intent conflict；
-- tests 检查 side-effect cardinality；
-- public view detached；
-- 对 crash/concurrency 限制诚实。
-
-低质量答案通常会：
-
-- 先写 exception classes；
-- 全 catch；
-- retry everything；
-- payload hash；
-- claim exactly-once；
-- 只测 happy path；
-- 把新 framework 当 architecture。
-
----
-
-# 40. 本 lab 最终真正想训练的判断
-
-不是：
-
-```text
-如何写 ApiError
-```
-
-而是：
-
-> **Boundary design 是把内部机制、失败和不确定性压缩成稳定的 caller semantics。**
-
-以及：
-
-> **Idempotency 不是一个 retry decorator；它从“什么叫同一个 logical request”开始。**
-
-如果学生能在未来面对任何 Agent-generated API patch 时先问：
-
-```text
-same bytes 还是 same intent？
-error 对 caller 意味着什么？
-outcome failure 还是 unknown？
-谁拥有 dedup state？
-这个 guarantee 到底覆盖哪个 effect？
-```
-
-M04 就达到了目的。
+M04 最终要训练的不是“Python 怎么定义 `ApiError`”，而是两种可迁移判断：**boundary design 要把 mechanism-specific complexity 压缩成 caller 可以长期依赖的少量语义；retry-safe effectful API 必须从 logical request identity 和 unknown outcome 开始，而不是从重试循环开始。**
