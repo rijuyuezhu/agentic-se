@@ -178,3 +178,24 @@ M04 还有一个适合作为 pilot 的特点：已有 TaskForge `submit/get/canc
 - 哪些解释被压缩后虽然 technically present，但教学上已经太薄。
 
 因此 PR 应要求至少一轮独立 semantic review 和一轮 cold-reader/editing review。只有 reviewer 能从新版独立重建本章 argument，并在需要时从 baseline/source audit 找到遗漏，pilot 才值得推广到 M00–M13。
+
+## 11. Issue #2 closure pass — instructor-case narrative
+
+2026-09-07 的独立 #2 closure review 认为 M04 module pilot 已闭环，但 `case-studies/m04/instructor-analysis.md` 仍停留在初版的 40 个逐题 answer-key sections。这个 finding 不涉及 reference semantics，而是 case-study content type 没有完成 issue #2 要求的 engineering-analysis edit。
+
+本轮没有修改 Lab、canonical starter 或 source audit。Instructor case 从 40 个微型答案收敛为 12 个连续 episodes：starter contract → boundary leak → input validity → timeout/request identity → idempotent effect semantics → evidence/oracle → residual failure windows → rejected paths → non-universal design choices → ownership/evolution → Agent transfer → instructor judgment。
+
+Original-vs-rewrite semantic sweep 特别保留：
+
+- `public_api._view` 已有 detached-boundary 正例，starter 不是二元意义上的“bad API”；
+- same payload twice 不是天然 bug，request identity 必须来自 caller intent；
+- blank command / blank supplied request ID 都要求 fail-before-side-effect；
+- `code / reason / metadata / message` 的 machine/human contract 分工，以及 message 不应被 exact-string testing 锁死；
+- same ID/same intent 与 same ID/different intent 的不同 semantics；
+- current-view replay 与 optional `replayed` field 的 compatibility trade-off；
+- request registry 不是 crash-safe / concurrency-safe，cancel metadata 仍有 check-then-observe race；
+- in-process creation dedup 不等于 durable idempotency，更不等于 arbitrary command exactly-once execution；
+- exception-vs-Result、`CONFLICT` naming、already-cancelled semantics 都保持 reference choice 而非 universal rule；
+- M07/M08/M09/M11 downstream debt 仍作为 explicit limitation，而不是被 narrative compression 吞掉。
+
+Canonical validation 仍得到 core `6 passed`，M04 boundary probe 仍复现 blank submit accepted、unknown get/cancel `KeyError`、running/succeeded cancel `False`、same payload 创建两个 jobs。Reference `18 passed` 只保留为 historical instructor evidence，不伪装成 canonical starter output。
