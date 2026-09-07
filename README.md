@@ -152,7 +152,7 @@ M00–M13 的完整主线现已形成：
 - [`reading-notes/traditional-se-gap-map.md`](reading-notes/traditional-se-gap-map.md) 对 SWEBOK v4.0a 的 18 个 Knowledge Areas 逐项判断“已覆盖 / 部分覆盖 / 真缺口 / 低优先级”，并据此只新增 8 个可选 [`extensions/`](extensions/index.md)；[`reading-notes/extensions-source-audit.md`](reading-notes/extensions-source-audit.md) 记录这些旁支实际检查过的当前标准、课程和一手实践资料及其取舍；
 - [`labs/13-capstone.md`](labs/13-capstone.md) 提供最终综合实验；[`labs/taskforge/capstone-starter/`](labs/taskforge/capstone-starter/) 是独立的 SQLite + remote-worker starting point，包含 old API、schema v1、background maintenance、known claim race、legacy finish quirk 与 flawed feature request；
 - `capstone_baseline_probe.py` 可确定性复现 double claim 与 stale v1 finish；baseline tests 仍是 `6 passed`，用于证明 green tests 不等于完整 correctness argument；
-- human decision pack 将错误的 arbitrary-command exactly-once 要求收敛为 attempt fencing + opt-in `automatic_at_least_once`，并定义 mixed-version rollout gate 与 rollback boundary；
-- [`case-studies/m13/instructor-analysis.md`](case-studies/m13/instructor-analysis.md) 记录实际 reference validation：临时 solution 共 `14 passed`；frozen v1 binary 对 expand-only schema 继续工作，但 v2 attempt 激活后 old server 会接受 unfenced finish，实际证明“任意时刻 old-binary rollback”不成立。
+- human decision pack 将错误的 arbitrary-command exactly-once 要求收敛为 **v2 attempt fencing** + opt-in `automatic_at_least_once`；legacy/manual `operator_requeue()` 的 unfenced stale-completion risk 明确保留为 migration residual risk，同时 mixed v1/v2 claim 必须共享 queued-row single-winner invariant，并定义 rollout gate 与 rollback boundary；
+- [`case-studies/m13/instructor-analysis.md`](case-studies/m13/instructor-analysis.md) 记录 historical reference validation：临时 solution 共 `14 passed`，其中包含 v1-v1 claim fix、frozen-v1 Expand compatibility 与 post-v2 old-server rollback counterexample，但没有覆盖当前 clarified contract 要求的 v1-v2 concurrent claim arbitration；因此这组结果不是学生 candidate 或当前完整 contract 的 acceptance oracle。
 
 课程主线至此完成。后续扩展应优先增加新的真实 case study、review exercise 或替代 capstone，而不是继续堆原则名词。

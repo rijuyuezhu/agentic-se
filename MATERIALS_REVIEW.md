@@ -635,7 +635,7 @@ M13 的 source policy 与前面不同，见：
 
 `reading-notes/m13-source-audit.md`
 
-Capstone 不再引入新的 normative source，而是显式复用 M02–M12 已实际审计的一手材料，并把新的跨模块组合标为 course synthesis。M13 特有的 claim——例如 frozen v1 binary 对 expand-only schema 是否仍能工作、v2 attempt 激活后 old server rollback 是否会接受 unfenced finish、state fencing 是否仍允许 external duplicate effect——全部使用实际 TaskForge runtime counterexample / reference evidence，而不是再引用“某个著名架构原则”。这样避免把 Capstone 变成材料数量竞赛。
+Capstone 不再引入新的 normative source，而是显式复用 M02–M12 已实际审计的一手材料，并把新的跨模块组合标为 course synthesis。M13 特有的 claim——例如 frozen v1 binary 对 expand-only schema 是否仍能工作、v2 attempt 激活后 old server rollback 是否会接受 unfenced finish、v2 state fencing 是否仍允许 external duplicate effect——全部使用实际 TaskForge runtime counterexample / reference evidence，而不是再引用“某个著名架构原则”。这样避免把 Capstone 变成材料数量竞赛。
 
 ---
 
