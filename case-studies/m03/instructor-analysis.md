@@ -1,137 +1,34 @@
 # M03 Instructor Analysis — TaskForge Testing
 
-> **Spoiler warning**：先完成 `labs/03-testing-evidence.md` 再看。
+> **Spoiler warning**：完成 [`../../labs/03-testing-evidence.md`](../../labs/03-testing-evidence.md) 前不要读。
 >
-> 这不是唯一正确答案。它的用途是验证 lab 题目本身是否存在清楚、可论证、可实际运行的解，并展示 instructor 应该如何评阅 reasoning。
+> 这不是唯一正确答案。它记录一条 instructor reference reasoning：怎样从一套全部绿色的 tests 中同时找到 **missing claims** 与 **overspecified claims**，再用 mutation / fail-before evidence 检查自己的 oracle 是否真的有区分力。对应来源边界见 [`../../reading-notes/m03-source-audit.md`](../../reading-notes/m03-source-audit.md)。
 
----
+M03 的 starter 不缺“测试文件”。它已经有 6 个通过的 tests，而且这些 tests 保护了真实行为。真正的问题是：**绿色只说明这些 tests 问过的问题得到预期答案；它不会自动告诉我们还漏了哪些问题，也不会告诉我们某个 assertion 是否把 implementation accident 错当成 contract。**
 
-# 1. Baseline 不是“测试太少”，而是 claims 有洞
+## 1. 先审现有 tests：有些 claim 缺失，有些反而太强
 
-原始 suite：
+Baseline：
 
 ```text
 6 passed
 ```
 
-这 6 个 test 已经能保护一些真实 behavior：
+它已经覆盖 success/failure exit-code mapping、queued-only cancellation、FIFO claim、basic submit lifecycle 和 invalid finish transition。因此 instructor 不应把它简单评价成“差测试”；更精确的说法是：它对若干已表达 claim 有区分力，但 contract coverage 不完整，而且至少有一处 overspecification。
 
-- success/failure exit-code mapping；
-- queued-only cancellation；
-- FIFO claim；
-- submit basic lifecycle；
-- invalid finish transition。
+现有 tests 中最有信息量的三个审计点是：
 
-所以不能简单说：
+| Existing test behavior | 它实际保护什么 | Instructor judgment |
+|---|---|---|
+| submit 后 assert `job-1`, `job-2` | ID format + ordering + queued count 混在一起 | 本 M03 exercise 只承诺 opaque / unique / stable lookup token；exact `job-N` 是 overspecification |
+| `claim_next()` 返回第一个 submitted job | FIFO claim | Lab 明确把 FIFO 当 contract，因此 assertion 合理 |
+| cancel test 用 `queued` / `running` 变量名，但两次 claim 后两者都已 running | scenario 仍可能测对行为，但命名与 assert 时真实 state 不一致 | 应让 test structure 反映真实 behavior partitions，而不是创建时意图 |
 
-> “这是一套差测试。”
+同一行 assertion 是否 brittle，不取决于它“看起来具体”，而取决于 specification 是否授权这种具体性。M03 Lab 与前一章的 ownership exercise 也可以对同一个 implementation detail给出不同 exercise contract；测试 authority 来自当前 task/spec，不来自代码恰好长什么样。
 
-更精确：
+## 2. Mutation probe 把“测试跑到这里了”升级成“合理小 bug 会不会被发现”
 
-> **它对已编码的几个 claim 有一定区分力，但 contract coverage 不完整，而且包含至少一个潜在 overspecification。**
-
-这是 M03 希望学生形成的语言。
-
----
-
-# 2. Existing Test Audit
-
-## 2.1 `test_submit_assigns_monotonic_ids_and_queues_jobs`
-
-它混合了至少四条 claim：
-
-1. submit 返回 id；
-2. id 按 `job-1`, `job-2` 格式增长；
-3. list 顺序与 submission 一致；
-4. 两个新 job 都 counted as queued。
-
-问题在第 2 条。
-
-M03 contract 只承诺：
-
-```text
-opaque + unique + stable lookup token
-```
-
-所以：
-
-```python
-assert first == "job-1"
-```
-
-把 implementation choice 升级成了 contract。
-
-更稳健的测试应保护：
-
-```python
-assert first != second
-assert service.get(first).id == first
-assert service.get(second).id == second
-```
-
-是否需要验证 submission order，则由 `list_jobs()` contract 单独测试。
-
-## 2.2 `test_worker_claims_first_queued_job`
-
-本 lab 已明确 FIFO 是 contract，所以：
-
-```python
-assert claimed.id == first
-```
-
-是合理 semantic assertion。
-
-如果真实产品没有 FIFO promise，这条则应重新审查。
-
-这正说明同一行 test 是否 brittle，取决于 contract，不取决于 syntax。
-
-## 2.3 `test_cancel_only_queued_job`
-
-变量命名：
-
-```python
-queued = submit(...)
-running = submit(...)
-claim_next()
-claim_next()
-```
-
-两次 claim 后：
-
-```text
-queued variable  → RUNNING job
-running variable → RUNNING job
-```
-
-变量名描述的是创建时意图，而不是 assert 时真实状态。
-
-建议改成：
-
-```python
-first = ...
-second = ...
-```
-
-或者分成多个 behavior tests：
-
-```text
-running job cannot be cancelled
-queued job can be cancelled
-```
-
-这样 scenario 更清楚。
-
----
-
-# 3. Baseline Mutation Probe 的实际结果
-
-课程仓库上实际运行：
-
-```bash
-PYTHONPATH=src uv run --with pytest --no-project python tools/mutation_probe.py
-```
-
-得到：
+Canonical mutation probe 实际得到：
 
 ```text
 SURVIVED terminal_forgets_cancelled
@@ -144,138 +41,44 @@ KILLED   claim_uses_lifo
 summary: 3 killed, 3 survived
 ```
 
-这三个 survivor 不是随机挑的。
+这 6 个 mutants 是课程选择的 fault hypotheses，不是完整 bug universe。它们的价值在于让三种不同 gap 变得可执行。
 
-它们分别代表：
+### Cancelled state 没有连接到 terminal semantics
 
-```text
-model/invariant gap
-observable data gap
-cross-lifecycle listing gap
-```
+`terminal_forgets_cancelled` 删除 `CANCELLED` from `Job.terminal`，现有 suite 仍绿。原因不是 cancellation 完全没测：cancel test 已经检查 status 变成 `CANCELLED`；terminal count 也测过，但只在 succeeded path 上。缺的是组合 claim：**cancelled job 也属于 terminal population。**
 
----
-
-# 4. Survivor 1 — `terminal_forgets_cancelled`
-
-mutant：
-
-```python
-@property
-def terminal(self):
-    return self.status in {
-        SUCCEEDED,
-        FAILED,
-        # CANCELLED missing
-    }
-```
-
-为什么 baseline 通过？
-
-现有 tests 的 `terminal_count()` 只在 succeeded path 中验证：
-
-```python
-assert metrics.terminal_count() == 1
-```
-
-取消测试虽然验证：
-
-```python
-status == CANCELLED
-```
-
-但从未连接：
-
-```text
-CANCELLED → terminal semantics
-```
-
-因此两个局部 claim 各自存在，却缺少组合 claim。
-
-一个足够的 behavior-oriented test：
+一个 behavior-oriented test 可以先走真实 public/service lifecycle，再观察 metrics：
 
 ```python
 def test_cancelled_job_counts_as_terminal() -> None:
     job_id = service.submit("sleep 1")
-
     assert service.cancel(job_id) is True
-
     assert service.get(job_id).status == JobStatus.CANCELLED
     assert metrics.terminal_count() == 1
 ```
 
-这里我们没有直接测试 `Job.terminal` implementation。
+它没有直接锁死 `Job.terminal` helper 的实现方式，而是在当前 semantic boundary 上保护 system-level terminal meaning。
 
-它从 service + metrics observable behavior 保护 system-level terminal semantics。
+### Submit contract 从未观察 command
 
----
+`submit_drops_command` 把 stored command 改成空字符串，现有 tests 仍然只看 ID、listing IDs 和 queued count，所以 mutant 与 oracle observationally equivalent。
 
-# 5. Survivor 2 — `submit_drops_command`
-
-mutant：
-
-```python
-state.jobs[job_id] = Job(id=job_id, command="")
-```
-
-现有 test 观察：
-
-- id；
-- list id；
-- queued count。
-
-完全没有观察 command。
-
-所以 mutant 与现有 oracle observationally equivalent。
-
-足够的 test：
+最小补洞来自 input contract 本身：
 
 ```python
 def test_submit_preserves_command() -> None:
     command = "printf 'hello world'"
-
     job_id = service.submit(command)
-
     assert service.get(job_id).command == command
 ```
 
-这里 expected 来自 input contract，不是从 implementation 重新计算。
+Expected value来自 caller 提供的 input，不需要复制 production implementation 来算 oracle。
 
----
+### Listing 只在“全部 active”这个 partition 被观察
 
-# 6. Survivor 3 — `list_jobs_hides_terminal`
+`list_jobs_hides_terminal` 只返回 non-terminal jobs。Existing list test 恰好发生在两个 jobs 都 queued 的 state，于是“all jobs”和“only active jobs”得到相同 observation。
 
-mutant：
-
-```python
-return [job for job in state.jobs.values() if not job.terminal]
-```
-
-为什么现有 suite 通过？
-
-唯一检查 list 的时刻是刚 submit 两个 queued jobs 后。
-
-在那个 state partition 中：
-
-```text
-all jobs are non-terminal
-```
-
-所以：
-
-```text
-all jobs
-```
-
-和：
-
-```text
-only active jobs
-```
-
-产生同样 output。
-
-需要 mixed-state scenario：
+要区分它们，需要 mixed-state scenario：
 
 ```python
 def test_list_jobs_includes_terminal_jobs() -> None:
@@ -288,81 +91,38 @@ def test_list_jobs_includes_terminal_jobs() -> None:
     assert [job.id for job in service.list_jobs()] == [finished, active]
 ```
 
-这个 test 同时利用 M03 contract 中的 submission-order promise。
+这里还使用了本 exercise 明确承诺的 submission-order contract；如果 ordering 不在 specification 中，oracle 就应该改成不依赖顺序的比较。
 
-如果 ordering 不是 contract，则应改为 set comparison。
+## 3. 三个新 tests kill 三个 survivor，但这仍然不是 completeness proof
 
----
-
-# 7. 三个 tests 实际足够 kill 三个 survivor
-
-Instructor 实际把上述 3 tests 临时加入 suite，重新运行 mutation probe。
-
-结果：
+Instructor 在临时副本中加入上面三条 behavior tests 后，mutation probe 实际变成：
 
 ```text
 summary: 6 killed, 0 survived
 ```
 
-普通 suite：
+普通 suite 变成：
 
 ```text
 9 passed
 ```
 
-因此 lab 的 mutation exercise 已实际验证，不是假设“理论上应该能 kill”。
+这证明 6 个 supplied fault hypotheses 现在都有对应 evidence channel；它**不**证明 TaskForge testing 已完整。至少还有 representation exposure、unknown-ID semantics、concurrent claim/cancel、persistence/restart、worker crash、retry、retention、ID reuse、command encoding、remote protocol 等风险没有被这组 mutants 表达，其中很多会成为后续模块的主问题。
 
-但是：
+Mutation score 因此不应被升级成另一个 coverage percentage。一个 surviving mutant 可能暴露真实 missing claim，也可能只是 equivalent / irrelevant fault；一个全 killed 的 selected set 也只是说明这组具体 counterexamples 被排除了。Concurrency/interleaving、crash/retry 等 temporal risk 会在 M07 获得新的 evidence model；M03 这里只把它们保留为当前 suite 的 remaining risk。
 
-> **6/6 supplied mutants 被 kill 仍然不意味着系统测试充分。**
+## 4. 测试还能从另一边失败：把合法实现错误地排除
 
-只说明这 6 个具体 fault hypotheses 被覆盖。
-
----
-
-# 8. 至少还有哪些风险没有被这 6 个 mutants 表达？
-
-例如：
-
-1. `get()` / `list_jobs()` representation exposure；
-2. unknown id semantics；
-3. duplicate/invalid command semantics；
-4. concurrent `claim_next()`；
-5. claim 与 cancel race；
-6. persistence/restart；
-7. worker crash between side effect and finish；
-8. retry semantics；
-9. job deletion/retention；
-10. id reuse after reset/restart；
-11. command encoding；
-12. remote worker protocol。
-
-很多属于未来模块。
-
-所以 mutation probe 是：
-
-```text
-selected fault injection
-```
-
-不是 completeness proof。
-
----
-
-# 9. Overspecification — ID Format
-
-本 lab contract 已明确 id opaque。
-
-因此原 test：
+原 submit test 精确要求：
 
 ```python
 assert first == "job-1"
 assert second == "job-2"
 ```
 
-应该改。
+但 M03 exercise contract 把 ID 视为 opaque、unique、stable lookup token。于是 UUID、ULID 或其它 opaque database key 都可能是 legal implementation，exact string assertion 却会把它们判错。
 
-一个可能版本：
+更合适的 oracle 是：
 
 ```python
 def test_submit_returns_distinct_stable_ids() -> None:
@@ -374,26 +134,11 @@ def test_submit_returns_distinct_stable_ids() -> None:
     assert service.get(second).id == second
 ```
 
-这允许：
+这不是把 test “写弱了”，而是把接受集合重新对齐 specification。Testing 的 correctness 与 thoroughness 是两个方向：既要排除我们不允许的实现，也不能因为测试自身偏好误杀合法变化。
 
-```text
-job-N
-UUID
-ULID
-opaque database key
-```
+## 5. 更关键的 regression：6 个绿灯下 caller 仍能直接改 authoritative state
 
-都属于 legal implementation。
-
-测试没有变“弱”。
-
-它是把允许实现的集合调整到与真实 contract 一致。
-
----
-
-# 10. Representation Exposure Regression
-
-当前：
+M02 已经暴露过 read-authority leak：
 
 ```python
 job_id = service.submit("echo hi")
@@ -402,191 +147,67 @@ view.status = JobStatus.SUCCEEDED
 assert service.get(job_id).status == JobStatus.SUCCEEDED
 ```
 
-说明 caller 获得了 authoritative mutation handle。
+M03 要做的不是直接选一个 architecture fix，而是先设计一个**只保护 authority isolation property** 的 regression oracle。
 
-M03 contract 明确禁止。
-
-## Regression test
-
-这里 oracle 只保护 authority isolation。它不能额外要求 observation 必须 writable，因为后面的 immutable `JobView` 也是合法 candidate：
+错误写法是无条件假设 observation 一定 writable；那会把 frozen `JobView` 这种合法 candidate 误杀。Reference oracle 允许两种合法结果：mutation attempt 被 read-only view 拒绝，或者它只修改 detached observation；无论哪种，authoritative state 都必须保持 `QUEUED`。
 
 ```python
 def test_get_does_not_expose_authoritative_mutable_job() -> None:
     job_id = service.submit("echo hi")
-
     observed = service.get(job_id)
+
     try:
         observed.status = JobStatus.SUCCEEDED
     except Exception:
-        # read-only observation 拒绝 mutation 也是合法结果。
+        # M03 没规定 read-only rejection 的具体 mechanism。
         pass
 
     assert service.get(job_id).status == JobStatus.QUEUED
 ```
 
-这里故意只在 mutation attempt 周围接受普通 exception；M03 contract 没有规定 rejection mechanism，因此不应把 `FrozenInstanceError` 等具体实现细节写进 oracle。其他 tests 仍负责验证 observation 本身可正常读取。
+这里 catch 只包住 deliberate mutation attempt；它不是 production error-handling pattern。M03 contract 没有 authority 要求 `FrozenInstanceError` 或其它具体 exception identity，所以 oracle 不应该绑定它。
 
-在 baseline 上 assignment 成功并直接写穿 authoritative object，所以最后的 assertion 应该失败：
+同一问题也存在于 `service.list_jobs()[0]`。Contract 是“read boundary 不自动授予 authoritative mutation authority”，而不是“只修 `get()` 这个函数”。因此 reviewer 必须检查所有相关 read surfaces。
 
-```text
-expected QUEUED
-actual SUCCEEDED
-```
+## 6. Design it twice：defensive snapshot 与 immutable view 都能满足当前 property
 
-对 defensive snapshot，同一 assignment 只改本地副本；对 frozen `JobView`，assignment 被拒绝。两者最终都保持 authoritative `QUEUED`，因此同一条 regression test 都应通过。这才是必须保留的 fail-before / pass-after evidence。
+Reference 比较两条真实可行路线。
 
-同样还应该思考：
+| Candidate | 优点 | 限制 / cost |
+|---|---|---|
+| defensive snapshots，例如 `dataclasses.replace(job)` | diff 小、现有 `Job`-shaped API 基本兼容、立即切断 alias | type 仍看起来 mutable；nested mutable fields 未来可能让 shallow copy 再次泄漏 |
+| frozen `JobView` | read-only boundary 在 type 上更清楚；internal entity 与 external/read representation 分开 | change surface 更大，可能影响已有 caller type assumptions；当前 toy system 可能过度设计 |
 
-```python
-jobs = service.list_jobs()
-jobs[0].status = ...
-```
+Instructor 对当前 M03 会接受 defensive snapshot 作为最小修复，只要 design memo 明确 shallow-copy limitation；选择 `JobView` 且 compatibility / read semantics 处理干净也同样合理。
 
-是否也泄漏 authority。
+这正是 testing chapter 不应该替 architecture 做决定的地方。Regression test 先定义 property 和 legal implementation set，再让 design judgment 选择 mechanism。
 
-答案是：当前也泄漏。
+## 7. Fail-before / pass-after 必须保存“这个 test 曾经真的抓到旧 bug”
 
----
-
-# 11. Fix Design A — Defensive snapshots
-
-最小方案：
-
-```python
-from dataclasses import replace
-
-
-def get(job_id: str) -> Job:
-    return replace(state.jobs[job_id])
-
-
-def list_jobs() -> list[Job]:
-    return [replace(job) for job in state.jobs.values()]
-```
-
-## 优点
-
-- diff 很小；
-- 现有 `Job` API 基本兼容；
-- 立刻切断 mutation alias；
-- 适合当前 toy system。
-
-## 缺点
-
-- type 仍然显示为 mutable `Job`，caller 看不出这是 snapshot；
-- 将来 `Job` 有 nested mutable fields 时 shallow copy 可能再次泄漏；
-- internal entity 与 external representation 没有在类型层分离。
-
----
-
-# 12. Fix Design B — Immutable `JobView`
-
-例如：
-
-```python
-@dataclass(frozen=True)
-class JobView:
-    id: str
-    command: str
-    status: JobStatus
-    exit_code: int | None
-```
-
-read boundary 返回：
-
-```text
-JobView
-```
-
-内部仍使用 mutable：
-
-```text
-Job
-```
-
-## 优点
-
-- type 直接表达 read-only boundary；
-- future nested representation 更容易控制；
-- state ownership 清晰。
-
-## 缺点
-
-- change surface 更大；
-- 可能影响已有 caller type assumptions；
-- 对当前极小系统可能过度设计。
-
-## Instructor judgment
-
-在 M03 当前规模下，我会接受 A 作为最小修复，但要求 design memo 明确 A 的 shallow-copy 限制。
-
-如果学生选择 B 且实现干净，也应给高分。
-
----
-
-# 13. 为什么不能只 fix `get()`
-
-因为：
-
-```python
-service.list_jobs()[0]
-```
-
-仍然是 authoritative object。
-
-contract 是：
-
-> caller read 不应自动获得 authoritative mutation authority。
-
-不是：
-
-> `get()` 这个函数特殊地 copy。
-
-所以 review 必须找 **所有 read boundary**。
-
-这是 M02 ownership reasoning 在 M03 regression testing 中的直接应用。
-
----
-
-# 14. Fail-before / Pass-after 该怎样保存
-
-高质量 bugfix evidence：
-
-```text
-Before:
-  focused test: FAIL
-  failure: observed mutation changed authoritative status QUEUED → SUCCEEDED
-
-Patch:
-  return snapshots at service read boundaries
-
-After:
-  focused test: PASS
-  full suite: PASS
-  mutation probe: supplied fault mutants still killed as expected
-```
-
-差的 evidence：
+高信息量 evidence 不只是：
 
 ```text
 all tests pass
 ```
 
-因为它没有证明新 test 真的关联旧 bug。
-
-Instructor 已在临时副本实际验证这一流程：
+而是类似：
 
 ```text
-baseline + 2 个 authority-leak regression tests:
-    2 failed
+Before:
+  focused authority-isolation test -> FAIL
+  observed mutation changed authoritative QUEUED -> SUCCEEDED
 
-只把 service.get()/list_jobs() 改为返回 defensive snapshots 后：
-    8 passed
+Patch:
+  detach service read results
+
+After:
+  focused test -> PASS
+  full suite -> PASS
 ```
 
-因此这里的 red→green 是实际执行过的 reference，不是仅凭代码阅读推测。这个历史记录只验证了 snapshot candidate，不应被改写成“当时也运行过 immutable view”。
+Instructor 当时在临时 copy 中实际验证过 defensive-snapshot path：加 `get()` / `list_jobs()` 两个 authority-leak regressions 后 baseline 是 `2 failed`；只把两个 service read boundaries 改成 defensive snapshots 后，suite 变成 `8 passed`。这个 historical record只证明当时的 snapshot candidate，不应被改写成“当时也实现并跑过 immutable view”。
 
-针对 regression oracle 是否误杀另一种 legal implementation，本轮又在独立临时 process 中对 `get()` 与 `list_jobs()` 各跑了同一个 authority-isolation probe，没有修改仓库 production/test code：
+后续为了检查 regression oracle 本身有没有过度规定 implementation，又单独做了 candidate probe：
 
 ```text
 get():
@@ -600,236 +221,59 @@ list_jobs():
   frozen JobView list          -> PASS (mutation rejected)
 ```
 
-这个追加 probe 只证明当前 oracle 能区分“authority 泄漏”而不要求 observation 可写；它不是 `JobView` architecture 的完整 implementation test，也不替代 compatibility / type-surface review。
+这条追加 evidence 只证明 oracle 接受声明的 legal candidate set；它不是 `JobView` architecture 的完整 compatibility test。
 
----
+## 8. Test boundary 仍然需要 judgment，不能变成新的教条
 
-# 15. 关于 `Job.terminal`：直接 unit test 可以吗？
+### 是否直接 unit-test `Job.terminal`？
 
-可以有两种合理判断。
+如果 `Job` 只是 internal representation，through service/metrics behavior 测 terminal semantics 往往更 resistant to refactoring；如果项目明确把 `Job` model 当公共 domain object，`terminal` 本身就是长期 semantic contract，那么直接 unit test 也合理。Instructor 评分应看学生能否说明**为什么这个 boundary 值得长期冻结**，而不是统一要求“只能测 public method”。
 
-## 判断 A — 不直接测
+### Interaction test 是否天然坏？
 
-如果 `Job` 只是 internal representation，terminal property 是 implementation helper：
+对于普通 `cancel queued -> CANCELLED`，assert internal setter 被调用几次通常是在测试实现 choreography。但若未来 contract 是“对 remote worker 恰好发出一条 cancellation request”，external interaction 本身就是 observable effect。判断标准是 interaction 是否对齐真正的 semantic boundary，而不是用了 mock 就扣分。
 
-```text
-通过 service/metrics behavior 测
-```
+### Property-based testing 是否自动更强？
 
-更 resistant to refactoring。
+一个适合 M03 的 property 是“任意 nonzero exit code 都使 running job failed，并保留该 exit code”。Hypothesis 可以生成整个 nonzero integer domain并 shrink counterexample；这增加了 counterexample search，却仍不覆盖 queued finish、zero success、persistence 或 concurrency。Generator/domain/property 自己都可能写错，所以 property-based testing 是 search engine，不是 automatic proof。
 
-## 判断 B — 直接测
+## 9. Agent 很容易生成更多 tests，但不一定增加新的 evidence
 
-如果项目明确把 `Job` model 当公共 domain object，`terminal` 是独立 semantic contract：
+Vague task 常见结果包括：按 production method 一一生成 tests、重复 happy path、继续锁死 exact ID、加很多 parametrization 但 partitions 没变化、没有观察 command、没有运行 mutation probe，或者在写 representation-exposure test 的同时立刻改 production，于是失去 fail-before evidence。
 
-```python
-assert Job(... CANCELLED).terminal
-```
+问题不在“Agent 笨”，而是 objective 没有约束 claim / oracle / partition / boundary / evidence。更强的 engineering task 应先要求：
 
-也合理。
+- 当前 contract 与允许实现集合；
+- 哪些 meaningful fault hypotheses 还没有 observation；
+- oracle expected 从哪里来；
+- behavior partitions 与 boundary states；
+- test double / fidelity limitation；
+- negative control 或 fail-before；
+- pass-after + regression evidence；
+- remaining risks 与不能证明的事情。
 
-评分关键不是选 A 还是 B。
+Agent 可以快速生成 candidate tests、mutation harness、Hypothesis strategies；acceptance 仍要独立检查它是否只是让 implementation 和 matching oracle 一起变绿。
 
-而是学生能否说明：
+## 10. Instructor judgment
 
-> **这个 unit boundary 为什么值得成为长期 contract。**
+不要因为 `+30 tests`、100% line coverage、用了 Hypothesis、用了 mock framework、mutation 100% 或严格 AAA format 就自动给高分。这些都是 mechanisms。
 
----
-
-# 16. Interaction Testing 的参考判断
-
-对于：
-
-```text
-cancel queued job → CANCELLED
-```
-
-不要测：
+高质量答案应该让一条 evidence chain 可被重建：
 
 ```text
-status setter called exactly once
+contract / allowed implementation set
+        ↓
+behavior partition + oracle
+        ↓
+meaningful negative control / mutant
+        ↓
+observable fail-before
+        ↓
+scoped production change
+        ↓
+pass-after + regression evidence
+        ↓
+remaining risk
 ```
 
-因为我们关心 outcome。
-
-但未来如果 TaskForge 有：
-
-```text
-cancel remote process
-```
-
-外部协议要求：
-
-```text
-exactly one cancellation request sent to remote worker
-```
-
-那么这个 interaction 就可能是 contract 本身。
-
-因此 instructor 不应机械扣“用了 mock”。
-
-要问：
-
-```text
-mock/interaction 是否对齐 external semantic boundary？
-```
-
----
-
-# 17. Optional Hypothesis Reference
-
-一个合理 property：
-
-```python
-from hypothesis import given, strategies as st
-
-
-@given(st.integers().filter(lambda code: code != 0))
-def test_any_nonzero_exit_code_fails(code: int) -> None:
-    service.reset_for_tests()
-    job_id = service.submit("anything")
-    worker.claim_next()
-
-    worker.finish(job_id, code)
-
-    job = service.get(job_id)
-    assert job.status == JobStatus.FAILED
-    assert job.exit_code == code
-```
-
-更好的 generator 可以直接排除 0，而不是 filter：
-
-```python
-st.integers(max_value=-1) | st.integers(min_value=1)
-```
-
-这个 property 比只测 `7` 增加了：
-
-```text
-对整个 nonzero integer domain 搜索反例
-```
-
-但它仍然不验证：
-
-- queued finish rejection；
-- success code；
-- persistence；
-- concurrency。
-
----
-
-# 18. Agent Vague Prompt 常见结果预期
-
-不保证每个 Agent 都这样，但应重点检查：
-
-- 给每个 method 加一个 test；
-- 直接 import `state`；
-- 重复现有 happy paths；
-- 为 exact id format 加更多 assertions；
-- 加大量 parametrization，但 partitions 没变；
-- 没有发现 `command`；
-- 没有 run mutation probe；
-- representation exposure test 写出后立即同时修改 production，缺 fail-before；
-- 最终总结只说 “X tests pass”。
-
-这些不是“Agent 笨”。
-
-它反映 vague task 本身没有指定 engineering objective。
-
----
-
-# 19. Engineering-Spec Agent Prompt 的真正价值
-
-不是 prompt 更长。
-
-而是它提前声明了：
-
-```text
-authority
-contract
-non-goals
-observable boundary
-validation semantics
-review expectations
-```
-
-这样 Agent 的 search space 被结构化。
-
-这正是整门课想训练的人类能力。
-
----
-
-# 20. Instructor 评分时不要奖励什么
-
-不要因为下面这些自动给高分：
-
-```text
-+30 tests
-100% line coverage
-Hypothesis used
-mock framework used
-mutation 100%
-strict AAA format
-```
-
-这些都是 mechanism。
-
-要奖励：
-
-- test 对应真实 contract；
-- partition 有理由；
-- oracle 独立；
-- meaningful mutant 被 kill；
-- legal refactor 不被误杀；
-- fail-before 真实；
-- remaining risks 说得清楚。
-
----
-
-# 21. 本 Lab 最重要的 instructor conclusion
-
-原 suite：
-
-```text
-6 passed
-3/6 selected mutants survive
-```
-
-只增加三个 behavior-oriented tests：
-
-```text
-9 passed
-0/6 selected mutants survive
-```
-
-再增加 representation-exposure regression：
-
-```text
-baseline 必须先红
-```
-
-然后 production ownership boundary 才有理由修改。
-
-这整条链展示的是：
-
-```text
-contract
-  ↓
-test claim
-  ↓
-negative control / mutant
-  ↓
-observable failure
-  ↓
-production change
-  ↓
-pass-after evidence
-```
-
-而不是：
-
-```text
-write more tests
-```
-
-这就是 M03 想教的 testing。
+M03 的最终结论不是“写更多测试”。更接近的是：**测试是一组可执行工程声明；好的 suite 会让错误的未来变化更难悄悄通过，同时尽量不阻碍 specification 允许的正确变化。**

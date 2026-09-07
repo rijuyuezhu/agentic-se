@@ -193,3 +193,21 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/mutation_probe.py
 - 测试生成的 `.pytest_cache` 被 ignore，没有进入 diff；没有生成 `uv.lock` 或其他待提交临时文件。
 
 这些结果只证明本批编辑没有破坏当前 lab baseline / probe、当前 regression oracle 接受声明的 candidate set，并保持基本仓库卫生；它们不替代本文件前述 semantic/cold-reader review。
+
+## 12. Issue #2 closure pass — M03 instructor-case narrative
+
+2026-09-07 closure review 发现 M03 module 的 case-driven rewrite 已成立，但 `case-studies/m03/instructor-analysis.md` 仍按 existing test / survivor / fix design / technique 逐题切成 21 个 page-level sections。内容正确，阅读单位仍偏 answer-key。
+
+本轮只重写 instructor case。新 spine 是：green baseline audit → selected mutation counterexamples → kill survivors → overspecification from the opposite direction → authority-leak fail-before → two legal fix candidates → preserve red/green provenance → boundary/property/interaction judgment → Agent/evidence → instructor conclusion。
+
+Semantic preservation 重点：
+
+- baseline 仍是 `6 passed`，selected mutation probe 仍是 `3 killed / 3 survived`；
+- 三个 survivor 与对应 behavior gap 均保留，historical `9 passed / 6 killed` 仍只代表 supplied mutants；
+- opaque-ID exercise 仍明确是 M03 Lab-specific contract，不反写产品永久 ID policy；
+- authority-isolation regression 仍接受 defensive snapshot 与 frozen `JobView`，不偷加“observation 必须 writable”的 oracle；
+- historical `2 failed -> 8 passed` 只归因于当时实际运行的 snapshot candidate；later frozen-view probe 仍只证明 oracle legal-set，不冒充完整 architecture validation；
+- direct `Job.terminal` unit test、interaction testing、Hypothesis 都保持 conditional judgment，而非 universal rule；
+- concurrency/crash/retry 只作为 remaining risk，并明确交给 M07 等后续 evidence model。
+
+Canonical validation 重新得到 core `6 passed` 与 mutation probe `3 killed / 3 survived`。
