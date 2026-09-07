@@ -225,13 +225,7 @@ except KeyError:
 assert service.cancel("job-missing") is False
 ```
 
-新行为也许更好，但这不是判断 blocker 的关键。brief 和 author description 都说这是 behavior-preserving structural refactor。因此：
-
-```text
-KeyError -> False
-```
-
-本身就是 undeclared behavior change。
+新行为也许更好，但这不是判断 blocker 的关键。brief 和 author description 都说这是 behavior-preserving structural refactor。因此，`KeyError -> False` 本身就是 undeclared behavior change。
 
 更好的 change topology 是把它拆成一个显式 M04-style API redesign：先定义 unknown/running/terminal semantics、error identity、caller compatibility，再写对应 tests。不能因为“顺手更友好”就把新 policy 混进 refactor。
 
