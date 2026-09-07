@@ -89,6 +89,12 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 
 详细教学设计见 [`COURSE_DESIGN.md`](COURSE_DESIGN.md)。
 
+### Final Transfer Practicum：检查知识能否迁移
+
+完成 M13 后，可以进入 [`Final Transfer Practicum`](practicum/README.md)。它**不是 M14**，也不引入新的主线知识；相反，它刻意离开 TaskForge，进入一个真实开源项目的 frozen historical revision，在低 scaffolding 条件下重新完成 issue review、system modeling、Agent-assisted change、独立 evidence 与 review。
+
+当前 practicum 使用 Pallets Click。学生任务入口只提供真实 repo、截至 frozen revision 的历史、setup、stakeholder request 和交付约束；authority map、must-preserve behavior list、target design 与 hidden finding 不属于 student-facing task。
+
 ### Extensions：按需深入，不增加新的主线模块
 
 传统 Software Engineering 里有些问题没有必要重新占一个 M14/M15，却仍然会改变真实工程判断。例如 requirement 并不是从天上掉下来的；代码版本也不等于完整 release identity；Agent 写代码变快以后，review capacity、security boundary 和 professional responsibility 也不会消失。
@@ -154,5 +160,6 @@ M00–M13 的完整主线现已形成：
 - `capstone_baseline_probe.py` 可确定性复现 double claim 与 stale v1 finish；baseline tests 仍是 `6 passed`，用于证明 green tests 不等于完整 correctness argument；
 - human decision pack 将错误的 arbitrary-command exactly-once 要求收敛为 **v2 attempt fencing** + opt-in `automatic_at_least_once`；legacy/manual `operator_requeue()` 的 unfenced stale-completion risk 明确保留为 migration residual risk，同时 mixed v1/v2 claim 必须共享 queued-row single-winner invariant，并定义 rollout gate 与 rollback boundary；
 - [`case-studies/m13/instructor-analysis.md`](case-studies/m13/instructor-analysis.md) 记录 historical reference validation：临时 solution 共 `14 passed`，其中包含 v1-v1 claim fix、frozen-v1 Expand compatibility 与 post-v2 old-server rollback counterexample，但没有覆盖当前 clarified contract 要求的 v1-v2 concurrent claim arbitration；因此这组结果不是学生 candidate 或当前完整 contract 的 acceptance oracle。
+- [`Final Transfer Practicum`](practicum/README.md) 进一步离开 TaskForge：当前版本固定 Pallets Click 的真实历史 revision，使用低 scaffolding stakeholder issue、coding-agent implementation、独立 reviewer 与 counterexample evidence 检查课程方法能否迁移到陌生 repo；候选审计与 empirical pilot 已完成，但其 instructor-side validation record 不进入学生导航。
 
 课程主线至此完成。后续扩展应优先增加新的真实 case study、review exercise 或替代 capstone，而不是继续堆原则名词。
