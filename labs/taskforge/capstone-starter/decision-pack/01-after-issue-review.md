@@ -10,9 +10,10 @@ TaskForge 无法仅靠自己的 SQLite state 判断一个超时 worker 是否已
 
 因此新的 contract 是：
 
-- TaskForge 可以保证 **current-attempt state fencing**：stale attempt 的 heartbeat / finish 不得覆盖 current attempt；
+- 对已经进入 **v2 attempt protocol** 的 execution，TaskForge 可以保证 **current-attempt state fencing**：stale v2 attempt 的 heartbeat / finish 不得覆盖 current v2 attempt；
 - 对启用自动 recovery 的 job，执行语义是 **at-least-once**；
 - 如果某个 command 的重复外部副作用不可接受，调用者必须使用 effect-owner 提供的 idempotency / fencing，或者不得启用自动 recovery；
+- legacy v1 execution 没有 attempt identity，因此 **不在上述 current-attempt fencing guarantee 内**；尤其是 historical `operator_requeue()` 之后再次由 v1 worker claim 的 row，旧 completion 仍可能无法区分前后两次 legacy execution。这个 migration residual risk 必须显式保留，不能被文档或测试写成“已 fenced”；
 - 不得在文档、API 或测试中重新声称 arbitrary shell command exactly-once。
 
 ## D2 — Legacy submission 保持 manual recovery
@@ -21,7 +22,8 @@ TaskForge 无法仅靠自己的 SQLite state 判断一个超时 worker 是否已
 
 - response shape 不变；
 - 创建的 job 默认 `recovery_policy=manual`；
-- 不会因为 lease timeout 被自动 requeue。
+- 不会因为 lease timeout 被 automatic sweeper requeue；
+- migration window 中 historical `operator_requeue()` 仍可作为人工 emergency action，但它保留 v1 completion 无 execution identity 的既有风险。若 operator 使用这条 path，必须把可能的 stale completion / duplicate execution 作为已知 residual risk 处理；对 duplicate execution 不可接受且没有 effect-owner idempotency/fencing 的 workload，不得把这条 escape hatch 当作安全 recovery。这个限制必须进入 rollout/operator plan。本 Capstone 不把它升级成 fenced recovery，也不允许 implementation Agent 静默改变这条 legacy semantics。
 
 允许新增一个明确的 v2 submission surface，使 caller 显式选择：
 
@@ -41,15 +43,15 @@ attempt
 worker_id
 ```
 
-只有 current running attempt 可以 renew / finish。
+对 v2 heartbeat / finish，只有 current running **v2** attempt 的消息可以被接受。
 
-旧 v1 worker payload (`job_id + exit_code`) 在 migration window 继续支持，但只能完成 legacy attempt；它不能完成一个已经进入 v2 attempt protocol 的 row。
+旧 v1 worker payload (`job_id + exit_code`) 在 migration window 继续支持，但只能完成 legacy attempt；它不能完成一个已经进入 v2 attempt protocol 的 row。这个限制只隔离 legacy-vs-v2 domain；因为 v1 payload 没有 attempt / worker identity，它仍不能区分一次 manual requeue 前后的两个 legacy executions。
 
 ## D4 — 先修现有 claim race
 
-在 mixed v1/v2 rollout 之前，现有 v1 claim handler 必须先做到单一原子 claim decision，而不能继续允许两个 worker 都成功返回同一个 queued job。
+在 mixed v1/v2 rollout 之前，现有 v1 claim handler 必须先做到单一原子 claim decision，而不能继续允许两个 v1 worker 都成功返回同一个 queued job。
 
-这个修复不得改变 v1 claim response shape。
+这个修复不得改变 v1 claim response shape。进入 mixed rollout 后，**所有同时 active 的 claim protocol 必须共享同一个 queued-row single-winner invariant**：同一个 queued row 面对并发 contenders，最多一个 claim call 可以获得 success receipt，不论 contenders 来自 v1 还是 v2 entry point。至少要验证 v1-v1 与 v1-v2；若 v2 使用独立 claim path，也要验证 v2-v2。实现可以共享 conditional primitive、transaction 或其它机制；本 decision 不指定 primitive。
 
 ## D5 — Expand → protocol migration → activation
 

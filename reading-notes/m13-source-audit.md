@@ -125,10 +125,10 @@ Capstone 中使用：
 
 Capstone 中使用：
 
-- claim success history 需要 linearizable single winner；
+- claim success history 需要 **linearizable single-winner decision**；在 mixed v1/v2 migration window，这个 invariant 必须跨所有同时 active 的 claim entry point，而不是每个 protocol 各自成立；
 - conditional update / transaction 是实现手段，不是 contract 本身；
 - lease expiry、finish、heartbeat、requeue 存在真实 interleavings；
-- current attempt 必须有可验证 fencing identity；
+- **v2 current attempt** 必须有可验证 fencing identity；legacy v1 completion 没有 execution identity，因此 historical manual requeue/reclaim 仍保留 stale-completion residual risk；
 - final row 看起来正确不能证明历史正确。
 
 ---
@@ -144,6 +144,8 @@ Capstone 中使用：
 Capstone 中使用：
 
 - schema compatibility 与 protocol semantic compatibility 分开；
+- mixed-version compatibility 既包括 representation/finish compatibility，也包括 v1/v2 claim coexistence 的 ownership history；
+- legacy `operator_requeue()` 是 migration emergency compatibility path，不自动获得 v2 current-attempt fencing guarantee；其 stale-completion / duplicate-execution residual risk 必须进入 rollout/operator reasoning，对 duplicate-sensitive 且没有 effect-owner protection 的 workload 不能称为安全 recovery；
 - Expand → protocol migration → activation → later Contract；
 - reader/writer version matrix；
 - old binary rollback 必须用真实 old binary / frozen consumer 验证；
@@ -211,7 +213,7 @@ Capstone 中使用：
 Capstone 中使用：
 
 - activation gate 必须依赖可观测条件，而不是“应该都升级完了”；
-- 至少需要：legacy worker count、running legacy attempt count、stale-rejection evidence、rollback review；
+- 至少需要：legacy worker count、running legacy attempt count、mixed-protocol claim ownership evidence、v2 stale-rejection evidence、legacy manual-requeue residual-risk visibility、rollback review；
 - metrics 与 diagnostic identity 分开；
 - rollout 成功不是“部署命令退出 0”，而是 system contract 在 production window 中有 evidence。
 
@@ -282,7 +284,7 @@ baseline tests + reference tests = 14 passed
 
 其中关键 evidence：
 
-1. v1 claim race 被 conditional claim 收敛到一个成功 worker；
+1. v1-v1 claim race 被 conditional claim 收敛到一个成功 worker；
 2. schema v2 expand 对 frozen v1 binary 保持读写兼容；
 3. v2 claim 生成 monotonic attempt；
 4. lease expiry 后 attempt 2 接管；
@@ -290,10 +292,10 @@ baseline tests + reference tests = 14 passed
 6. legacy finish 不能完成 v2 attempt；
 7. manual recovery job 不会自动 requeue；
 8. activation gate 在 legacy worker / legacy running attempt 未清零时关闭；
-9. 两个 execution attempt 仍可以各自产生一次外部 effect，证明 state fencing != external exactly-once；
+9. 两个 v2 execution attempt 仍可以各自产生一次外部 effect，证明 v2 state fencing != external exactly-once；
 10. v2 attempt 激活后 frozen old server 仍会接受 unfenced finish，证明 arbitrary old-binary rollback unsafe。
 
-这些结果只证明 reference path 满足经过人类 decision 修正后的 Capstone contract；它们不是“所有 lease scheduler 的通用证明”。Reference solution 当时存在于临时 solution copy，并没有作为 canonical starter / 可直接复用的学生 oracle 一起发布；因此学生仍必须在自己的 candidate 上重新产生 fail-before / pass-after、compatibility、negative-control 与 rollback evidence，不能把这里记录的 `14 passed` 当作自己的 acceptance evidence。
+这些结果是 historical reference path 的真实 evidence，但**不是当前 clarified Capstone contract 的完整 acceptance proof**。当时的 8 个 focused tests 只验证了 v1-v1 claim single winner，没有验证 mixed v1-v2 concurrent arbitration；historical manual `operator_requeue()` 的 stale-v1-finish history也仍是被明确保留的 residual risk，而不是 reference 已消除的 guarantee。Reference solution 当时存在于临时 solution copy，并没有作为 canonical starter / 可直接复用的学生 oracle 一起发布；因此学生仍必须在自己的 candidate 上重新产生 v1-v1 / v1-v2（必要时 v2-v2）claim history、compatibility、v2 fencing、legacy manual-requeue residual-risk、negative-control 与 rollback evidence，不能把这里记录的 `14 passed` 当作自己的 acceptance evidence。
 
 ---
 

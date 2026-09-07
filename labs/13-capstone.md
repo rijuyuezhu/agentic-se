@@ -103,11 +103,12 @@ submission/02-decision-delta.md
 对 D1–D7 至少标记 `I FOUND IT` / `I PARTIALLY FOUND IT` / `I MISSED IT`，并解释差异。必须覆盖：
 
 - arbitrary-command exactly-once 被撤回，automatic recovery 是 at-least-once；
+- current-attempt fencing guarantee 只覆盖 v2 attempt protocol；legacy/manual v1 requeue/reclaim 保留 stale-completion residual risk；
 - legacy submit 保持原 response，默认 manual recovery；
 - 新 opt-in `automatic_at_least_once` surface；
 - monotonic attempt identity 与 fenced heartbeat / finish；
-- v1 finish 只能完成 legacy attempt；
-- existing claim race 必须在 mixed rollout 前修复；
+- v1 finish 只能完成 legacy attempt，但不能区分 manual requeue 前后的两个 legacy executions；
+- existing v1-v1 claim race 必须在 mixed rollout 前修复；mixed window 中所有 active claim protocols 还必须共享 single-winner invariant；
 - Expand → protocol migration → activation gate → later Contract；
 - post-v2 state 下不再承诺任意 old-server binary rollback。
 
@@ -144,7 +145,7 @@ submission/05-design-memo.md
 | Surface | Existing contract | New contract | Must remain | Explicit non-guarantee |
 |---|---|---|---|---|
 
-至少覆盖 legacy submit、v2 opt-in submit、v1 claim、v1 finish、v2 claim、v2 heartbeat、v2 finish、automatic recovery、schema migration、rollback。
+至少覆盖 legacy submit、v2 opt-in submit、v1 claim、v1 finish、v2 claim、v2 heartbeat、v2 finish、automatic recovery、schema migration、rollback。并把三个跨 surface obligation 单独写清：v2 current-attempt fencing 的 guarantee scope；historical legacy/manual `operator_requeue()` 的 unfenced stale-completion residual risk；mixed v1/v2 claim entry points 共享 queued-row single-winner invariant。
 
 必须明确写出：
 
@@ -157,13 +158,13 @@ for arbitrary commands.
 
 ### Design memo
 
-至少回答 current problem、desired semantics、preserved semantics、non-goals、claim atomicity、attempt/fencing design、recovery policy、schema evolution、protocol compatibility、activation gate、rollback boundary、external-effect residual risk 与 rejected alternatives。
+至少回答 current problem、desired semantics、preserved semantics、non-goals、claim atomicity、mixed-protocol ownership、v2 attempt/fencing design、legacy manual-requeue residual risk、recovery policy、schema evolution、protocol compatibility、activation gate、rollback boundary、external-effect residual risk 与 rejected alternatives。
 
 比较至少两个真正 plausible implementation shape，例如 jobs-table attempt columns vs separate attempts table，或 conditional update vs explicit transaction。Reference shape 不是规范；荒谬 strawman 也不算 design comparison。
 
 ## 5. Phase 4 — State machine 与 compatibility matrix
 
-把 current execution 明确建模。Human decision 之后，一条最小 conceptual state path 是：
+把 **v2 current execution** 明确建模。Human decision 之后，一条最小 conceptual state path 是：
 
 ```text
 queued
@@ -185,7 +186,7 @@ running(a1)
 submission/06-compatibility-matrix.md
 ```
 
-至少分析：old server + schema v1；new server 在 migration 前面对 schema v1；old server + expanded schema；new server + old worker；new server + new worker；mixed workers；以及 **v2 attempt state 已经出现后切回 old server**。最后一行不能因为旧代码能读 column 就直接写 `PASS`。
+至少分析：old server + schema v1；new server 在 migration 前面对 schema v1；old server + expanded schema；new server + old worker；new server + new worker；mixed workers；historical legacy manual requeue；以及 **v2 attempt state 已经出现后切回 old server**。`mixed workers` 行必须明确 claim ownership 是否跨 v1/v2 entry point single-winner；manual-requeue 行必须明确它是 residual-risk exception 而非 v2 fenced recovery。最后一行不能因为旧代码能读 column 就直接写 `PASS`。
 
 ## 6. Phase 5 — Staged plan 与 Agent delegation
 
@@ -202,9 +203,9 @@ submission/08-agent-plan.md
 
 ```text
 S0 characterize
-S1 fix v1 claim atomicity
+S1 fix v1-v1 claim atomicity
 S2 schema expand
-S3 dual worker protocol + attempt fencing
+S3 dual worker protocol + cross-protocol claim ownership + v2 attempt fencing
 S4 opt-in automatic_at_least_once submission
 S5 observability + activation gate
 S6 automatic recovery activation
@@ -231,9 +232,11 @@ Implementation 可以使用 Agent，但一个 stage 完成后先保存 raw evide
 
 最终 `EVIDENCE.md` 必须把 claim 映射到 command、observed result、negative control / limitation。以下八组 evidence 都是 mandatory；实现 shape 可以不同。
 
-### A. Existing claim race：fail-before / pass-after
+### A. Claim ownership across the migration window：fail-before / pass-after
 
-Baseline 已稳定得到两个 success receipts。修复后在无额外 DB fault 的 deterministic interleaving 中，应只有一个 caller 成功 claim 该 queued row；更一般的 safety claim 是同一 queued row **at most one successful receipt**。只展示 final row 一个 worker 不算 pass-after。
+Baseline 已稳定得到 v1-v1 两个 success receipts。先证明修复后的 v1-v1 deterministic interleaving 对同一 queued row 最多一个 success receipt；只展示 final row 一个 worker 不算 pass-after。
+
+然后把同一个 invariant 扩到 mixed protocol coexistence：至少 deterministic 构造 **v1 claimant vs v2 claimant** 同时竞争同一 queued row，并证明最多一个 success receipt。若 v2 使用与 v1 不同的 claim path，还要说明并验证 v2-v2；若多个 entry point 最终共享同一原子 ownership primitive，也要用 history evidence 证明这个共享确实覆盖所有 active protocol，而不是只从代码形状推断。
 
 ### B. Schema Expand + frozen v1 consumer
 
@@ -263,15 +266,17 @@ attempt 1 claim
 
 ### D. Legacy finish compatibility
 
-Migration window 中，v1 `job_id + exit_code` completion 仍可完成 legacy attempt；同一个 handler 不得完成已经进入 v2 attempt protocol 的 row。否则 compatibility path 会绕过 fencing。
+Migration window 中，v1 `job_id + exit_code` completion 仍可完成 legacy attempt；同一个 handler 不得完成已经进入 v2 attempt protocol 的 row。否则 compatibility path 会绕过 **v2** fencing。
+
+同时必须把另一条边界写进 evidence：v1 payload 没有 attempt / worker identity，因此它不能区分 `legacy A claim → operator_requeue → legacy B claim → A late finish`。本题 human decision 明确把这条 historical manual-requeue path 留作 migration residual risk，而不是 current-attempt fencing guarantee。至少重放 baseline stale-finish history，并在 contract / rollout artifact 中标成 residual risk，而不是把它误判成 v2 fencing regression。
 
 ### E. Recovery policy
 
-证明 legacy/default `manual` job 即使 lease expired 也不会被 automatic sweeper requeue；只有显式 opt-in automatic job 才能按授权 policy requeue。
+证明 legacy/default `manual` job 即使 lease expired 也不会被 automatic sweeper requeue；只有显式 opt-in automatic job 才能按授权 policy requeue。另写清 historical `operator_requeue()` 是人工 emergency exception：如果 migration window 中使用它，operator 必须接受/记录 unfenced legacy stale-completion 风险；对 duplicate execution 不可接受且没有 effect-owner idempotency/fencing 的 workload，rollout/operator plan 不得把这条 escape hatch 当作安全 recovery。实现也不能把“manual”偷换成“安全 fenced retry”。
 
 ### F. External-effect negative control
 
-主动构造两个 attempts 各自产生一次 external effect，同时 stale finish 仍被正确 fence。这个 test/probe 的期望结果是“duplicate effect 仍可能发生”。它验证的是 non-guarantee，不是要求你把它修成 exactly-once。
+主动构造两个 **v2 attempts** 各自产生一次 external effect，同时 stale v2 finish 仍被正确 fence。这个 test/probe 的期望结果是“duplicate effect 仍可能发生”。它验证的是 non-guarantee，不是要求你把它修成 exactly-once。
 
 ### G. Activation gate
 
@@ -304,11 +309,11 @@ submission/09-production-evidence.md
 submission/10-rollout.md
 ```
 
-Production evidence plan 至少定义：legacy worker inventory、running legacy attempts、v1/v2 claim success、stale finish / heartbeat rejection、automatic requeue、manual-policy violation，以及 recovery gate state。对每个 signal 写清它支持哪个 decision、适合 metric/event/log 哪一种表示、有什么 cardinality 风险。
+Production evidence plan 至少定义：legacy worker inventory、running legacy attempts、v1/v2 claim success、mixed-protocol claim conflicts/single-winner evidence、v2 stale finish / heartbeat rejection、automatic requeue、manual-policy violation、legacy manual-requeue usage/residual-risk event，以及 recovery gate state。对每个 signal 写清它支持哪个 decision、适合 metric/event/log 哪一种表示、有什么 cardinality 风险。
 
 `job_id / attempt / worker_id` 可以保留在 diagnostic events 做 correlation；不要把 `job_id` 当 aggregate metric label。
 
-Rollout plan 至少写三阶段：Expand、Protocol Migration、Activation。每阶段写 entry condition、exit condition、failure action 与 rollback/reversal semantics。对 stale rejection spike、legacy worker重新出现、manual job 被自动 requeue、migration partial failure 等 scenario 给 operator action。
+Rollout plan 至少写三阶段：Expand、Protocol Migration、Activation。每阶段写 entry condition、exit condition、failure action 与 rollback/reversal semantics。对 mixed claim ownership violation、v2 stale rejection spike、legacy worker 重新出现、manual job 被 automatic sweeper requeue、legacy manual requeue 后出现 ambiguous/stale completion、migration partial failure 等 scenario 给 operator action。
 
 不要把 activation 写成“星期二十点开开关”。它必须引用 Phase 8 的 observable gate 和当前 rollback boundary。
 
@@ -320,10 +325,10 @@ Review 至少重建七类问题：
 
 | Area | 必查问题 |
 |---|---|
-| Issue / contract | 有没有重新声称 exactly-once？legacy submit/default recovery 是否漂移？ |
-| State authority | current attempt 是否唯一？legacy handler 能否绕过 fencing？ |
-| Concurrency | v1 claim linearization、expiry vs finish、stale heartbeat 是否有 history evidence？ |
-| Migration | Expand 是否真的由 frozen old artifact 验证？mixed-version path 与 gate 是否成立？ |
+| Issue / contract | 有没有重新声称 exactly-once？v2 fencing scope、legacy manual-requeue residual risk、legacy submit/default recovery 是否被准确表达？ |
+| State authority | v2 current attempt 是否唯一？legacy handler 能否绕过 v2 fencing？是否错误声称 v1 manual requeue 也有 fencing identity？ |
+| Concurrency | v1-v1、v1-v2（以及独立 v2 path 的 v2-v2）claim 是否共享 single-winner history？expiry vs finish、stale heartbeat 是否有 evidence？ |
+| Migration | Expand 是否真的由 frozen old artifact 验证？mixed-version claim/finish path、legacy manual exception 与 gate 是否成立？ |
 | Rollback | 哪个 phase 可 old-binary rollback，哪个 state 之后不能？ |
 | Evidence | 有没有 fail-before、negative control、version-scoped oracle、残余 uncertainty？ |
 | Scope | 是否出现无 authority 的 infrastructure、cleanup、v1 deletion 或 guarantee change？ |
@@ -374,7 +379,7 @@ submission/
 EVIDENCE.md
 ```
 
-`EVIDENCE.md` 至少记录 baseline pytest、baseline probe、race fail-before/pass-after、schema expand + frozen old artifact、stale finish/heartbeat fencing、legacy finish boundary、manual-vs-automatic recovery、external duplicate negative control、activation gate、rollback boundary 与最终 focused/full test commands。不要只写“见 CI”。
+`EVIDENCE.md` 至少记录 baseline pytest、baseline probe、v1-v1 race fail-before/pass-after、mixed v1-v2 single-winner evidence（独立 v2 path 再含 v2-v2）、schema expand + frozen old artifact、v2 stale finish/heartbeat fencing、legacy finish boundary、legacy manual-requeue stale-completion residual history、manual-vs-automatic recovery、external duplicate negative control、activation gate、rollback boundary 与最终 focused/full test commands。不要只写“见 CI”。
 
 Instructor analysis 只有完成自己的 submission 后再读：[`../case-studies/m13/instructor-analysis.md`](../case-studies/m13/instructor-analysis.md)。它是一条 reference reasoning path，不是标准实现。
 

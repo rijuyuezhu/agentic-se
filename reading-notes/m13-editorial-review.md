@@ -83,10 +83,10 @@ Important merge-base claims retained:
 - Historical v1 finish payload is `job_id + exit_code` and cannot fence a stale execution.
 - Automatic retry for arbitrary external commands cannot by itself prove exactly-once external effects.
 - Human decision D1–D7 remains the normative Capstone contract.
-- Legacy submit response remains unchanged and defaults to manual recovery.
+- Legacy submit response remains unchanged and defaults to manual recovery; historical `operator_requeue()` remains an unfenced migration residual-risk path rather than being silently upgraded to safe retry.
 - `automatic_at_least_once` is explicit opt-in.
-- New protocol has current-attempt fencing; legacy completion can only complete legacy attempt.
-- Existing v1 claim race must be fixed before mixed rollout.
+- v2 protocol has current-attempt fencing; legacy completion can only complete legacy attempt, but cannot distinguish two legacy executions separated by manual requeue.
+- Existing v1-v1 claim race must be fixed before mixed rollout, and all active v1/v2 claim entry points must then share the same queued-row linearizable single-winner invariant.
 - Reference representation defaults (`attempt=0`, nullable lease, `manual`) retain their migration-specific qualifiers and are not presented as universal schema rules.
 - CAS / conditional update is a reference implementation choice, not the contract; transaction or other equivalent atomic decision remains possible.
 - State fencing and external-effect dedup/fencing remain separate authorities.
@@ -149,17 +149,17 @@ The Lab was rewritten as an execution document rather than prose chapter. The re
 11. human adjudication / merge-rollout closure;
 12. retrospective.
 
-The eight mandatory evidence clusters preserve the old Lab's A–H obligations: claim race, schema Expand/frozen v1, attempt fencing, legacy finish boundary, recovery policy, external duplicate negative control, activation gate, rollback boundary.
+The eight mandatory evidence clusters preserve the old Lab's A–H structure. After PR review, cluster A was strengthened from v1-v1 claim repair to the migration-window ownership invariant (v1-v1 + mandatory v1-v2, plus v2-v2 when it has an independent path); D/E now also require the historical legacy-manual-requeue stale-finish history to remain explicit residual-risk evidence rather than disappearing behind the v2 fencing claim.
 
 The final submission layout remains twelve numbered artifacts plus `EVIDENCE.md`. M13 remains 30% of the course grade; its internal rubric remains 100 points with the original 20/15/15/15/15/10/10 distribution, and the merge-base automatic deductions keep their original -20/-20/-15/-15/-10/-10 weights.
 
 ## 8. Instructor-reference provenance clarification
 
-The old source audit and instructor case already said the reference implementation was run in a **temporary solution copy** and recorded `14 passed`, frozen-v1 Expand compatibility, duplicate external effects despite state fencing, and an unsafe old-server rollback counterexample after v2 activation.
+The old source audit and instructor case already said the reference implementation was run in a **temporary solution copy** and recorded `14 passed`, frozen-v1 Expand compatibility, duplicate external effects despite v2 state fencing, and an unsafe old-server rollback counterexample after v2 activation.
 
-A provenance clarification was added: that temporary reference solution is not shipped as the canonical starter/student oracle. Therefore its recorded `14 passed` is instructor reference evidence, not evidence a student can cite for their own candidate. Student acceptance still requires independently generated runtime evidence in their working copy.
+The first rewrite correctly clarified that this temporary solution is not shipped as the canonical starter/student oracle. The follow-up review exposed a second provenance boundary: those historical 8 focused tests covered v1-v1 claim single-winner but did **not** cover v1-v2 concurrent arbitration. Because D4 is now made explicit at the actual mixed-protocol scope, the `14 passed` record is preserved as truthful historical evidence for the claims it tested, but is no longer described as complete evidence for the clarified current contract.
 
-This does not change the historical reference claim; it narrows how that claim may be used.
+Student acceptance therefore requires independently generated mixed-protocol claim evidence as well as the existing compatibility/fencing/rollback evidence. The baseline legacy `operator_requeue()` stale-finish history is also retained as evidence of an intentionally preserved migration residual risk, not rewritten as a reference failure that was historically fixed.
 
 ## 9. Abstraction dependency sweep
 
@@ -189,17 +189,28 @@ The module was reduced from a long heading/checklist index into a smaller number
 
 Compression is not itself acceptance evidence. The relevant check is whether every preserved qualifier/non-goal above remains findable and whether a cold reader encounters the need for each abstraction before its first normative use.
 
-## 12. Reviewer focus
+## 12. PR #18 review follow-up — migration-history closure
+
+The reviewer identified two symptoms of one deeper cluster. Independent diagnosis confirmed both:
+
+1. D1's broad `current-attempt state fencing` wording contradicted D2/D3's retained v1 protocol. `attempt==0` can distinguish legacy-vs-v2 state but cannot distinguish two legacy executions separated by `operator_requeue()`. Fixing the v1-v1 claim race does not repair that sequential stale-completion history.
+2. D4 and the compatibility matrix required mixed v1/v2 coexistence, while Evidence A and the historical reference tests only exercised v1-v1 claim arbitration. Per-version single-winner does not prove cross-version coexistence single-winner.
+
+The remediation deliberately does **not** invent a new legacy fencing representation or silently change `operator_requeue()`. Human decision D1-D3 now scope current-attempt fencing to v2, retain the historical manual requeue as an explicit migration residual-risk path, require its stale-completion history to stay visible in evidence/rollout/review, and prohibit treating that escape hatch as safe recovery for duplicate-sensitive workloads without effect-owner protection. D4 now states the cross-protocol queued-row single-winner invariant and requires v1-v1 + v1-v2 evidence, plus v2-v2 when v2 has an independent claim path. CAS/transaction/shared primitive remains an implementation choice.
+
+This refinement occurs entirely after the staged human-decision reveal, so it does not reintroduce the pre-decision design leak fixed by the rewrite. No canonical TaskForge starter production code or baseline probe behavior changed.
+
+## 13. Reviewer focus
 
 Independent review of this PR should particularly check:
 
 - whether the pre-decision module truly avoids leaking D1–D7 design conclusions while still explaining why the original issue is blocked;
 - whether the post-decision attempt/lease/fencing narrative distinguishes state authority from external-effect authority;
-- whether legacy `manual` recovery and v1 completion compatibility remain scoped precisely;
-- whether claim-race safety is expressed as a history property, not a final-row property;
+- whether v2 current-attempt fencing is scoped away from the unfenced legacy-manual-requeue residual history;
+- whether migration-window claim ownership is expressed as one cross-protocol history invariant, with mandatory v1-v2 evidence rather than only v1-v1;
 - whether migration distinguishes representation expand, protocol coexistence, semantic activation, and later contract removal;
 - whether frozen-old evidence and rollback boundary keep their phase qualifiers;
 - whether the Lab still contains all eight required evidence obligations and remains directly executable by a student;
 - whether independent verification / Review Agent / human adjudication preserve the M12 authority model;
-- whether the instructor reference is clearly non-canonical and its historical `14 passed` record is not offered as student acceptance evidence;
+- whether the instructor reference is clearly non-canonical and its historical `14 passed` record is both non-student evidence and explicitly incomplete for the clarified mixed v1/v2 claim obligation;
 - whether no new external normative claim was introduced beyond the existing M13 source audit.

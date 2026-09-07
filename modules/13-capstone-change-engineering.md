@@ -63,17 +63,17 @@ M13 故意把 human decision 放在 `decision-pack/01-after-issue-review.md`，�
 
 冻结 first-pass review 后，再读取 human decision。当前 canonical decision 做了七件关键事：
 
-- 撤回 arbitrary command exactly-once guarantee；TaskForge 只承诺 current-attempt state fencing，自动 recovery 的执行语义是 at-least-once。
-- 保持 legacy `submit_job(command)` 的 response shape，并令旧 submission 默认 `recovery_policy=manual`。
+- 撤回 arbitrary command exactly-once guarantee；**v2 attempt protocol** 才承诺 current-attempt state fencing，自动 recovery 的执行语义是 at-least-once。
+- 保持 legacy `submit_job(command)` 的 response shape，并令旧 submission 默认 `recovery_policy=manual`；historical `operator_requeue()` 仍是 migration emergency path，但 legacy completion 没有 execution identity，因此这条 path 保留 stale-completion / duplicate-execution residual risk，不属于 v2 fencing guarantee。对 duplicate execution 不可接受、又没有 effect-owner protection 的 workload，它不能被当作安全 recovery。
 - 允许新增显式 opt-in 的 `automatic_at_least_once` submission surface。
 - 新 worker protocol 引入 monotonic attempt identity；heartbeat / finish 必须携带 `job_id + attempt + worker_id`。
-- v1 completion 在 migration window 继续存在，但只能完成 legacy attempt，不能绕过新 fencing。
-- mixed rollout 之前先修现有 v1 claim race，并把 schema expand、protocol migration、recovery activation 分阶段。
+- v1 completion 在 migration window 继续存在，但只能完成 legacy attempt；这只能隔离 legacy-vs-v2 domain，不能把两次 manual-requeue 前后的 legacy execution 区分开。
+- mixed rollout 之前先修现有 v1-v1 claim race；进入 mixed window 后，所有 active claim entry point 还必须共享 queued-row single-winner invariant。Schema expand、protocol migration、recovery activation 继续分阶段。
 - 收窄 rollback guarantee：Expand-only 阶段以 old-binary compatibility 为目标；一旦 v2 attempt semantics 已经写入系统状态，就不再承诺简单切回旧 server binary。
 
 这组 decision 是本 Capstone 的 normative teaching contract。它不是从“lease 最佳实践”自然推导出的唯一设计，也不是 implementation Agent 可以自行发明的答案。
 
-## 4. Human decision 之后，attempt 才成为 current-execution authority
+## 4. Human decision 之后，v2 attempt 才成为 current-execution authority
 
 现在才有足够 authority 去解释 `attempt` 为什么重要。一个 logical job 可以被执行多次；TaskForge 需要区分 `job-7 / attempt 1` 与 `job-7 / attempt 2`，并决定哪一个 execution 仍有权提交 heartbeat 或 terminal transition。
 
@@ -85,21 +85,21 @@ AND job.current_attempt == payload.attempt
 AND job.current_worker == payload.worker_id
 ```
 
-实现不要求照抄这个 predicate，也不要求使用特定 CAS primitive。关键 contract 是：旧 attempt 在新 attempt 接管后不能再修改 current lifecycle state。
+实现不要求照抄这个 predicate，也不要求使用特定 CAS primitive。关键 contract 是：旧 **v2** attempt 在新 v2 attempt 接管后不能再修改 current lifecycle state。
 
-这也给 lease 一个更精确的语义。Lease 不是证明“旧进程已经停止”；它是 TaskForge 判断 current execution authority 的期限。Expiry 后，系统可以依据 recovery policy 撤销旧 attempt 的 current authority，并允许新 attempt 接管；旧 attempt 晚到的 heartbeat / finish 必须被 fence 掉。
+这也给 **v2 lease** 一个更精确的语义。Lease 不是证明“旧进程已经停止”；它是 TaskForge 在 v2 attempt protocol 中判断 current execution authority 的期限。Expiry 后，系统可以依据 recovery policy 撤销旧 v2 attempt 的 current authority，并允许新 attempt 接管；旧 v2 attempt 晚到的 heartbeat / finish 必须被 fence 掉。这段 contract 不倒推到没有 execution identity 的 legacy/manual v1 requeue path。
 
 Reference schema 选择在 `jobs` 上增加 `attempt DEFAULT 0`、nullable `lease_expires_at`、`recovery_policy DEFAULT 'manual'`。这里的 `attempt=0` 是 migration sentinel，`manual` default 则保护 legacy submit semantics。另一种 schema，例如 separate attempts table，也完全可以成立；课程评分的是 authority 与 migration semantics，而不是结构与 reference 相同。
 
-## 5. State fencing 仍然没有拥有 external effect
+## 5. v2 state fencing 仍然没有拥有 external effect
 
 现在可以重新回到最初的 exactly-once 冲突。假设 attempt 1 已经执行 `charge-card`，然后 lease expires；attempt 2 再执行一次。即使 attempt 1 的 late finish 被正确拒绝，外部世界仍可能已经发生两次扣款。
 
-这不是 attempt fencing 的失败。它说明两个 authority 不同：TaskForge 可以拥有 lifecycle state 的 current-attempt authority；支付系统、对象存储或其它 effect owner 才可能拥有外部副作用的 dedup / fencing semantics。
+这不是 v2 attempt fencing 的失败。它说明两个 authority 不同：TaskForge 可以在 v2 protocol 内拥有 lifecycle state 的 current-attempt authority；支付系统、对象存储或其它 effect owner 才可能拥有外部副作用的 dedup / fencing semantics。
 
 如果 effect owner 支持 logical-job idempotency key、attempt fencing token 或其它 transactional integration，可以设计更强的 workload-specific guarantee。但 TaskForge 的 arbitrary shell-command boundary 本身没有这些 knowledge。
 
-因此 Capstone 必须保留一个反直觉的 **negative control**：构造两个 execution attempts 都产生 external effect，同时证明 TaskForge 仍然正确拒绝 stale state transition。这个 probe 通过，不表示实现坏了；它证明 acceptance statement 没有偷偷把 state fencing 夸成 external exactly-once。
+因此 Capstone 必须保留一个反直觉的 **negative control**：构造两个 v2 execution attempts 都产生 external effect，同时证明 TaskForge 仍然正确拒绝 stale v2 state transition。这个 probe 通过，不表示实现坏了；它证明 acceptance statement 没有偷偷把 v2 state fencing 夸成 external exactly-once。
 
 这条 distinction 也解释了为什么“把 claim/execute/finish 全放一个 SQLite transaction”或“换成 Kafka”都不能自动解决原 contradiction。SQLite transaction 不拥有远端副作用；broker 可以改变 delivery/coordination failure surface，但 lost acknowledgement 之后的 external effect ambiguity 仍然存在。反过来，简单地永远禁止 retry 也不符合 human decision 已授权的 opt-in automatic at-least-once recovery。
 
@@ -131,7 +131,7 @@ Instructor reference 曾在临时 solution copy 中记录两条直接证据：Ex
 
 Capstone starter 已经有 `SELECT candidate → later UPDATE` 的 v1 claim race。如果直接在这个 protocol 上叠 lease，新的 recovery feature 会继承旧的非法 history。
 
-一个合理的早期 stage 是先把 v1 claim 修成 single-winner，同时完全保留 v1 response shape。Reference 用 conditional update；`BEGIN IMMEDIATE` transaction 或其它等价原子 decision 也可以。需要证明的是行为：一个 queued job 面对 concurrent claim calls，最多一个 caller 获得该 row 的 success receipt。
+一个合理的早期 stage 是先把 v1-v1 claim 修成 single-winner，同时完全保留 v1 response shape。Reference 用 conditional update；`BEGIN IMMEDIATE` transaction 或其它等价原子 decision 也可以。但一旦 v2 claim entry point 加入 migration window，contract 不能退化成“每个 protocol 各自 single-winner”：同一个 queued row 面对所有同时 active 的 claim calls，最多一个 caller 获得 success receipt。至少要有 deterministic v1-v1 与 v1-v2 evidence；如果 v2 使用独立 claim path，也要说明/验证 v2-v2。这里要求的是 history invariant，不指定共享哪种 primitive。
 
 这体现 M05 的 change topology：先把独立、已知的 protocol defect 收敛，再引入需要 migration 的新 semantics。不是因为“小 PR”本身更道德，而是这样每一步的 claim、evidence 与 rollback/reversal boundary 都更清楚。
 
@@ -164,21 +164,21 @@ Independent Review Agent 不应只消费 implementation Agent 的 final summary�
 | Claim | 必须能看到的 evidence | 关键反例 / limitation |
 |---|---|---|
 | v1 API contract preserved | old-client characterization | unknown external clients 仍是 residual uncertainty |
-| v1 claim becomes single-winner | deterministic fail-before / pass-after history | final row 唯一不够 |
+| migration-window claim is single-winner | deterministic v1-v1 + v1-v2 history；独立 v2 path 再覆盖 v2-v2 | 各 protocol 单独绿不等于 coexistence history 合法 |
 | schema Expand 对旧 binary 可用 | frozen v1 code 实际读写 expanded DB | schema readable 不等于 post-activation safe |
-| stale v2 finish / heartbeat 被 fence | attempt1 → expiry → attempt2 → stale message | compatibility handler 不能绕过 fencing |
-| legacy jobs 仍是 manual | expired manual job 不被 sweeper requeue | automatic opt-in 是另一 contract |
+| stale v2 finish / heartbeat 被 fence | attempt1 → expiry → attempt2 → stale message | compatibility handler 不能绕过 v2 fencing |
+| legacy jobs 仍是 manual | expired manual job 不被 sweeper requeue；记录 manual-requeue residual history | v1 manual requeue 不具 current-execution fencing guarantee |
 | activation 有真实 gate | blocker state closes gate; clean state may open | inventory freshness 仍需运营保证 |
 | external exactly-once 未被声称 | duplicate-effect negative control | 更强 guarantee 需要 effect-owner mechanism |
 | rollback boundary 被识别 | expand-only old binary works；post-v2 old server counterexample | binary rollback != system rollback |
 
 Concurrency test 应控制 interleaving，而不是靠 `sleep()` 赌 timing。Compatibility test 应尽量运行真实 frozen consumer/binary，而不是让新代码自己模拟 `legacy=True`。Negative control 的任务则是证明某个 **non-guarantee** 仍然真实存在，避免测试套件只会证明自己写下的 happy path。
 
-Production evidence 同样要服务 decision。当前 teaching contract 至少需要能回答：还有多少 legacy workers？是否仍有 legacy running attempts？stale finish/heartbeat 是否被拒绝？automatic requeue 是否只影响 opt-in jobs？activation gate 是否满足？`job_id / attempt / worker_id` 很适合 diagnostic event correlation，但不应机械成为 aggregate metric 的高基数 label。
+Production evidence 同样要服务 decision。当前 teaching contract 至少需要能回答：还有多少 legacy workers？是否仍有 legacy running attempts？mixed v1/v2 claim 是否维持 single-winner？v2 stale finish/heartbeat 是否被拒绝？automatic requeue 是否只影响 opt-in jobs？migration window 中是否发生/使用了具有已知 stale-completion 风险的 legacy manual requeue？activation gate 是否满足？`job_id / attempt / worker_id` 很适合 diagnostic event correlation，但不应机械成为 aggregate metric 的高基数 label。
 
 ## 12. Review 与 rollout 是 change acceptance 的最后两道不同问题
 
-Independent review 至少要重新检查 contract、authority、concurrency、migration、rollback、evidence 与 scope。一个典型 blocker 是：实现已经有 attempt fencing，但 README 又写回“exactly-once guaranteed”；另一个是：schema migration 是 additive，于是作者直接宣称 post-activation old-binary rollback safe。前者夸大 guarantee，后者把 representation compatibility 错当 semantic compatibility。
+Independent review 至少要重新检查 contract、authority、concurrency、migration、rollback、evidence 与 scope。典型 blocker 包括：实现已有 v2 attempt fencing，却把它写成所有 legacy/manual executions 都被 fenced；v1/v2 各自 claim test 都绿，却没有 cross-protocol single-winner evidence；README 又写回“exactly-once guaranteed”；或者 schema additive 就直接宣称 post-activation old-binary rollback safe。这些分别混淆 guarantee scope、coexistence history、external-effect authority 与 representation compatibility。
 
 Reviewer 也不能把个人偏好升级成 blocker。Separate attempts table、transaction vs conditional update、文件名、是否使用 Postgres，都只有在能连到 contract、invariant、migration、failure 或 maintainability consequence 时才构成 finding。
 
@@ -186,9 +186,9 @@ Review closure 后仍不能把 rollout 写成“deploy succeeded”。Activation
 
 ## 13. Reference 是一条可行 path，不是答案结构
 
-Instructor reference 选择单 SQLite jobs table、conditional claim、monotonic attempt、nullable lease expiry、manual default、dual worker protocol 与 activation gate。它在临时 solution copy 中记录了 `14 passed`（6 个 baseline + 8 个 focused tests），并记录 frozen-v1 expand compatibility、external duplicate negative control 与 post-v2 old-server rollback counterexample。
+Instructor reference 选择单 SQLite jobs table、conditional claim、monotonic attempt、nullable lease expiry、manual default、dual worker protocol 与 activation gate。它在临时 solution copy 中记录了 `14 passed`（6 个 baseline + 8 个 focused tests），并记录 frozen-v1 expand compatibility、external duplicate negative control 与 post-v2 old-server rollback counterexample；但那组 focused tests 只验证了 v1-v1 claim single-winner，没有覆盖当前 contract 明确要求的 v1-v2 concurrent arbitration。
 
-这些结果的 provenance 记录在 [`../reading-notes/m13-source-audit.md`](../reading-notes/m13-source-audit.md) 与 instructor analysis 中。Reference solution 本身不是 canonical starter，也不是学生可以拿来替代自己 evidence 的 oracle。你可以采用 transaction、separate attempts table 或其它等价结构，只要自己的 contract、compatibility、history、migration、rollback 与 production evidence 闭合。
+这些结果的 provenance 记录在 [`../reading-notes/m13-source-audit.md`](../reading-notes/m13-source-audit.md) 与 instructor analysis 中。Historical `14 passed` 只证明它实际覆盖的局部 claims，不是 clarified current contract 的完整 acceptance proof；reference solution 本身也不是 canonical starter 或学生 oracle。你可以采用 transaction、separate attempts table 或其它等价结构，只要自己的 contract、mixed-protocol ownership history、compatibility、v2 fencing、legacy residual risk、migration、rollback 与 production evidence 闭合。
 
 Reference 也没有解决真实 scheduler 的所有问题：clock uncertainty、worker authentication、DB corruption recovery、多 server heavy contention、真实 worker inventory、external-effect idempotency、operator UI、schema downgrade tooling 与 v1 protocol removal 都仍在 scope 外。Capstone 的目标不是把这个教学系统伪装成 production-grade scheduler。
 
