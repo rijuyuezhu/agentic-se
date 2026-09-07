@@ -469,6 +469,16 @@ must repair.
 
 短并不等于 shallow。这里已经包含 change model、root cause、severity、counterexample、downstream consequence 与 scope discipline。
 
+但这份 **first-pass Request Changes** 也不应被误读成“找到 semantic center 的两个 blocker，所以其它 assigned code 永远不用看”。Risk-first 的收益是尽早发送会导致大规模 rework 的 broad feedback。等 candidate 修到可能被 approve 的状态时，reviewer 仍要完成自己承担的剩余 human-written scope，并检查 maintainability / readability / understandability / complexity 等 code-health concerns；如果只承担 partial review，要明确披露并确认其他 reviewer 覆盖剩余部分。
+
+本 case 恰好没有需要单独展示的 Medium finding，但课程 canonical severity 仍是 `Blocker / Medium / Nit`：
+
+- Blocker：material acceptance claim 失败或有 merge 前必须关闭的不可接受风险；
+- Medium：有具体 evidence/material consequence，通常应在本 CL 修，但单独未必否定整份 change；
+- Nit：non-mandatory polish。
+
+`Important / Should fix` 可以作为 Medium 的 wording alias；`FYI` / `Optional` 是 comment intent，不是新的 severity 档。
+
 ## 17. Re-review 时不能只看 thread resolved
 
 如果 author 发新 patch set 说“fixed all comments”，我会：
@@ -479,7 +489,9 @@ must repair.
 4. review 新/改 tests，确认不是只改 expected；
 5. 确认 normal authority-localization goal 仍成立；
 6. 检查是否偷带新的 behavior scope；
-7. 重新判断 residual risk，而不是复用旧 approval。
+7. 完成尚未覆盖的 assigned human-written implementation，并重新检查 code health；
+8. 若存在 partial/specialist scope，确认相应 qualified reviewer 已覆盖；
+9. 重新判断 residual risk，而不是复用旧 approval。
 
 Stale approval 是真实 review failure mode：conversation 被 resolve 不等于 system claim 已成立。
 

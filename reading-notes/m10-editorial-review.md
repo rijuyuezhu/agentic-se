@@ -236,7 +236,7 @@ behavior change is undeclared and packaged into a structural CL
 
 `m10-source-audit.md` 已把主要 source roles 分开：
 
-- Google Engineering Practices：code-health standard、broader-context review、review tests、risk-first navigation、small/coherent CL、description quality；
+- Google Engineering Practices：code-health standard、broader-context review、review tests、risk-first navigation、assigned human-written scope coverage / partial-scope disclosure、qualified-reviewer coverage、small/coherent CL、description quality；
 - *Software Engineering at Google* Ch.9：code review 的长期价值与不同 change type；
 - Gerrit：machine `Verified` 与 human `Code-Review` 作为不同 workflow signal；
 - Stanford CS190：knowledge hiding/leakage、interface、modularity review；
@@ -257,7 +257,7 @@ JobAuthority name = authority isolation proof
 
 ```text
 PR as bounded engineering argument
-review funnel
+risk-first funnel = prioritization, not sampling
 claim -> oracle -> evidence -> residual risk -> decision
 root-cause aggregation
 job-9 -> job-10 partition
@@ -265,6 +265,8 @@ historical probe lifetime classification
 corrected CL topology
 Agent tool-output laundering framing
 ```
+
+Severity taxonomy 则不是随意 synthesis：`COURSE_DESIGN.md` 的 canonical 教学 contract 是 `Blocker / Medium / Nit`。本章允许 `Important / Should fix` 作为 Medium wording alias，`Optional / FYI` 作为额外 comment intent，但不能替换 canonical 三档。
 
 ## 9. Cold-reader rewrite decisions
 
@@ -314,7 +316,12 @@ context beyond diff
 
 - review 一个 CI green 但有 semantic/architecture consequence 的 PR；
 - review issue/change contract 本身；
-- 写 blocker / important / nit / FYI 的 evidence standard。
+- 写 **Blocker / Medium / Nit** 的 evidence standard。`Important / Should fix` 只作为 Medium alias；Optional/FYI 是额外 comment intent。
+
+PR #15 follow-up review 又暴露两处压缩 drift，本轮独立核验后一起闭环：
+
+1. **risk-first coverage**：先看 semantic center 是 prioritization，不是 sampling。最终 approval 前一般仍完成 assigned human-written scope；partial review 明确披露，specialist area 由 qualified reviewer 覆盖。Code health（maintainability/readability/understandability/complexity）仍是 mandatory engineering judgment，不能与 nits 合并。
+2. **severity authority**：`COURSE_DESIGN.md` 的 canonical taxonomy 是 `Blocker / Medium / Nit`，不能由 editorial record 偷换成另一套 label。
 
 M11 leakage sweep 只保留显式桥接句：Agent reviewer 可以做 comparison，但 task decomposition / parallel reviewer-implementer / merge conflicts 明确留到 M11。
 
@@ -363,10 +370,11 @@ Hygiene / structure：
 git diff --check = PASS
 relative Markdown links = PASS
 changed Markdown fences = balanced
-module = 650 lines / 1 H1 / 0 page-level separator
-Lab = 620 lines / 1 H1 / 0 page-level separator
-instructor case = 507 lines / 1 H1 / 0 page-level separator
-editorial review = 398 lines / 1 H1 / 0 page-level separator
+module = 657 lines / 1 H1 / 0 page-level separator
+Lab = 634 lines / 1 H1 / 0 page-level separator
+instructor case = 519 lines / 1 H1 / 0 page-level separator
+source audit = 546 lines / existing 12 H1 / existing 12 source-section separators
+editorial review = 412 lines / 1 H1 / 0 page-level separator
 secret scan = no findings
 uv.lock = absent
 ```
@@ -379,6 +387,9 @@ Semantic stale-claim sweep 也重新确认：
 - four reviewer-probe symptoms 被聚合成 two root causes；
 - `KeyError -> False` blocker 的理由是 scope/contract violation，不是“False 本身一定更差”；
 - author CI green 没被写成 acceptance conclusion；
+- risk-first 没被写成“只抽查 semantic center 即可 approve”；
+- maintainability/readability/code health 没被降格成天然 nit；
+- canonical severity 保持 `Blocker / Medium / Nit`，Optional/FYI 只作 comment intent；
 - M11 orchestration 只作为显式 bridge，不是 M10 core。
 
 ## 12. Independent reviewer focus
@@ -393,6 +404,9 @@ This record is not self-approval. Reviewer should independently check at least�
 - M02/M09 authority boundary 是否精确；
 - historical probe lifetime 是否没有被滥用来忽略真实 regression；
 - source-backed claim 与 course synthesis 是否仍分开；
+- risk-first 是否明确是 prioritization 而非 sampling；approval coverage / partial-scope disclosure / specialist coverage 是否完整；
+- code health 是否与真正 nits 分开，material maintainability/readability regression 是否仍可升级 severity；
+- `Blocker / Medium / Nit` 是否与 `COURSE_DESIGN.md` canonical contract 对齐；
 - Lab reveal-probe ordering 是否仍保护 independent review；
-- grading 是否奖励 evidence/root-cause/scope，而不是 comment 数量；
+- grading 是否奖励 evidence/root-cause/scope/code-health judgment，而不是 comment 数量；
 - M11 的 agent orchestration authority 是否没有提前泄漏。

@@ -67,13 +67,11 @@ evidence
 residual risk
 ```
 
-如果某一部分你没有资格判断，例如 security、cryptography、concurrency 或某个 domain-specific contract，成熟结论不是假装全懂，而是：
+如果你只负责部分 files / aspects，也必须明确披露自己的 review scope；不能把 partial review 的 LGTM 伪装成 whole-change approval。一般情况下，最终 approval 前仍应理解自己被分配 review 的 human-written code；对超出能力范围的 specialist surface，要确认有 qualified reviewer 覆盖，例如明确写 `Need specialist review for <specific surface>`。
 
-```text
-Need specialist review for <specific surface>
-```
+Review completion 不是“所有 comment thread 都 resolved”，而是当前 change 在实际 approval scope 内的 material claims、remaining implementation 和 code-health concerns 都已有足够的独立判断者与 evidence owner。
 
-Review completion 不是“所有 comment thread 都 resolved”，而是当前 change 的 material claims 都有足够的独立判断者和 evidence owner。
+因此后面反复强调的 **risk-first** 是 review 的优先级策略，不是 sampling 策略：先找最可能推翻整份 change 的问题，可以避免低价值逐行工作；但在 change 进入可接受状态前，仍要完成自己承担的剩余 review scope。
 
 ## 3. Author description 很重要，但它只是 claim
 
@@ -181,9 +179,11 @@ matching wrong oracle
 
 然后得到漂亮的绿色 CI。
 
-## 6. 不要从第一个文件逐行扫：先找 semantic center
+## 6. Risk-first 不是抽查：先找 semantic center，再完成剩余 scope
 
-Candidate patch 的 semantic center 是新 `job_authority.py`。`service.py`、`worker.py`、`metrics.py`、`legacy_audit.py` 大部分是在 routing。
+Candidate patch 的 semantic center 是新 `job_authority.py`。`service.py`、`worker.py`、`metrics.py`、`legacy_audit.py` 大部分是在 routing。先看 semantic center，是因为它最可能决定整份 change 是否成立；**不是**因为 routing files 从此不用 review。
+
+如果 center 已经有 fundamental design/contract mismatch，应尽早反馈，避免先在将被重写的代码上花时间。反过来，如果 center 基本成立，reviewer 仍要继续检查被分配的其余 human-written change，确认 routing、tests、docs、error handling、maintainability 等没有引入新的问题。Risk-first = prioritization, not sampling.
 
 先问每个 semantic operation 是否偷偷加入了新 policy：
 
@@ -386,17 +386,21 @@ M03 某些 mutation harness 也可能绑定具体旧 source site。
 
 ## 12. Severity 是工程后果，不是语气强弱
 
-本课程建议 reviewer 明确表达 intent，例如：
+`COURSE_DESIGN.md` 要求学生能写 `Blocker / Medium / Nit` 的证据标准，因此本章把这三档作为 canonical severity：
 
 ```text
 Blocker
-Important / Should fix
+Medium        # 也可写 Important / Should fix
 Nit
-Optional / Consider
-FYI
 ```
 
-平台不必真的有这些 label。重要的是 author 能知道哪些结论阻止 merge。
+`Optional / Consider`、`FYI` 可以继续作为 comment intent，但它们不是第四、第五档 severity。平台当然不必真的提供这些 label；重要的是 author 能知道哪些问题阻止 merge、哪些 material 问题应在本 CL 修、哪些只是 polish。
+
+**Blocker**：证据表明当前 change 的 material engineering claim 不成立，或存在必须在 merge 前关闭的不可接受风险。
+
+**Medium**：有具体 evidence 和 material consequence，通常应在本 CL 修正，但该 finding 本身未必足以否定整个 change；例如局部 maintainability regression、重要但 bounded 的 missing validation，或会明显增加后续维护成本的 design issue。是否最终 blocking 仍取决于 cumulative risk，而不是 label 名字。
+
+**Nit**：非 mandatory polish / minor clarity / personal-style-adjacent improvement；缺少它不应被伪装成 code-health blocker。
 
 Blocker 通常需要连接到 material engineering consequence，例如：
 
@@ -489,10 +493,13 @@ CL 3 — future remote worker
 4. Which callers/authority/durable/failure surfaces does it touch?
 5. Do tests/probes distinguish correct from plausible-wrong implementations?
 6. What residual risk remains?
-7. Only then: maintainability, readability, nits.
+7. Review the remaining assigned implementation and code-health concerns.
+8. Only then separate true nits / optional polish from mandatory findings.
 ```
 
-如果 Stage 0–4 已经发现 fundamental mismatch，就应该尽早给 broad feedback，而不是先花四十分钟改 variable names。
+如果 Stage 0–4 已经发现 fundamental mismatch，就应该尽早给 broad feedback，而不是先花四十分钟改 variable names。这只是调整投入顺序；如果 broad design 通过，最终 approval 前仍要完成自己承担的其余 human-written scope，或明确说明 partial scope 并确认其他 reviewer 已覆盖剩余部分。
+
+这里的 **code health** 也不是 nit 的同义词。明确的 maintainability、readability、understandability、complexity regression 可以是 Medium，严重时也可以 blocking；只有真正 non-mandatory 的 polish 才是 Nit。
 
 ## 16. Reviewer probe 应该验证你的 reasoning，而不是替你 reasoning
 

@@ -353,15 +353,21 @@ superseded fitness rule
 
 ## 11. Phase J — 在 reveal probe 前写 first-pass review
 
-现在写正式 first-pass。格式可用：
+现在写正式 first-pass。**Risk-first 允许你先报告已经足以推翻当前 patch 的 finding，但它不是 sampling permission。** 如果 broad blocker 使剩余代码很可能被重写，可以先发 first-pass；若最终要 Approve，则仍必须完成自己承担的其余 human-written review scope，或明确说明 partial scope / specialist coverage。
+
+格式可用：
 
 ```text
 Decision: Approve / Request changes / Split / Need specialist review
 
+Reviewed scope
+- files/aspects actually reviewed
+- deferred/partial scope and who must cover it, if any
+
 Change model
 - ...
 
-Finding 1 — <severity + short title>
+Finding 1 — <Blocker / Medium / Nit + short title>
 Location:
 Contract:
 Observation:
@@ -420,6 +426,14 @@ probe 当前会给出高信息量 symptoms，但不要按 output ID 数量决定
 - `JobAuthority` direction 本身是否被 regression 错误否定？
 - mutable `Job` 是否只是 residual M02 issue？
 - M07 historical artifact 是否被正确排除？
+- 在 semantic center 之外，自己承担的其余 human-written implementation 是否已 review？
+- maintainability / readability / understandability / complexity 是否有 material code-health regression，而不是被统统降成 nit？
+
+Severity 以课程 canonical 三档为准：`Blocker / Medium / Nit`。`Important / Should fix` 可以作为 Medium 的 wording alias；`Optional / FYI` 是 comment intent，不是额外 severity。
+
+- **Blocker**：material claim 不成立或存在 merge 前必须关闭的不可接受风险；
+- **Medium**：有具体 evidence/material consequence，通常应在本 CL 修，但单独未必否定整份 change；
+- **Nit**：non-mandatory polish / minor clarity，不应冒充 code-health blocker。
 
 一个高质量 final review 可以很短，但必须有：
 
@@ -579,11 +593,11 @@ Optional：Agent vague-prompt vs engineering-contract comparison。
 | Dimension | 分值 | 优秀表现 |
 |---|---:|---|
 | Independent system reconstruction | 20 | 不依赖 author summary；恢复正确 baseline、M07 exception、M02 residual |
-| Finding quality | 25 | 找到 material semantic blockers；有最小反例；按 root cause 聚合 |
+| Finding quality | 25 | 找到 material semantic findings；有最小反例；按 root cause 聚合；Blocker/Medium/Nit evidence 标准清楚 |
 | Evidence review | 20 | 不被 9 passed 锚定；能审 tests/oracles；targeted probe 对应 uncertainty |
-| Scope discipline | 15 | regression / baseline issue / historical harness / cleanup 分类正确 |
+| Scope discipline | 15 | regression / baseline issue / historical harness / cleanup 分类正确；risk-first 不变成 sampling；partial/specialist scope 明确 |
 | Change engineering | 10 | structural / behavioral / future remote work 拆分清楚 |
-| Decision & re-review quality | 10 | severity 明确；知道何时 approve/request/split/specialist；patch-set re-review 有证据 |
+| Decision & re-review quality | 10 | severity 明确；code health 不被降成 nits；知道何时 approve/request/split/specialist；patch-set re-review 有证据 |
 
 以下不会自动加分：
 
