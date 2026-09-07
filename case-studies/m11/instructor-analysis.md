@@ -122,6 +122,20 @@ worker_pool = default
 
 所以 `job_id` 高 cardinality 不能推出 `job_id` 没 telemetry value。真正 contract 是：individual identity 不应让 aggregate series count 随 workload 线性增长。
 
+### Failure-class transfer reference
+
+高分答案还要把 signal choice 迁移到 latency 之外，而不是把 event/log/trace 当一个 diagnosis bucket：
+
+| Failure | Reference reasoning |
+|---|---|
+| 慢 | aggregate latency SLI/distribution 判断 scope；component metrics 帮助找 pressure；只有跨组件 path/timing 是问题时才需要 trace |
+| 无进展 | lifecycle progress/oldest-age/heartbeat evidence 说明“按哪个 progress contract 没前进”；缺 event 本身仍可能是 telemetry loss |
+| 数据不一致 | 先定义应该一致的 authority/read surface 与 freshness bound；mismatch metric 看范围，diagnostic event/log 保留 identity/version/source；跨服务 serving/replication path 才可能需要 trace |
+
+Reference inconsistency transfer 可以假设未来有 derived status/read model。**Current starter does not implement this read model**；它只是为了迁移 signal-selection reasoning 的 future assumption，也不要求学生实现。关键 property 是：如果两个 surface 被 contract 要求在某 observation/freshness boundary 内一致，那么 observability 要能识别 mismatch，并说明哪份状态有 authority 的依据来自 architecture/contract，而不是 trace 本身。
+
+OTel 官方 signal model 可以用来校准这里的 distinction：metric 是 runtime measurement，log 是 event record，trace 表达 request/path through components。课程把它们映射成 evidence shape，但不推导“所有 failure 都必须三种 signal 齐全”。Sampling、propagation gap 与 event loss 都会限制 conclusion。
+
 ## 7. Sensitive data 与 telemetry compatibility
 
 Reference event 不记录 command、headers、tokens、arbitrary user content。TaskForge command 未来可能携带 path、credential misuse、business/user data，不能默认进入 telemetry backend。

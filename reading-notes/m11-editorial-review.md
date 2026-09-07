@@ -154,6 +154,37 @@ Source-backed claims are kept bounded:
 
 Course synthesis is the discrete retry-storm probe and the phrase “retry is load”. The probe’s fixed ratios are not source-backed production recommendations.
 
+### Post-review closure: canonical signal-selection transfer
+
+Independent review correctly identified a different compression loss: the rewritten running case taught latency/missingness well, but `COURSE_DESIGN.md` also requires `logs / metrics / traces as evidence` and an assignment that distinguishes **slow / hung-or-no-progress / data-inconsistent** behavior.
+
+This was not fixed by restoring old telemetry encyclopedia sections. The artifact chain now adds one bounded transfer exercise:
+
+```text
+failure question
+-> signal shape
+-> evidence limitation
+```
+
+- slow: user latency aggregate + cause metrics; trace only if cross-component path/timing is the question;
+- no progress: lifecycle/oldest-age/heartbeat-or-equivalent progress evidence, while missing telemetry remains ambiguous;
+- inconsistent data: first define which authority/read surfaces should agree and under what freshness/consistency boundary, then use mismatch aggregation + identity/version/source diagnostic evidence; trace can localize a cross-service serving/replication path but cannot establish authority or correctness by itself.
+
+The Lab now makes this `failure-signal-matrix.md` a deliverable and rubric obligation. No tracing SDK or new executable probe is required.
+
+The source audit also adds the current OpenTelemetry Signals overview as primary calibration: metric = runtime measurement, log = event record, trace = request/path through components. This supports the signal-shape distinction without turning OTel into a required stack or a three-pillars definition.
+
+### Post-review provenance closure: operational simplicity
+
+Independent review also correctly noted that the module had promoted operational simplicity into a strong M11 claim while the audit did not yet have dedicated primary provenance.
+
+Added Google SRE primary material:
+
+- `https://sre.google/sre-book/simplicity/`
+- `https://sre.google/workbook/simplicity/`
+
+The adopted claim stays bounded: end-to-end complexity in software, architecture, tools and lifecycle processes increases the surface that must be understood, tested, changed and operated, so simplicity is a reliability review dimension. Explicit non-claims remain: fewer tools/components are not automatically more reliable; LOC/service count/panel count are not reliability metrics; necessary redundancy/isolation/telemetry is not rejected merely for adding components.
+
 ## 8. Semantic preservation sweep
 
 The rewrite explicitly preserves these merge-base claims/qualifiers:
@@ -177,7 +208,10 @@ The rewrite explicitly preserves these merge-base claims/qualifiers:
 
 - `job_id` can be useful diagnostic correlation while being inappropriate as aggregate metric label;
 - behavior-level cardinality negative control is preferred over source-string grep;
-- high-cardinality metrics are not declared universally forbidden; the cost model matters.
+- high-cardinality metrics are not declared universally forbidden; the cost model matters;
+- metric / event-log / trace are not collapsed into one diagnosis bucket: aggregate measurement, local event record and cross-component path evidence answer different questions;
+- slow / no-progress / inconsistent-data transfer is now a Lab obligation, not a passing qualifier;
+- trace is conditional on cross-component path/timing need and does not establish authority/correctness by itself.
 
 ### Telemetry compatibility/security
 
@@ -223,13 +257,14 @@ Abstractions now appear after pressure:
 2. user journey creates need for SLI;
 3. SLI creates need to separate specification from measurement implementation;
 4. missing events create denominator/missingness pressure;
-5. job-ID series explosion creates metric/event signal-shape distinction;
-6. consumer break creates telemetry compatibility;
-7. “how good is good enough?” introduces SLO/budget;
-8. “when must a human act?” introduces action-contract alerting;
-9. sustained overload introduces backpressure/load shedding;
-10. retries make recovery mechanism itself part of failure load;
-11. the combined failure produces incident/postmortem reasoning.
+5. job-ID series explosion creates aggregate-vs-correlation signal-shape distinction;
+6. slow / no-progress / inconsistent-data transfer forces metric/event-log/trace choice to follow the failure question;
+7. consumer break creates telemetry compatibility;
+8. “how good is good enough?” introduces SLO/budget;
+9. “when must a human act?” introduces action-contract alerting;
+10. sustained overload introduces backpressure/load shedding;
+11. retries make recovery mechanism itself part of failure load;
+12. the combined failure produces incident/postmortem reasoning.
 
 The chapter no longer introduces postmortem or retry/backoff as detached encyclopedia entries.
 
@@ -241,7 +276,9 @@ The rewrite avoids turning reference choices into universal architecture:
 - `StartLatencySummary` is an instructor reference type, not canonical product API;
 - bounded retry budget is a comparison model, not production policy;
 - `production_observability.py` is a suggested Lab seam, not required architecture;
-- Prometheus/Grafana/OTel are not required;
+- Prometheus/Grafana/OTel and a tracing SDK are not required;
+- heartbeat/lease is only one possible no-progress evidence mechanism, not a newly mandated TaskForge architecture;
+- the derived read-model inconsistency case is an explicit future transfer case, not a claim that the starter currently has a replicated read model;
 - canary percentages are not fixed;
 - SLO targets are not copied from Google;
 - overload responses are compared, not ranked universally.
@@ -254,6 +291,8 @@ M11 projections are explicitly scoped:
 - naive dashboard is a valid projection of eventual success/final queue, just insufficient for user history;
 - queue depth is a point-in-time state projection, not full waiting history;
 - diagnostic event identity is not aggregate metric identity;
+- the inconsistent-data transfer only applies after declaring which surfaces/invariant should agree and under what freshness/consistency boundary;
+- trace path evidence can localize where a value/request traveled but does not decide semantic authority;
 - retry-storm discrete rounds model amplification, not wall-clock system capacity;
 - incident evidence packet is a reasoning projection, not automatic root-cause proof.
 
@@ -288,6 +327,8 @@ Deferred to M12:
 - parallel implementer/reviewer agents;
 - merge conflict handling;
 - systematic independent-agent workflow design.
+
+Independent review also surfaced one downstream wording seam that is intentionally **not** repaired in PR #16: current M12 sometimes treats `M11 denominator = accepted jobs` as a permanently protected authority and describes removing rejected work from a denominator as inherently goal gaming. M11’s narrower rule is different: the population of a particular SLI comes from its declared specification. Silently changing an already-declared population to make a result green is gaming; whether rejected submissions belong in a different/new availability or admission SLI is itself a specification question. M12 should reconcile that distinction during its own rewrite.
 
 ## 14. Final validation evidence
 
@@ -331,15 +372,15 @@ Hygiene / structure after rewrite:
 git diff --check = PASS
 relative Markdown links = PASS
 changed Markdown fences = balanced
-module = 320 lines / 1 H1 / 18 H2 / 0 page separators
-Lab = 537 lines / 1 H1 / 20 H2 / 0 page separators
-instructor case = 299 lines / 1 H1 / 16 H2 / 0 page separators
-source audit = 611 lines; source sections 1-11 plus synthesis sections 12-15
-editorial review = 359 lines / 1 H1 / 15 H2 / 0 separators
+module = 337 lines / 1 H1 / 18 H2 / 0 page separators
+Lab = 561 lines / 1 H1 / 20 H2 / 0 page separators
+instructor case = 313 lines / 1 H1 / 16 H2 / 0 page separators
+source audit = 647 lines; primary/source sections 1-12 plus synthesis sections 13-16
+editorial review = 405 lines / 1 H1 / 15 H2 / 0 separators
 no uv.lock
 ```
 
-Secret scan = no findings. Final staged-scope review is run immediately before commit/push.
+Secret scan = no findings. Final staged scope = exactly five M11 Markdown artifacts; M12, canonical TaskForge product source, and `m11_retry_storm_probe.py` are unchanged in this follow-up.
 
 ## 15. Independent reviewer focus
 
@@ -348,6 +389,10 @@ This record is not self-approval. A reviewer should independently check at least
 - whether the false-green TaskForge case genuinely drives the chapter rather than merely decorating it;
 - whether the 2s/99% teaching target is still clearly non-authoritative;
 - whether accepted/claim/missingness temporal semantics remain coherent;
+- whether slow / no-progress / inconsistent-data actually forms a signal-selection transfer obligation rather than another glossary table;
+- whether metrics, event/log records and traces carry distinct evidence roles without making tracing mandatory;
+- whether the inconsistency transfer declares the authority/read surfaces and freshness/consistency boundary before calling a mismatch a bug;
+- whether trace/correlation is prevented from becoming correctness or authority proof;
 - whether `job_id` metric-vs-event reasoning preserves correlation value without high-cardinality cargo cult;
 - whether telemetry schema migration imports M08 precisely rather than making all logs permanent APIs;
 - whether cause-based alert exceptions remain visible;
@@ -355,5 +400,6 @@ This record is not self-approval. A reviewer should independently check at least
 - whether timeout/non-execution and duplicate-effect qualifiers remain consistent with M04/M07;
 - whether overload alternatives remain real alternatives;
 - whether postmortem is blameless **and** technically precise, with verifiable actions;
-- whether operational simplicity is treated as reliability reasoning rather than “fewer tools is always better”;
+- whether operational simplicity has primary provenance while remaining a bounded tradeoff rather than “fewer tools/components is always better”;
+- whether the M12 denominator seam is only recorded/deferred, not silently changed in this batch;
 - whether M12 orchestration material has not leaked backward.

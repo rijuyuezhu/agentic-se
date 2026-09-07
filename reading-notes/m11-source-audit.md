@@ -383,16 +383,19 @@ Prometheus 文档里的具体 cardinality 数字只作为该生态的 guideline�
 
 ---
 
-## 9. OpenTelemetry — Logs Data Model / Semantic Conventions
+## 9. OpenTelemetry — Signals / Logs Data Model / Semantic Conventions
 
 Primary sources:
 
+- https://opentelemetry.io/docs/concepts/signals/
 - https://opentelemetry.io/docs/specs/otel/logs/data-model/
 - https://opentelemetry.io/docs/concepts/semantic-conventions/
 - https://opentelemetry.io/docs/specs/semconv/
 
 实际检查：
 
+- OTel 当前 signal overview 将 trace 描述为 request 穿过 application/components 的 path，将 metric 描述为 runtime measurement，将 log 描述为 event record；
+- 这些 signal 可以从不同角度观察同一系统活动，但没有说“每个问题都必须同时使用所有 signals”；
 - OTel log data model 试图给不同来源的日志一个共同、可映射的数据模型；
 - `Timestamp`、`TraceId`、`Severity`、`Body`、`Attributes` 等字段有明确角色；
 - `EventName` 可标识 event type / event schema；
@@ -401,9 +404,10 @@ Primary sources:
 
 ### 本课程采用
 
-核心不是要求全员采用 OTel，而是：
+核心不是要求全员采用 OTel，而是保留两条可迁移 reasoning：
 
-> **Telemetry schema 也是 interface。**
+1. **signal shape 要由 failure question 决定。** Metric 适合 runtime measurement/aggregation；log/event 适合保留离散 observation；当要恢复 logical request/job 穿过多个 instrumented component 的 path/timing 时，trace 才提供不同 evidence。课程不会把三者写成 maturity ladder，也不会要求每个 failure 三种 signal 齐全。
+2. **Telemetry schema 也是 interface。**
 
 如果一个 `job_finished` event 今天：
 
@@ -493,7 +497,34 @@ M11 要求一份 **blameless but technically precise** postmortem。最低应恢
 
 ---
 
-# 12. 交叉验证后的 M11 核心模型
+## 12. Google SRE — Simplicity / Operational Simplicity
+
+Primary sources:
+
+- https://sre.google/sre-book/simplicity/
+- https://sre.google/workbook/simplicity/
+
+实际检查：
+
+- SRE Book 把 simplicity 与 reliability/stability 直接联系，并强调 release/change 的可理解性与可测量性；
+- SRE Workbook 更明确地把 simplicity 作为 end-to-end goal，范围不只包括 code，也包括 system architecture、tools 与 software-lifecycle processes；
+- complexity 会增加理解、维护、测试、变更和运行成本，而且某个局部 change 引入的 complexity 可能成为由其他团队/后续维护者承担的 externality；
+- retry 本身就是 workbook 用来说明 end-to-end complexity 的例子之一：一个局部看似简单的 recovery mechanism 可能让整体 path/load 更难推理。
+
+### 本课程采用
+
+M11 的 bounded claim 是：**operational simplicity 是 reliability reasoning 的一个重要维度。** 新 instrumentation、alert、fallback、retry path、deployment step 或 operator workflow 都会增加需要理解、测试、运行和恢复的 surface；只有当它带来的 evidence/mitigation value 值得这些成本时才应保留。
+
+### 不升级成课程规则
+
+- tool count 与 reliability 没有简单的单调关系；少一个工具可能减少 surface，也可能失去必要 evidence / control；
+- process / component count 与 reliability 也没有自动关系；redundancy、isolation、failure domain 与 dependency shape 仍需单独分析；
+- 不把 LOC、service count 或 dashboard panel count 当 reliability metric；
+- 不把“boring/simple”当拒绝必要 redundancy、isolation、telemetry 或 failure handling 的借口。
+
+---
+
+# 13. 交叉验证后的 M11 核心模型
 
 这些来源共同支持一个比“装监控工具”更稳定的 model：
 
@@ -549,7 +580,7 @@ postmortem learning + verifiable follow-up
 
 ---
 
-# 13. 本模块刻意不依赖的内容
+# 14. 本模块刻意不依赖的内容
 
 以下材料可能有价值，但本轮不把它们当 authority：
 
@@ -560,13 +591,13 @@ postmortem learning + verifiable follow-up
 - fixed SLO target，例如“所有 API 都 99.99%”；
 - fixed alert threshold；
 - fixed sampling percentage；
-- “所有服务必须 distributed tracing”。
+- distributed tracing 不是默认上线义务；只有 failure question 需要跨组件 path/timing evidence 时，才需要为它支付 instrumentation、propagation、sampling 与 storage 成本。
 
 原因不是这些内容一定错，而是本课要教的是可迁移的 engineering reasoning。
 
 ---
 
-# 14. 对 TaskForge M11 的直接影响
+# 15. 对 TaskForge M11 的直接影响
 
 M11 starter / teaching probes 应体现：
 
@@ -576,10 +607,13 @@ M11 starter / teaching probes 应体现：
 4. naive dashboard 因为只看 final success / ending queue depth，会判断 healthy；
 5. user-centered SLI 会判断明显 degraded；
 6. naive metrics 若把 `job_id` 作为 label，会制造 workload-proportional cardinality；
-7. useful logs/events 可以保留 `job_id` 作为 diagnosis correlation key；
-8. page 不应直接由 `queue_depth > N` 这种 cause threshold 定义，除非它确实对应紧急、可行动的 user impact；
-9. retry-storm teaching probe 要稳定展示 retries 如何在 capacity 不变时增加 attempts，同时明确它不是 production benchmark；
-10. Lab 要把 overload/retry evidence 延伸到 incident timeline 与 blameless/technically precise postmortem，而不是停在 dashboard design。
+7. useful logs/events 可以保留 `job_id` 作为 diagnosis correlation key；trace 只有在跨组件 path/timing 是问题时才提供不同 evidence；
+8. Lab 必须把 signal-selection reasoning 迁移到 **慢 / 无进展 / 数据不一致**，并为每类说明 metric、event/log、trace 的适用问题与 sampling/missingness limitation；
+9. 数据不一致 transfer 必须先声明 authority/read surface 与 freshness/consistency boundary，不能把任意 temporal staleness 自动判成 inconsistency；
+10. page 不应直接由 `queue_depth > N` 这种 cause threshold 定义，除非它确实对应紧急、可行动的 user impact；
+11. retry-storm teaching probe 要稳定展示 retries 如何在 capacity 不变时增加 attempts，同时明确它不是 production benchmark；
+12. Lab 要把 overload/retry evidence 延伸到 incident timeline 与 blameless/technically precise postmortem，而不是停在 dashboard design；
+13. operational simplicity 要作为 reliability tradeoff 检查，但不升级成 fewer tools/components automatically better。
 
 这使 M11 能自然复用：
 
@@ -591,18 +625,20 @@ M11 starter / teaching probes 应体现：
 
 ---
 
-# 15. Module-level claims 与来源边界
+# 16. Module-level claims 与来源边界
 
 本模块会使用下列课程综合术语，它们不是某一个来源的逐字定义：
 
 ```text
 observability contract
 measurement blind spot
+failure-question -> signal-shape transfer
 signal placement
 telemetry schema as interface
 operational action contract
 production evidence chain
 retry amplification teaching model
+operational simplicity as a review dimension
 reliability learning loop
 ```
 

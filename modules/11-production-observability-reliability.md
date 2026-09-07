@@ -119,11 +119,28 @@ M11 starter 故意给了第二个错误设计：把 `job_id` 放进 aggregate me
 | Question | 更合适的 signal shape |
 |---|---|
 | “最近 5 分钟 late jobs 占比多少？” | bounded aggregate metric |
-| “job-847 为什么等了 11 秒？” | diagnostic event/log/trace with correlation ID |
+| “job-847 在哪个 lifecycle step 停住了？” | correlated event/log records；若跨组件 path 本身是问题，再考虑 trace |
+| “dependency 慢发生在 API、queue 还是 worker 后面的调用？” | component metrics + cross-component trace/path evidence |
+
+这里不能把 `event / log / trace` 压成同一个 diagnosis bucket。Metric 擅长回答 cohort/rate/distribution；event/log 保留某个位置发生过的离散事实与局部上下文；trace 的独特价值在于恢复一个 logical request/job 穿过多个 instrumented component 的 path 与 timing。Trace 不是“更高级的 log”，也不是每个系统都必须有；如果问题根本不跨 process/service path，结构化 lifecycle events 可能已经足够。
 
 Reference aggregate labels 可以是 `outcome=within_target|late`、`worker_pool=default`、bounded reason code。`job_id`、request ID、具体 command 等高基数或敏感上下文更适合 diagnosis-oriented signal，而且仍要有 retention/privacy policy。
 
 这也解释了为什么“禁止源码出现 `job_id`”是错误 fitness rule。我们要保护的是 **aggregate series identity 不按 individual job identity 增长**，不是消灭 correlation。
+
+### Transfer：慢、无进展、数据不一致需要不同 evidence
+
+Latency running case 只覆盖了一类 production failure。把同一个 reasoning 迁移到三个不同问题：
+
+| Failure question | Useful evidence | 不能自动推出什么 |
+|---|---|---|
+| accepted job **慢** | user-facing latency SLI/distribution；queue/worker cause metrics；必要时用 trace 拆跨组件 path | 某个 component 慢就一定是 root cause |
+| accepted job **无进展 / 像挂住** | lifecycle progress events、oldest age、heartbeat/lease 等有明确定义的 progress evidence | “没看到下一条 event”就一定证明 job 没执行；telemetry 也可能丢失 |
+| 两个本应在声明的 freshness/consistency boundary 内一致的 surface **数据不一致** | mismatch/invariant metric；带 identity/version/source 的 diagnostic event/log；若读写/复制跨组件，再用 trace 恢复 serving/write path | trace 或 correlation 本身能证明哪份数据 authoritative，或能单独证明 correctness |
+
+例如未来 TaskForge 有 derived status/read model 时，可以定义一个明确问题：在承诺的 freshness bound 内，authority 记录的 lifecycle version/status 与 read-model 返回结果是否一致。Aggregate mismatch rate 能告诉我们问题是否普遍；单个 mismatch event 能保留 `job_id`、两个版本/status 与 observation source；如果 stale value 可能由跨服务 read/replication path 产生，trace 才开始提供 event/log 不同的证据。
+
+这个 transfer 的重点不是强迫每个 failure 同时使用 metrics、logs、traces，而是让 signal 由 **要区分的 failure semantics** 决定。Sampling 与 missing telemetry 也必须进入 limitation：采样 trace 没出现某条 path，不等于 path 不存在；没有 heartbeat/event，不等于 operation 没发生；只抽样 consistency checks，也不能把未观测 cohort 自动宣布为 consistent。
 
 ## 6. Telemetry schema 也是长期接口
 

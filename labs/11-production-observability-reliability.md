@@ -185,6 +185,28 @@ assert "job_id" not in source
 
 因为 diagnosis event 正可以合法包含 `job_id`。
 
+### Failure-class transfer：慢 / 无进展 / 数据不一致
+
+提交一个 `failure-signal-matrix.md`。不要再围绕 starter latency case 复述同一套 signals，而是针对三种不同 failure semantics 设计 production evidence：
+
+| Failure class | 你必须定义的 question |
+|---|---|
+| 慢 | 哪个 user-visible phase 超过 contract，慢发生在哪个 cohort/path？ |
+| 无进展 / 像挂住 | accepted work 是否在声明的 progress model 下停止前进？ |
+| 数据不一致 | 哪两个 surface / invariant 本应在什么 freshness/consistency boundary 内一致？ |
+
+对每类都回答：
+
+1. 哪个 aggregate metric/SLI 能发现范围或趋势？
+2. 哪个 event/log 能保留单个 observation 的 identity、version、source 与局部事实？
+3. **什么时候 trace 才提供不同 evidence？** 只有当你需要恢复 logical request/job 跨 process/service/component 的 path/timing 时才选它；不要因为 rubric 写了 trace 就虚构 span。
+4. sampling、event loss、clock/freshness semantics 会让什么 conclusion 失效？
+5. 哪个 evidence 只支持 correlation/diagnosis，不能单独证明 root cause 或 correctness？
+
+数据不一致可以使用一个明确的 future TaskForge transfer case：假设存在 derived status/read model，并承诺在某 freshness bound 内与 lifecycle authority 一致。设计 bounded mismatch metric；再设计一条 diagnosis event/log，保留 `job_id`、authority version/status、observed version/status 与 source。若 stale read 可能经过多个 service/process，再说明 trace 怎样帮助恢复 serving/replication path；同时明确 trace **不能**决定哪一份状态有 authority。
+
+这里不要求实现 tracing SDK，也不要求为三个 failure class 都新增 executable instrumentation。评分看的是 `failure question → signal choice → limitation` 是否成立。
+
 ## 7. Telemetry compatibility：schema 也是 consumer contract
 
 假设已有 dashboard/alert/query 依赖：
@@ -488,16 +510,17 @@ M12 才系统讨论 Agent orchestration；这里 Agent 只是 implementation/rev
 1. `production-contract.md`；
 2. SLI specification + measurement implementation / blind spots；
 3. aggregate metric + diagnostic event model；
-4. telemetry compatibility decision；
-5. SLO / error-budget reasoning；
-6. page + ticket action contracts；
-7. retry-storm evidence + overload/backpressure comparison；
-8. rollout gate；
-9. `incident-evidence.md`；
-10. blameless technically precise `postmortem.md`；
-11. minimal implementation patch + tests；
-12. Agent prompt + independent review；
-13. residual risk。
+4. `failure-signal-matrix.md`：慢 / 无进展 / 数据不一致的 signal choice 与 limitations；
+5. telemetry compatibility decision；
+6. SLO / error-budget reasoning；
+7. page + ticket action contracts；
+8. retry-storm evidence + overload/backpressure comparison；
+9. rollout gate；
+10. `incident-evidence.md`；
+11. blameless technically precise `postmortem.md`；
+12. minimal implementation patch + tests；
+13. Agent prompt + independent review；
+14. residual risk。
 
 ## 18. Validation commands
 
@@ -517,7 +540,7 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/m11_retry_storm_pr
 |---|---:|---|
 | User-centered reliability model | 20 | 从 user journey 推 SLI；scope/unknown/missingness 清楚 |
 | Measurement quality | 15 | placement、denominator、blind spots、coverage 可解释 |
-| Telemetry design | 15 | bounded cardinality；aggregate/diagnostic signal 分工；无敏感泄漏；schema compatibility 明确 |
+| Telemetry design | 15 | bounded cardinality；能针对慢/无进展/数据不一致选择 metric/event-log/trace evidence；signal limitation、隐私与 schema compatibility 明确 |
 | SLO + operational action | 15 | target/window/budget reasoning 与 page/ticket action contract 相连 |
 | Overload + retry reasoning | 15 | 能复现 amplification；比较 backpressure/load shedding/retry alternatives；不 cargo-cult 参数 |
 | Incident + postmortem | 10 | impact/timeline/evidence 精确；blameless；systemic conditions 与 verifiable actions 闭环 |
@@ -533,5 +556,6 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/m11_retry_storm_pr
 1. 这些绿灯对应的 user contract 是什么？
 2. measurement 在哪里，漏掉谁？
 3. denominator / unknown / sampling 会不会让失败消失？
-4. overload/retry mechanism 会不会反过来制造新 load？
-5. alert 是否真的驱动 urgent action；incident 后 learning 是否真的回到 system change？
+4. 如果症状从“慢”换成“无进展”或“数据不一致”，当前 metrics/events/logs/traces 还能区分它们吗？
+5. overload/retry mechanism 会不会反过来制造新 load？
+6. alert 是否真的驱动 urgent action；incident 后 learning 是否真的回到 system change？
