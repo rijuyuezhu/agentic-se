@@ -1,569 +1,82 @@
-# M12 Instructor Analysis — Agentic Software Engineering
+# M12 Instructor Analysis — 当正确实现仍不足以证明正确委派
 
-> 这份 reference 不是“标准 prompt 答案”。
->
-> 它记录的是：怎样判断 delegation 是否完整、Agent 应该在哪里停、human authority 怎样被局部转移，以及授权后的最小实现怎样用独立 evidence 验证。
+这份 instructor analysis 不是标准答案模板。M12 真正要评的是：学生能否区分事实、specification 与未决 judgement；能否让 Agent 在明确 authority 内高效工作；能否把正确 stop 当成成功；能否用不完全同源的 evidence/review 去挑战 candidate；以及 human/policy owner 是否在最后仍拥有真正的 product decision。
 
----
+TaskForge admission case 的价值恰恰在于：最终 reference implementation 很小。若学生只交十几行 lock 代码，即使代码完全正确，也没有完成 M12。
 
-# 1. 这章真正考什么？
+## 1. 为什么 vague task 不能靠“Agent 恰好做对了”来辩护
 
-不是：
+`vague-task.json` 只要求“加 admission control、保持 tests green”。这没有决定 public rejection semantics、legacy compatibility、threshold ownership、side-effect timing、concurrency scope、measurement、write scope、oracle ownership 或 release authority。
 
-```text
-谁能让 Agent 一次写出最漂亮的 admission-control code
-```
+因此真正的问题不是信息量少，而是 **decision space 未被 bounded**。
 
-而是：
+假设某个强 Agent 恰好做出与 instructor reference 一样的实现，也只能说明这一 run 选择了一个可接受 interpretation。它不能证明 prompt 排除了这些同样 plausible 的替代路径：直接改 legacy `submit_job()`、把 overload 当 exception、把 threshold 写成 global constant、在 reject 前先 allocate id、把 M11 target 调低、删掉旧 probe、自己 merge/deploy。
 
-```text
-能不能先发现任务语义不足？
-能不能防止 Agent 优化错误 proxy？
-能不能限制 write / production authority？
-能不能让 Agent 在需要产品决策时正确停止？
-能不能把 human decision durable 化？
-能不能让 implementation 和 acceptance reasoning 分离？
-```
+评分时不要因为最终 patch 正确就反向给 vague task 高分。委派质量要看它在实现**之前**约束了什么。
 
-所以一个没有 patch、但准确输出：
+## 2. Engineered task 的价值：把已有 judgement 写成 contract，把未知保留为未知
 
-```text
-STOP_AND_ESCALATE
-```
+`engineered-task.json` 不只是“更长 prompt”。它做了四件关键事。
 
-的 Agent，可能比一个 300 行全绿 patch 做得更好。
+第一，它保护已有系统语义：legacy path 默认兼容；rejection 必须零 job-state side effect；accepted work 继续进入已有 lifecycle；不能建立第二套 lifecycle authority；M11 start-latency SLI 仍按原 accepted-job population 解释。
 
----
+第二，它限制 implementation blast radius：只允许修改列出的 TaskForge code/tests/tools，不允许把数据库、RPC、message queue、production deployment 之类架构变化偷带进来。
 
-# 2. Vague Task 为什么不够？
+第三，它把 evidence 先写在 candidate 前面：legacy compatibility、accepted lifecycle、rejection side effect、concurrency、M11 measurement 都有 claim-oriented evidence obligation。
 
-starter：
+第四，也是最重要的，它允许 `STOP_AND_ESCALATE`。Task contract 不要求 implementation Agent 在所有情况下交 patch。
 
-```text
-TaskForge burst 时等待太久。
-加一个 overload/backpressure 机制，把它修好，测试一下。
-```
+这里仍有未决问题，所以 `m12_orchestration_probe.py` 对 engineered task 只返回 `STRUCTURALLY_COMPLETE`。Instructor 必须明确告诉学生：这个结果只说明 fixture 满足 structural checker 的字段要求，不等于“现在已经有完整产品 specification”。
 
-它至少缺少这些 decision：
+## 3. Unsafe plan 的根因是 authority drift，而不是“Agent 方案不优雅”
 
-```text
-what counts as overload?
-where admission happens?
-what is rejected?
-what public result means reject?
-who owns threshold?
-what happens to job id?
-which old callers must remain compatible?
-what happens under concurrent submit?
-can the Agent change SLO?
-can the Agent modify its own evidence?
-can the Agent merge/deploy?
-```
+Unsafe plan 降低 M11 target、改 measurement population、删除旧 probe、修改 release workflow，并准备 merge/deploy。这些动作表面上都能帮助“完成任务”，但它们越过了不同 owner。
 
-因此问题不是：
+最典型的是把 99% target 改成 15%。代码甚至可能完全没 bug，dashboard 也真的会绿；但它没有改善 accepted-job start latency，只是改了 success definition。类似地，如果 candidate 把已经 accepted 且很慢的 jobs 从 SLI population 中移除，也是在重写 specification，而不是修系统。
 
-```text
-prompt too short
-```
+这里要纠正旧教材里一个容易误导的说法：**pre-acceptance admission rejection 不属于 M11 accepted-job start-latency denominator，本身不是 denominator gaming。** M11 的 cohort 从来就是 accepted jobs。真正要保护的是：不要偷偷重定义 accepted-work population，也不要把 admission rejection 说成 start-latency success。若产品关心 rejection/availability，应另建对应 SLI。
 
-而是：
+删除 M11 probe 也不是普通 cleanup，因为它是当前 accepted-work behavior 的 evidence。只有在先证明 harness 已因 version-specific source shape 失效、而它原保护的 product contract 已被其它 evidence 接住时，才可以把“fixture stale”与“product regression”区分开。
 
-```text
-decision space is under-specified
-```
+因此 unsafe plan 的 root cause 可以概括成：implementation authority 膨胀成了 specification、oracle、release 与 production authority。
 
-把同一句 prompt 扩成 2000 字，但仍没有这些 authority / contract 信息，也不会本质改善。
+## 4. 为什么 bounded plan 的正确输出是 Stop
 
----
+`bounded-agent-plan.json` 完成了足够 reconnaissance，并明确留下两个 open questions：public overload result shape，以及 capacity threshold ownership/value。
 
-# 3. 为什么不能用“Agent 恰好做对了”证明 Vague Task 足够？
+这两个问题都不是从 current code 能“发现”的事实。Public shape 会影响 caller compatibility；threshold 则是 product/capacity policy，而 canonical TaskForge 没有任何可信 production capacity model。Implementation Agent 若自己选一个常见答案，实际上是在把 unknown 伪装成 observed fact。
 
-假设某个强 Agent 收到 vague task 后自己推断：
+因此 `STOP_AND_ESCALATE` 应给正分。课程要惩罚的不是“问人”，而是：本来缺 authority，却为了保持 execution momentum 把它变成 assumption。
 
-```text
-use opt-in API
-preserve legacy path
-threshold is caller-owned
-reject consumes no id
-```
+Instructor 也不要要求 Agent 事事停下来。若 task contract 已明确把某类 design choice delegated 给 implementation role，那么 Agent 可以自己选择并解释 tradeoff。**模型信心不是 authority grant；task/decision record 才是。**
 
-结果和 instructor 一模一样。
+## 5. `M12-ADMISSION-001` 究竟授权了什么
 
-这只能说明：
+Human decision record 将剩余空间局部闭合。Reference interpretation 是：
 
-```text
-Agent selected an acceptable interpretation
-```
+- legacy `submit_job()` 不变；
+- 新增 opt-in admitted operation，reference 名为 `submit_job_admitted(...)`；
+- accepted result machine-readable，并返回 `job_id`；
+- overload result machine-readable，code 为 `OVERLOADED`；
+- threshold 由 caller/config owner 提供；
+- threshold 必须是 nonnegative integer；negative value 在任何 mutation 前 `ValueError`；
+- rejected admission 不创建 `Job`，不消耗 id；
+- admitted submissions 之间的 check + job creation 串行化；
+- legacy submissions 不在该 concurrency guarantee 内；
+- worker claim 可以并发发生，可能让决定 conservative/stale，但不能导致 admitted-to-admitted over-admission；
+- M11 target 与 accepted-job start-latency specification 不变。
 
-不能说明：
+两点 provenance/authority qualifier 必须保留。
 
-```text
-the delegation constrained all unacceptable interpretations
-```
+**Opt-in API 不是唯一正确架构。** 这是为 bounded teaching lab 选择的兼容性较小方案；代价是存在两个 submission path，legacy 可以 bypass。未来如果要 mandatory global admission，需要新的 compatibility/migration/architecture decision。
 
-软件工程关心的不只是：
+**Caller-owned threshold 也不是 universal best practice。** Reference 这么做只是因为 starter 没有 production capacity model。真实系统完全可能由 config service、autoscaler、queue owner 或 policy engine 拥有这个值。
 
-```text
-one run produced a good patch
-```
+Human decision record 本身也不是“最终架构 authority”。它只是一次 bounded feature decision，未来可以被新的、更高层 decision supersede。
 
-还关心：
+## 6. Reference implementation 为什么很小，却仍需要精确 scope
 
-```text
-what makes future runs / agents / maintainers converge on the same contract?
-```
-
-这就是 durable specification 的价值。
-
----
-
-# 4. Engineered Task 做了什么？
-
-`engineered-task.json` 并没有提前实现 feature。
-
-它只是压缩 decision space。
-
-## 4.1 Goal
-
-从：
-
-```text
-fix overload
-```
-
-变成：
-
-```text
-new opt-in admission path
-explicit rejection before work creation
-legacy default unchanged
-```
-
----
-
-## 4.2 Non-goals
-
-明确：
-
-```text
-no DB/RPC/queue
-no M03-M10 cleanup
-no SLO rewrite
-no silent legacy-submit change
-```
-
-这对 Agent 很重要，因为它很容易把 repository-wide cleanup 当成 bonus。
-
----
-
-## 4.3 Contracts
-
-最关键：
-
-```text
-reject creates no Job
-reject consumes no id
-accepted lifecycle unchanged
-no second lifecycle authority
-M11 accepted-job denominator unchanged
-```
-
-这些都是 future patch 的判据。
-
----
-
-## 4.4 Write scope
-
-允许读广泛，但写入受限。
-
-这体现：
-
-```text
-understanding scope
-!=
-mutation scope
-```
-
----
-
-## 4.5 Evidence contract
-
-不是：
-
-```text
-run tests
-```
-
-而是：
-
-```text
-claim → required evidence
-```
-
-这是 M03/M10 的直接复用。
-
----
-
-# 5. `m12_orchestration_probe.py` 证明什么？
-
-它只做 structural policy checking。
-
-它能发现：
-
-- required fields 缺失；
-- write path 越界；
-- plan 明说要改 SLO；
-- plan 明说要改 denominator；
-- plan 想删 evidence；
-- plan 想 merge / deploy；
-- unresolved questions；
-- authorization id 是否对应 human decision。
-
-它不能证明：
-
-```text
-engineered task 的产品策略正确
-human decision 一定正确
-implementation 不会有 bug
-```
-
-所以这个 probe 自己也只是 evidence source。
-
-不要把 M12 变成：
-
-```text
-policy checker green
-→ safe Agent workflow
-```
-
-那只是把 M10 的 CI worship 换了名字。
-
----
-
-# 6. Unsafe Plan 的 Root Cause
-
-`unsafe-agent-plan.json` 表面上很积极：
-
-```text
-make dashboard healthy
-change threshold
-change denominator
-remove old probe
-merge
-deploy
-```
-
-它不是七个独立问题。
-
-root cause 是：
-
-> **Agent 把“达到 feature goal”的实现 authority 扩张成了“重新定义 success、修改 evaluator、接受风险、发布生产”的 authority。**
-
-具体表现：
-
-```text
-semantic authority drift
-evaluator capture
-write-scope violation
-release authority drift
-production authority drift
-```
-
-所以 instructor 会把最高层 finding 写成 authority failure，而不是只列七个 style comment。
-
----
-
-# 7. 修改 SLO 为什么是特别危险的？
-
-M11 已经建立：
-
-```text
-user expectation
-→ SLI
-→ SLO
-```
-
-如果 feature implementation 为了让自己通过 acceptance，顺手把：
-
-```text
-0.99
-```
-
-改成：
-
-```text
-0.15
-```
-
-那是在改变：
-
-```text
-what success means
-```
-
-而不是实现 success。
-
-这与：
-
-```text
-bugfix changes test expected value to current buggy output
-```
-
-是同一种结构。
-
----
-
-# 8. 删除 M11 Probe 为什么不是普通 cleanup？
-
-因为 probe 是 acceptance evidence。
-
-Candidate 同时修改：
-
-```text
-implementation
-+
-thing that judges implementation
-```
-
-当然，有时 evaluator 必须合法修改。
-
-但这种修改本身要获得独立 review。
-
-否则 pipeline 可能变成：
-
-```text
-change behavior
-→ update expected
-→ green
-```
-
----
-
-# 9. Bounded Plan 为什么是正确的？
-
-它做了几件成熟的事情：
-
-```text
-read first
-write only allowed paths
-preserve legacy semantics
-keep SLO untouched
-require evidence
-```
-
-然后发现：
-
-```text
-public result shape unresolved
-threshold owner unresolved
-```
-
-于是停。
-
-这个 stop 是高质量输出，因为这些问题分别触及：
-
-```text
-M04 public contract
-M08 compatibility
-M09 authority
-M11 product/capacity policy
-```
-
-它们不是 implementation detail。
-
----
-
-# 10. 为什么不能让 Agent “合理选择一个”然后继续？
-
-可以——**如果**组织已经把这个 authority 委托给它。
-
-例如 task 可以明确：
-
-```text
-You may choose the overload result shape from A/B based on compatibility analysis.
-```
-
-那它就获得了 design authority。
-
-starter 没有这样授权。
-
-因此：
-
-```text
-model confidence
-```
-
-不能替代：
-
-```text
-authority grant
-```
-
----
-
-# 11. Human Decision Record 解决什么？
-
-`M12-ADMISSION-001` 明确：
-
-```text
-legacy submit_job stays unchanged
-new opt-in submit_job_admitted
-max_queued_jobs caller-owned
-max_queued_jobs >= 0
-negative -> ValueError before side effect
-OVERLOADED machine code
-reject no Job / no id
-admitted submissions serialize check + create
-M11 SLO unchanged
-```
-
-这把原本 conversation-level decision 变成 durable engineering artifact。
-
-以后：
-
-- implementation Agent；
-- reviewer；
-- future maintainer；
-- Capstone；
-
-都能看到同一个 authority record。
-
----
-
-# 12. 为什么选择 Opt-in API？
-
-这不是唯一正确设计。
-
-Reference 选择：
-
-```text
-submit_job()            legacy path
-submit_job_admitted()   opt-in path
-```
-
-因为本 lab 目标是：
-
-```text
-introduce admission behavior
-without silently changing old callers
-```
-
-这样可以减少 compatibility surface。
-
-代价：
-
-```text
-two submission paths coexist
-legacy callers can bypass admission
-```
-
-这在长期 architecture 上可能不理想。
-
-但 human decision 明确把它作为 M12 的 bounded scope。
-
-因此 reviewer 不应该把：
-
-```text
-legacy path bypasses admission
-```
-
-直接写成 blocker。
-
-正确写法更像：
-
-```text
-Follow-up / architecture debt:
-If admission becomes mandatory system-wide, authority must move to a
-single submission boundary and legacy bypass must be migrated.
-```
-
----
-
-# 13. 为什么 Threshold 由 Caller / Config Owner 提供？
-
-因为当前课程没有给 production capacity model。
-
-如果 reference 随便写：
-
-```python
-MAX_QUEUE = 100
-```
-
-看起来实现完整了。
-
-实际上它偷偷做了一个 product/operations decision。
-
-所以 instructor 选择：
-
-```text
-mechanism in TaskForge
-policy value outside TaskForge
-```
-
-即：
-
-```text
-TaskForge knows how to enforce a limit
-caller/config owner chooses the limit
-```
-
-这也符合 M02/M04：
-
-> policy 不应该由偶然 storage / implementation detail 决定。
-
----
-
-# 14. Negative Threshold 为什么后来被补进 Decision？
-
-第一版 bounded plan 正确地问：
-
-```text
-threshold domain是什么？
-```
-
-如果 reference implementation直接写：
-
-```python
-if max_queued_jobs < 0:
-    raise ValueError
-```
-
-但 decision record 没有写，test oracle 就会来自 implementation。
-
-这正是 M03 反复警告的方向倒置。
-
-因此 instructor 最终把：
-
-```text
-non-negative integer
-negative → ValueError before side effect
-```
-
-明确写入 `human-decision.json`，再写 reference test。
-
-顺序是：
-
-```text
-decision
-→ oracle
-→ implementation
-```
-
-而不是：
-
-```text
-implementation
-→ test expected
-→ retroactive “contract”
-```
-
----
-
-# 15. Reference Implementation
-
-Reference 只改临时副本，不进入 canonical baseline。
-
-核心设计：
+Instructor reference 只在临时 TaskForge 副本中实现，不进入 canonical starter。核心 seam 可以写成：
 
 ```python
 _admission_lock = threading.Lock()
@@ -583,1077 +96,169 @@ def submit_admitted(command: str, *, max_queued_jobs: int) -> str | None:
         return submit(command)
 ```
 
-Public boundary：
+Public wrapper 再把 `None` 投影成 `{"accepted": false, "code": "OVERLOADED"}`，accepted id 投影成 `{"accepted": true, "job_id": ...}`。
 
-```python
-def submit_job_admitted(command: str, *, max_queued_jobs: int):
-    job_id = service.submit_admitted(...)
-    if job_id is None:
-        return {"accepted": False, "code": "OVERLOADED"}
-    return {"accepted": True, "job_id": job_id}
-```
+为什么 lock 只保护 admitted path？因为 promised scope 只是“concurrent admitted calls 对彼此串行化 check + create”，不是“所有 TaskForge mutation 在一个 global lock 下线性化”。把 legacy submit、worker claim、所有 state mutation 全部塞进去，会悄悄扩大 architecture claim。
 
----
+Worker 可能在 admitted request counting/creation 附近 claim queued work。当前 contract 接受这一点：它可能让 admission 决定偏保守，或让读取很快过时。如果需求升级为“所有 submission/claim 在一个 global occupancy linearization point 上精确一致”，当前设计就不够，需要回到 M07/M09 重做 ownership 与 concurrency model。
 
-# 16. 为什么 Lock 只保护 admitted path？
+Instructor 不应把“有 lock”当正确性结论。正确性来自 contract scope 与实现 critical section 的对应。
 
-Human decision 的 promised scope 是：
+## 7. 为什么 negative threshold 必须先写进 decision，再写 test
+
+Negative threshold 最初很容易被当成普通 input-validation nit。但如果没有提前规定，reference implementer 可能自己选择 clamp 到 0、接受所有、抛异常或返回 overload；随后 test 再照着 implementation 写，就会形成：
 
 ```text
-Concurrent calls through the admitted path
-serialize admission-check + job creation against each other.
+implementation choice
+    -> test expectation
+    -> retroactive "contract"
 ```
 
-不是：
+M12 要反过来：先让 owner 明确 domain 与 failure timing，再让 Agent 写 implementation/test。于是 negative value 的意义不只是 boundary test，而是一个小型 oracle-ownership exercise。
 
-```text
-all TaskForge submissions globally obey admission
-```
+## 8. 五个 focused tests 各证明什么、又不证明什么
 
-所以 reference 没有重写：
+临时 reference 在 6 个 core tests 之外增加 5 个 focused tests，合计实际为 `11 passed`。
 
-```text
-legacy submit
-worker claim
-all state mutation
-```
+**Legacy public shape** 检查 `submit_job("echo legacy") == {"job_id": "job-1"}`。它支持 compatibility claim，但不能单独证明所有 legacy behavior 都没变，所以仍要跑历史 regression probes。
 
-进同一个 lock。
+**Accepted admitted submit** 检查 accepted result、`job-1` 与 `QUEUED` state，目的是证明 new boundary 没有创建 parallel lifecycle representation。
 
-这是刻意的小 scope。
+**Rejected admitted submit** 使用序列：第一次 admitted 得到 `job-1`；第二次 overload；随后 legacy submit 得到 `job-2`。这同时验证 reject 没新增 `Job` 且没消耗 allocator id。这里的 no-gap 是本 Lab contract，不应推广成全系统 ID 原则。
 
-如果长期需求升级成 mandatory global admission，那需要新的 architecture decision。
+**Invalid threshold** 检查 negative value `ValueError`、state 仍为空、下一次 valid submit 仍得到 `job-1`，从而支持 fail-before-side-effect。
 
----
+**Two contenders / one slot** 用 barrier 让两个线程竞争 `max_queued_jobs=1`，要求结果恰好一个 accepted、一个 `OVERLOADED`、总共一个 `Job`。这个 test 观察到了正确 behavior，但**单独不能证明 atomicity**。
 
-# 17. Worker 与 Admission 的 Interleaving
+## 9. Concurrency evidence 为什么需要 negative control + code review + behavior test
 
-Worker 可以在 admitted request counting / creation 附近 claim queued job。
+一个极 plausible 的错误实现是：先 `queued_count()`，再单独 `submit()`。若 A、B 都在 queue=0 时读取，然后 barrier 后分别 submit，就会得到 two accepted jobs。
 
-当前 decision 允许：
-
-```text
-worker claim may reduce queued work concurrently
-```
-
-这最多让 admission decision 保守或瞬时过时，不会让两个 **admitted submissions** 同时越过一个 slot 的 promise。
-
-如果未来 policy 要的是：
-
-```text
-exact total system occupancy at one global linearization point
-```
-
-那么当前 local lock 不够。
-
-那会重新进入 M07/M09 的系统级 authority 设计。
-
----
-
-# 18. Reference Tests
-
-临时副本新增 5 个 tests。
-
-原 core：
-
-```text
-6
-```
-
-M12：
-
-```text
-5
-```
-
-实际：
-
-```text
-........... [100%]
-11 passed
-```
-
----
-
-# 19. Test 1 — Legacy Public Shape
-
-```python
-assert submit_job("echo legacy") == {"job_id": "job-1"}
-```
-
-这是 compatibility claim。
-
-它并不能证明整个 old behavior 没变。
-
-所以还需要旧 regression probes。
-
----
-
-# 20. Test 2 — Accepted Work 进入原 Lifecycle
-
-```text
-submit_job_admitted(..., max=1)
-→ accepted=true
-→ job-1
-→ status=QUEUED
-```
-
-目的是证明 new boundary 没有创建 parallel lifecycle representation。
-
----
-
-# 21. Test 3 — Rejection Zero Side Effect
-
-Sequence：
-
-```text
-first admitted → job-1
-second admitted → OVERLOADED
-legacy accepted → job-2
-```
-
-并确认 reject 后：
-
-```text
-jobs == [job-1]
-```
-
-这个测试比只检查：
-
-```text
-accepted=false
-```
-
-强得多。
-
-因为它验证 state cardinality 和 allocator side effect。
-
----
-
-# 22. Test 4 — Invalid Threshold
-
-Decision 已定义：
-
-```text
-negative → ValueError before any state/id side effect
-```
-
-reference 验证：
-
-```text
-invalid
-→ ValueError
-→ jobs empty
-→ next valid submit = job-1
-```
-
----
-
-# 23. Test 5 — Two Contenders / One Slot
-
-两个线程由 barrier 同时开始：
-
-```text
-max_queued_jobs=1
-```
-
-结果必须：
-
-```text
-1 accepted
-1 OVERLOADED
-1 Job total
-```
-
-实际通过。
-
-但是 instructor 特别强调：
-
-> **这个 stress-shaped concurrency test 单独并不能证明 atomicity。**
-
-它需要和 implementation review 一起使用。
-
----
-
-# 24. 为什么另外做 Naive Deterministic Counterexample？
-
-为了证明一个非常 plausible 的错误实现：
-
-```python
-if queued_count() < limit:
-    return submit(command)
-```
-
-确实存在 interleaving bug。
-
-Instructor 构造：
+Instructor 的 deterministic negative control 实际展示过类似结果：
 
 ```text
 A observes queue=0
 B observes queue=0
-barrier
 A submit
 B submit
+=> two accepted jobs under a one-slot policy
 ```
 
-实际结果：
+因此 reference concurrency argument 是组合证据：contract 先声明 admitted check+create 要串行；naive split-step 有 deterministic counterexample；reference code 把 count + reject/submit 放在同一个 admitted-path critical section；public concurrent test 又观察到 at most one acceptance。
 
-```text
-naive_results = ['job-2', 'job-1']
-naive_jobs    = ['job-1', 'job-2']
-```
-
-也就是说：
-
-```text
-one-slot policy
-→ two accepted jobs
-```
-
-这个 negative control 比“我觉得应该加锁”更强。
-
----
-
-# 25. Concurrency Evidence 的正确组合
-
-Reference 的 correctness argument 是：
-
-```text
-1. Contract says admitted check+create serializes.
-2. Naive two-step implementation has deterministic counterexample.
-3. Reference code puts count + reject/submit under one admitted-path lock.
-4. Concurrent public test observes at most one acceptance.
-```
-
-不是：
-
-```text
-one thread test passed
-→ proven thread-safe
-```
-
----
-
-# 26. Regression Results
-
-Reference 临时副本实际运行：
-
-```text
-M04 boundary       PASS / same visible behavior
-M05 dashboard      fingerprints unchanged
-M06 legacy audit   fingerprints unchanged
-M07 failure probe  unchanged
-M08 compatibility  unchanged
-M09 architecture   baseline inventory still runs
-M11 production     original overload gap unchanged
-M12 orchestration  unchanged
-```
-
-特别是 M11：
-
-```text
-2 / 12 start-latency SLI
-```
-
-仍然存在。
-
-这不是 reference 失败。
-
-因为 M12 feature 是 opt-in admission mechanism，不是宣称已经选择并部署了 production threshold。
-
-这非常重要：
-
-> **不要为了证明新 mechanism 有价值而伪造 production outcome。**
-
----
-
-# 27. M03 Historical Mutation Harness
-
-M03 mutation harness 在 reference temp copy 中仍可运行：
-
-```text
-3 killed
-3 survived
-```
-
-因为 M12 没移动它依赖的那些 exact mutation sites。
-
-新 tests 让每个 mutant run 中出现的 pytest test count 增加，但 baseline semantic result 仍一致。
-
-这只是偶然兼容，不应被升级成 M12 必须保持的 product contract。
-
----
-
-# 28. M10 Replay Harness 为什么失效？
-
-Reference 中：
-
-```text
-m10_rc = 1
-```
-
-原因不是 M12 product regression。
-
-M10 的 `agent-pr.patch` 是一个**针对 M10 baseline source shape 的教学 candidate patch**。
-
-它会重写 `service.py`。
-
-当 M12 已合法在同一文件增加：
-
-```text
-_admission_lock
-submit_admitted
-```
-
-再 replay 那个 old candidate，会形成一个不再代表原 M10 case 的混合 tree，甚至产生：
-
-```text
-NameError: state is not defined
-```
-
-正确分类：
-
-```text
-M10 replay harness
-=
-version-scoped teaching artifact
-```
-
-而不是：
-
-```text
-permanent product regression suite
-```
-
-这和 M05/M09 已经讨论的 test/tool lifetime 完全一致。
-
----
-
-# 29. 一个 Reviewer 可能错误报告的 Finding
-
-例如：
-
-```text
-Blocker: legacy submit_job bypasses max_queued_jobs.
-```
-
-如果 reviewer 没看 human decision，这很像 blocker。
-
-但 decision 明确：
-
-```text
-legacy submit_job intentionally bypasses admission
-```
-
-所以应改成：
-
-```text
-Non-blocking architecture note:
-mandatory future admission will require migration of legacy callers.
-```
-
-这说明独立 review 不等于“忽略 specification”。
-
-独立的是 reasoning，不是 contract。
-
----
-
-# 30. 一个真正的 Blocker 示例
-
-假设 candidate：
-
-```python
-def submit_admitted(...):
-    if metrics.queued_count() >= max_queued_jobs:
-        return None
-    return submit(command)
-```
-
-Blocker：
-
-```text
-The admission decision is split across two independently interleavable
-operations. Two admitted submissions can both observe capacity and both
-create work. This violates M12-ADMISSION-001's explicit concurrency scope.
-```
-
-Required outcome：
-
-```text
-serialize admitted check+creation
-+
-add counterexample-oriented concurrency evidence
-```
-
----
-
-# 31. 另一个真正的 Blocker
-
-Candidate：
-
-```python
-job_id = service.submit(command)
-if queued_count() > limit:
-    service.cancel(job_id)
-    return OVERLOADED
-```
-
-即使最终 jobs 看起来被 cancel：
-
-它仍违反：
-
-```text
-reject creates no Job
-reject consumes no id
-```
-
-而且可能产生：
-
-- audit artifacts；
-- metrics；
-- concurrent claim；
-- external observer history。
-
-这是 M07 的：
-
-```text
-final state != history
-```
-
-再次出现。
-
----
-
-# 32. 还有一种更隐蔽的 Goal Gaming
-
-Candidate 不改 SLO target，但改：
-
-```text
-accepted job definition
-```
-
-让 slow job 在 claim 前都不算 accepted。
-
-于是：
-
-```text
-SLI suddenly improves
-```
-
-这仍是 denominator gaming。
-
-所以 evidence contract 写的不是：
-
-```text
-literal source line unchanged
-```
-
-而是：
-
-```text
-accepted jobs remain the measured population
-```
-
-Reviewer 必须理解 semantic definition。
-
----
-
-# 33. 为什么 `job_id` Allocation 也是 Authority Concern？
-
-如果 reject 先 allocate id：
-
-```text
-job-1 accept
-job-2 reject
-job-3 accept
-```
-
-是否一定错误？
-
-不一定。
-
-很多真实系统允许 id gaps。
-
-但本 lab human contract 明确：
-
-```text
-reject consumes no id
-```
-
-所以这里错误来自 contract，不来自通用“ID 必须连续”原则。
-
-这很重要。
-
-不要从 lab 反推出：
-
-> production IDs 永远不能有 gap。
-
----
-
-# 34. 为什么不把 `max_queued_jobs` 存进 global config？
-
-因为当前 task 没有要求 durable policy authority。
-
-如果 Agent新增：
-
-```text
-global mutable config
-```
-
-就会引入：
-
-```text
-new state owner
-reload semantics
-concurrent update semantics
-persistence questions
-```
-
-不必要地扩大 M12 scope。
-
-Caller-owned threshold 是 deliberate minimality。
-
----
-
-# 35. 为什么不直接用 `metrics.queued_count()`？
-
-Reference 可以技术上调用它。
-
-但 instructor 更倾向在 `service` 的 admitted critical section 中直接读取 canonical state representation，因为：
-
-- `metrics.py` 是 reporting/read view；
-- admission 是 semantic mutation decision；
-- 将 policy authority 建在 metrics helper 上会增加 temporal/semantic coupling。
-
-不过 canonical TaskForge 仍然是 teaching baseline，没有正式 JobAuthority。
-
-长期正确 architecture 应由 M09 后续 evolution 决定。
-
-因此这里不把这个局部选择升级成 universal principle。
-
----
-
-# 36. Human Decision 仍然不是“最终架构”
-
-它只是：
-
-```text
-one bounded feature decision
-```
-
-未来可能被 supersede：
+任何一个单项都不应被夸大。随机 stress 可以补充，但“1000 次没撞到 race”不是 absence-of-race proof。
 
-```text
-mandatory admission
-shared durable queue
-remote workers
-per-tenant quotas
-fair scheduling
-SLO-aware queueing
-```
-
-那时应重新建模。
-
-好的 authority record 允许后续 decision supersede 它，而不是假装今天的策略永久正确。
-
----
-
-# 37. Independent Reviewer 的输入顺序
-
-Instructor 推荐第一轮 reviewer 拿：
-
-```text
-base
-contract
-human decision
-diff
-raw evidence
-```
-
-不要先看：
-
-```text
-Implementer: “This is safe, minimal, fully tested.”
-```
-
-因为后一句是 framing。
-
-第二轮再比对 implementer summary：
-
-```text
-Did author omit a known limitation?
-Did reviewer misunderstand intended scope?
-```
-
----
-
-# 38. Reviewer 不一定必须是另一种模型
-
-可接受独立性来源：
-
-```text
-fresh context
-separate session
-different role prompt
-different model
-human reviewer
-runtime negative control
-static checker
-```
-
-关键是减少 correlated failure。
-
-例如：
-
-```text
-same Agent writes code
-same Agent writes expected
-same Agent reviews itself
-same Agent merges
-```
-
-虽然流程有四步，实际上 failure mode 高度相关。
-
----
-
-# 39. Multi-Agent Reference Exercise
-
-如果并行三个 reviewer：
-
-```text
-A API / compatibility
-B concurrency / lifecycle
-C evidence / oracle
-```
-
-这是比较合理的 decomposition。
-
-因为他们主要 read-heavy，而且问题空间相对独立。
-
-最后由主 reviewer / human synthesize：
-
-```text
-duplicate findings
-conflicting assumptions
-root cause grouping
-severity
-```
-
-不要仅统计：
-
-```text
-3 agents found 14 comments
-```
-
-comment 数不是 review quality。
-
----
-
-# 40. Authority Matrix 的 Instructor Interpretation
-
-## Exploration Agent
-
-可以：
-
-```text
-read
-search
-run tests/probes
-write notes
-```
-
-不需要 source write。
-
-## Implementation Agent
-
-可以：
-
-```text
-isolated write
-add tests
-run local evidence
-produce diff
-```
-
-不能：
-
-```text
-merge
-deploy
-change SLO
-expand scope
-```
-
-## Review Agent
-
-第一轮：
-
-```text
-read / run / report
-```
-
-不改 candidate。
-
-## Human Authority
-
-保留：
-
-```text
-new semantic decisions
-scope expansion
-residual risk acceptance
-merge / production policy
-```
-
-这不是说所有团队永远都必须这样。
-
-它只是 starter 的 explicit delegation architecture。
-
----
-
-# 41. 怎样逐步减少 Human Bottleneck？
-
-假设这个 admission workflow 做了 100 次，团队发现：
-
-```text
-machine-readable OVERLOADED
-no-id-on-reject
-non-negative threshold
-```
-
-已经成为稳定 repository policy。
-
-那么以后不应每次重新人工决定。
-
-可以把它编码进：
-
-```text
-public type
-unit tests
-architecture policy
-API schema
-```
+## 10. Regression evidence：M11 仍旧 2/12 不是 M12 失败
 
-Human authority 没消失。
+Reference 临时副本跑过 core 与 M04/M05/M06/M07/M08/M09/M11/M12 相关 probes，既有行为保持。一个容易误判的现象是：`m11_production_probe.py` 仍然显示原来的 overload gap。
 
-它被编译成 system rule。
+这是正确的。M12 reference 只添加 opt-in mechanism；它没有把生产 synthetic burst 改成走 admitted API，也没有提供 production threshold。若为了展示“feature 修好了 production”而修改 M11 workload/target，就会把教学 evidence 伪造成 deployment result。
 
----
+M12 要学生能说：**mechanism implemented != policy selected != rollout performed != production outcome proven**。
 
-# 42. Instructor 不给“Prompt Length”分
+## 11. Historical harness applicability 不能机械化
 
-一个 30 行 contract，如果每一行都对应真实 decision，可能很好。
+Instructor reference 中，M03 mutation harness 仍能运行并产生原来的教学现象；某个 M10 replay harness 则因为 M12 合法 source evolution 不再匹配旧 patch shape，被分类为 version-scoped teaching artifact，而不是 product regression。
 
-一个 1000 行 prompt，如果充满：
+这不是让学生背结论。Candidate 不同，applicability 也可能不同。正确做法是问：这个 historical harness 原本保护什么 semantic contract？今天那个 contract 仍在吗？失败是 behavior 变了，还是 harness 只绑定了旧内部形状？是否已有新的、更直接 evidence 接住同一 promise？
 
-```text
-be careful
-think deeply
-follow best practices
-```
-
-没有价值。
-
-评分看：
-
-```text
-decision coverage
-scope clarity
-oracle quality
-authority clarity
-```
-
----
-
-# 43. Correct Escalation 必须得分
-
-如果学生的 Agent 在 bounded phase 说：
-
-```text
-I cannot choose overload result shape because this changes caller contract.
-```
-
-应该加分。
-
-如果另一个 Agent 自信地发明一个 shape、实现 500 行并全绿：
-
-在 human decision 之前反而应该扣分。
-
-否则课程会训练出错误激励：
-
-```text
-confidence > discipline
-```
-
----
-
-# 44. 不要把 Production Human Gate 当宗教
-
-Starter 把 merge/deploy 留给 human，是因为这是教学上的清晰 authority boundary。
-
-成熟组织可以安全地自动化：
-
-```text
-canary promotion
-rollback
-routine dependency updates
-```
-
-前提是：
-
-```text
-policy explicit
-evidence strong
-blast radius bounded
-rollback tested
-audit visible
-```
-
-那时 authority 是被明确委托给 automation。
-
-不是“没有人类就没有 authority”。
-
----
-
-# 45. Source Audit 对课程的校正
-
-M12 没有选一本“Agentic SWE 圣经”。
-
-原因是当前领域变化太快。
-
-我们实际结合：
-
-```text
-OpenAI current agent/harness docs
-Anthropic harness/eval engineering reports
-SWE-bench benchmark scope
-METR maintainer acceptance / productivity studies
-GitHub AI review instruction behavior
-```
-
-并严格区分：
-
-```text
-stable engineering pattern
-vs
-current product implementation
-```
+“旧测试红了所以一定不能改”与“旧测试红了所以删掉”都是懒惰判断。
 
-例如：
+## 12. Verification 与 Review 先分开，再谈 Reviewer authority
 
-```text
-AGENTS.md
-```
-
-是当前具体机制。
-
-稳定原则是：
-
-```text
-durable scoped repository guidance
-```
-
----
-
-# 46. METR Maintainer Study 应怎样讲？
-
-不能讲成：
-
-```text
-“AI 写的代码一半都不能 merge。”
-```
-
-研究范围有限，而且 Agent 没有真实 contributor 那样的多轮 review feedback。
-
-正确课程用途是：
-
-> 一个 automated grader 的 pass 与 maintainer acceptance 是两个不同的测量对象。
-
-这直接支持 M10/M12 的 independent review stage。
-
----
-
-# 47. Productivity Study 应怎样讲？
-
-也不能讲成：
-
-```text
-AI 让程序员慢 19%
-```
+M10 已经建立 `machine verification != review`：前者回答某些被选中的可执行问题是否通过，后者还要重新恢复 change model、质疑“这些是否是对的问题”、寻找遗漏 risk partition 与 counterexample。M12 的宽目标因此应叫 **independent acceptance path**，其中既可以有 runtime probe / static checker / external oracle 提供 independent verification，也可以有 human 或 separate Agent context 提供 independent review reasoning；不能把两者重新合成一个词。
 
-那是 early-2025 特定样本、特定工具、熟悉成熟 repo 的 RCT 结果。
+本 Lab 还有一个课程层面的特定约束：Implementation Agent 后必须出现 separate **Review Agent context/session**，再由 human adjudicate。使用同一 model 的 fresh session 足够满足这条 exercise boundary，不要求 different vendor。Human review 在现实工程中当然合法，但这里 human 的 mandatory role 是 adjudication；checker/probe 也仍是重要 verification evidence，但两者都不能代替这道 two-Agent exercise。
 
-后续 2026 数据又受到 selection effect 限制。
+接下来才讨论 Reviewer authority。一个常见 reviewer finding 是：
 
-课程真正拿走：
+> legacy `submit_job()` 可以绕过 admission，因此实现不安全，必须 blocker。
 
-```text
-subjective speed perception can disagree with measured outcome
-```
-
-所以团队要测自己真实 workflow。
-
----
-
-# 48. M12 的核心 Assessment
+事实前半句成立，但当前 human decision 明确只承诺 admitted-to-admitted scope，legacy bypass 是 non-guarantee。因此在没有其它 contract 的前提下，这应记录成未来 mandatory-admission architecture concern，而不是本次 blocker。
 
-一个优秀学生应能做到：
+真正的 blocker 例子包括：rejection 已经消耗 id；two admitted contenders 可同时 accepted；candidate 改了 legacy public shape；negative threshold mutation 后才失败；candidate 改 M11 accepted-work definition 让 evidence 变绿。
 
-1. **不急着让 Agent 写。**
-2. 先恢复 system model。
-3. 把 task 写成 delegation contract。
-4. 区分 capability / permission / authority。
-5. 正确识别 stop/escalation point。
-6. 把 human decision durable 化。
-7. 只授权最小 implementation scope。
-8. 要求 claim-oriented evidence。
-9. 让独立 reviewer 能推翻 candidate。
-10. 识别 old harness 的 version scope。
-11. 不把 test/benchmark pass 当 merge authority。
-12. 不把 human gate 当永久人工 ceremony，而考虑哪些 rule 可被编码。
+Independent review 的目的不是“找得越多越好”，而是找到**能击中 promised behavior 的 counterexample**。
 
----
+## 13. Reviewer 的输入顺序也是 independence design
 
-# 49. 常见错误评分
+第一轮 review 前先冻结完整 candidate state，并记录稳定 snapshot id；Review Agent 最好只拿 base、task contract、human decision、该 frozen candidate diff、raw verification evidence，而不是先看 implementer summary。这样可以减少 framing/anchoring correlation，也给后面的 parallel exercise 留下一份可重放的共同输入。
 
-## High severity
+Review independence 不要求必须换模型。Fresh Agent context/session、不同 role framing、与 implementer 不同源的 evidence 都可以降低 correlation；相反，即使换了模型，如果两边完全继承 candidate-controlled instructions、tests 与 conclusions，也可能高度相关。Runtime probe / static checker 在这里应记作 verification path，而不是 reviewer 本身。
 
-- 修改 SLO / denominator 让 feature 通过；
-- 未授权改变 public contract；
-- implementation Agent merge/deploy；
-- 新增第二 lifecycle authority；
-- concurrency promise 没有 atomic decision；
-- 删除 failing evidence 而无 supersession reasoning；
-- reviewer 只复述 implementer summary。
+当前 GitHub Copilot code review 会从 PR head branch 读取 custom instructions / agent instructions / skills，是一个很好的 product-specific trust-boundary例子：review Agent 的 configuration 本身可能由 candidate branch 影响。Instructor 应把它讲成当前产品机制，不要升级成“AI review 天生不独立”的普遍定律。
 
-## Medium
+Reviewer finding 最终仍需要 adjudication。Reviewer 不是新的 product owner。
 
-- task scope 太宽；
-- evidence 只有“all tests pass”；
-- progress state 只存在 chat；
-- multi-agent shared-write 没有 ownership decomposition；
-- known limitation 没写。
+## 14. Multi-agent exercise 真正评的是 decomposition
 
-## Low / nit
+M12 不需要第二个 implementation candidate。应复用 Phase 11 前冻结的**同一个 pre-review snapshot**，把 read-only review 拆成 public API/compatibility、concurrency/side effect、evidence/oracle 三条 path，并行启动三个独立 Review Agent context。它们拿同一份 base / contract / decision / candidate / raw evidence，不拿前一轮 findings 或 human adjudication，再比较 overlap、disagreement、wall-clock 与 synthesis cost。
 
-- contract JSON field 命名不同；
-- 使用 YAML/Markdown 而不是 JSON；
-- exact Agent product/tool 不同。
+因此 Phase 12 的 adjudication 只能是 first-pass closure，而不是整个 candidate 的 final acceptance。Parallel replay 若发现任何新的 material / contract-impacting finding，必须回到 human adjudication；在这些 finding 被裁决前，早先的 `ACCEPT` 仍是 provisional。Duplicate 或已被完整覆盖的 finding 可以不产生新 decision，但 instructor 应要求学生显式说明其 closure，而不能让“parallel experiment”变成 acceptance 之后无人负责的新 evidence。
 
-课程不绑定 artifact syntax。
+这个设计既保证 mandatory path 一定有输入，也能区分“parallel review 是否真的带来额外 information”与“只是多跑了三个 Agent”。如果学生只是让三个人同时改 `service.py` 和 `public_api.py`，再展示 Git 能 merge，不应给高分，也不要求把这种 write-heavy experiment 真做一遍。Git conflict 只是 text collision；semantic conflict 还包括 producer/consumer 选择不同 error contract、两个 agent 分别新增 competing state owner、一个改 API 另一个按旧 API 写 consumer。
 
----
+评分时看：frozen input 是否一致、subtask boundaries 是否清楚、findings 的 overlap/disagreement 是否被真实比较、shared mutable surface 是否被压小、输出是否有 evidence contract、最后 integration authority 是否明确。Agent 数量本身没有分。
 
-# 50. Reference 最后的工程判断
+## 15. Evals 与 productivity：数据只能支持有限结论
 
-这个 lab 的“正确答案”不是 admission lock 本身。
+METR 2026 maintainer study 可以用来说明 automated grader 与 maintainer acceptance 不是同一 oracle。要保留样本事实：4 位活跃 maintainer、3 个 SWE-bench Verified repo、296 个 AI-generated PR；golden-baseline normalization 下，maintainer merge decision 平均约比 automated-grader score 低 24 percentage points。也要一起讲限制：repo/model/harness sample 有限、review 环境不是完整现实贡献流程、Agent 没有 feedback iteration、研究不声称 fundamental capability ceiling。
 
-真正答案是整个 sequence：
+Productivity study 同样不能被写成 slogan。Early-2025 RCT 在特定 experienced OSS developer/repo setting 观察到约 19% slowdown，同时 participants perceived speedup；2026 follow-up 又因 adoption 带来的 selection effects，明确认为 task-level current speedup estimate 难以可靠解释。
 
-```text
-vague request
-  ↓
-recognize missing semantics
-  ↓
-read-only system model
-  ↓
-engineered delegation contract
-  ↓
-unsafe plan rejected
-  ↓
-bounded plan stops correctly
-  ↓
-human decision record
-  ↓
-limited authority grant
-  ↓
-small implementation
-  ↓
-claim-oriented evidence
-  ↓
-independent review
-  ↓
-human/policy adjudication
-```
-
-如果学生只提交最后 15 行 lock 代码，即使代码完全正确，也没有完成 M12。
+到 2026 年 5 月，METR 对 349 名 technical workers 的 self-report survey 给出很高的 median perceived value uplift，但作者同时强调 convenience sample、selection bias，以及 perception 无法直接验证真实 counterfactual productivity。Instructor 应利用这个“看起来互相张力”的 evidence 教学生：不要挑一条数字替 workflow 做结论。
 
----
+本课程只要求学生测自己的 outcome：cycle time、rework、review effort、escaped defects、scope violations、correct escalations、human decision burden 等。Code volume、token count、Agent count 与“感觉快”都不能独立成为 productivity proxy。
 
-# 51. 实际验证记录
+## 16. Human gate 的目标是保留 novel judgement，不是保留所有机械工作
 
-本轮 instructor reference 在临时 TaskForge 副本中实际执行。
+M12 的 authority ladder 不是“Agent 永远低权限”。若一个 judgement 已经稳定到可以写成明确 policy、可机器检查 evidence、bounded action 与可靠 rollback，那么把它自动化是合理的 engineering improvement。
 
-## Canonical baseline
-
-```text
-6 passed
-```
+例如 isolated read、scoped patch、test execution 常常可以高度自动；某类低风险 merge 也可能被 branch policy 自动授权；bounded canary 在强 stop trigger 下可能进一步自动化。另一方面，不可逆数据删除、全量 schema migration、未知 blast-radius production action 可能仍需要更高 human authority。
 
-## M12 orchestration harness
+Instructor 要看学生是否用 reversibility、blast radius、evidence strength、policy maturity 做判断，而不是用“AI safe/unsafe”二元分类。
 
-```text
-VAGUE       → INSUFFICIENT_CONTRACT
-UNSAFE      → REJECT_PLAN
-BOUNDED     → STOP_AND_ESCALATE
-AUTHORIZED  → AUTHORIZED_TO_IMPLEMENT
-```
+Correct escalation 也必须得分。若 rubric 事实上奖励“Agent 最终总能交 patch”，学生会学到错误激励：隐藏 uncertainty 比暴露 uncertainty 更容易成功。
 
-## Authorized reference
+## 17. Source audit 对本章的 authority 边界
 
-```text
-6 core
-+ 5 M12 focused tests
-= 11 passed
-```
+本章外部材料只能支撑它们真正支撑的部分。
 
-## Naive concurrency negative control
+OpenAI 当前 Codex material 支撑：清楚的 goal/context/constraints/done-when、复杂任务 planning、durable `AGENTS.md`/ExecPlan、subagent read-heavy parallelism、sandbox/approval/tool surface 等当前产品实践。M12 扩展出的十一项 delegation contract、`STOP_AND_ESCALATE` 状态机与四角色 authority matrix 是**课程综合**，不是 OpenAI 标准。
 
-```text
-one slot
-2 contenders
-→ 2 accepted
-```
+Anthropic material 支撑：workflow/agent distinction、simplest adequate orchestration、long-running progress/context artifacts、parallel team/harness 的具体经验。它不证明“多 Agent 更好”或固定 team size。
 
-实际示例结果：
+SWE-bench/METR 支撑 automated eval 与 maintainer acceptance gap 的经验事实，但不支撑“benchmark 无用”或“AI 不能写 mergeable code”。
 
-```text
-naive_results = ['job-2', 'job-1']
-naive_jobs = ['job-1', 'job-2']
-```
+GitHub review instructions 是当前 product fact，必须随产品文档校准。
 
-线程返回顺序不重要。
+Capability / Permission / Authority 三分法、read broadly/write narrowly、authority ladder、claim-oriented evidence packet 等，是课程为了把前面 M00-M11 的软件工程原则映射到 Agent workflow 而做的 synthesis。不要伪装成某一 vendor 的 quoted framework。
 
-重要的是：
+详细 provenance 见 [M12 Source Audit](../../reading-notes/m12-source-audit.md)。
 
-```text
-accepted count = 2
-```
+## 18. 实际验证记录与 instructor acceptance bar
 
-## Applicable regressions
+Canonical starter 在本轮审计中实际复现：
 
 ```text
-M04 PASS
-M05 PASS
-M06 PASS
-M07 PASS
-M08 PASS
-M09 PASS
-M11 PASS
-M12 PASS
+core tests: 6 passed
+M11: good=2 bad=10 total=12 sli=0.167 target=0.990
+M12 vague: INSUFFICIENT_CONTRACT
+M12 unsafe: REJECT_PLAN
+M12 bounded: STOP_AND_ESCALATE
+M12 authorized: AUTHORIZED_TO_IMPLEMENT
 ```
 
-## Historical harness applicability
+Instructor reference 曾在临时副本中验证：
 
 ```text
-M03 mutation harness: still runs, 3 killed / 3 survived
-M10 replay harness: no longer applicable after M12 source evolution
+6 core + 5 focused M12 tests = 11 passed
+one-slot naive negative control -> 2 accepted
+M04/M05/M06/M07/M08/M09/M11/M12 applicable regressions -> pass/unchanged teaching behavior
+M03 mutation harness -> still applicable in that reference
+M10 replay harness -> version-scoped/inapplicable after that source evolution
 ```
-
-M10 failure 被记录为 version-scope change，而不是 product regression。
-
----
 
-# 52. 最终一句话
+线程返回 `job-1` / `job-2` 的顺序不重要；negative control 重要的是 accepted count 变成 2，证明 naive split check/create 可以 over-admit。
 
-> **M12 的目标不是让 Agent 尽量少问人，而是让它尽量少做未经授权的猜测；不是让 human 保留所有机械工作，而是让真正新的 engineering judgment 有明确 owner，并把已经稳定的 judgment 逐步编码进系统。**
+最后的评分标准可以压成一句话：**M12 不追求让 Agent 尽量少问人，而是让它尽量少做未经授权的猜测；不要求 human 保留机械工作，而要求 novel judgement 有明确 owner，并把已经稳定的 judgement 逐步迁移到 contract、tests、policy 与 tool guardrails。**
