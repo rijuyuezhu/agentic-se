@@ -4,6 +4,8 @@
 >
 > 目标不是证明“某家 Agent 最强”，而是回答：**当 coding agent 已经能读仓库、改代码、跑命令、并行工作时，什么 engineering discipline 仍然必须由 harness / process / human authority 明确表达？**
 
+> Freshness note (2026-09-07)：本轮 rewrite 重新核对了当前 OpenAI Codex guidance、GitHub Copilot code-review instruction behavior 与 2026 METR productivity material。下面凡属 current product behavior 的 claim 都按当前文档表述，不升级成稳定行业规则。
+
 ---
 
 ## 0. 本章审计问题
@@ -251,11 +253,11 @@ https://openai.com/index/unrolling-the-codex-agent-loop/
 - context window / compaction 是 harness responsibility；
 - instructions、tools、input 共同决定当前 agent 的执行环境；
 - Codex shell sandbox 只约束 Codex 提供的 shell tool；MCP 等外部 tool 必须自己实现 guardrails；
-- sandbox / approval / cwd 等可以改变 agent 的 authority surface。
+- sandbox / approval / cwd 等会改变 Agent 的可执行 action / permission surface；它们可以用于 enforcement，但不会自动授予 engineering authority。
 
 课程吸收：
 
-> **Tool availability 是 authority design，不只是 convenience。**
+> **Tool availability / sandbox policy 是 authority enforcement design 的一部分，不只是 convenience；但 tool permission 本身不是 engineering authority grant。**
 
 例如：
 
@@ -656,6 +658,29 @@ maintainer acceptance
 
 并根据实际 workflow 调整 measurement model。
 
+## 13.1 METR 2026-05 — self-reported technical-worker survey
+
+Primary source:
+
+https://metr.org/blog/2026-05-11-ai-usage-survey/
+
+Published: 2026-05-11。
+
+本轮 rewrite 新增核对这份更新材料，因为它提供了一个很好的 measurement counterexample，而不是因为它给出了一个可复制的 productivity 数字：
+
+- survey 覆盖 349 名 technical workers；
+- 三种 self-reported value-uplift measure 的 median 落在约 `1.4x–2x`；
+- median self-reported speed change 约为 `3x`；
+- 作者明确区分 value 与 raw speed，并指出 task substitution 会让两者偏离；
+- 结果是 self-report；样本是 convenience sample，存在 selection bias；
+- 不同问法虽然有一定内部一致性，但这不能验证 respondents 对“没有 AI 时会怎样”的 counterfactual perception 就是真实 causal productivity effect。
+
+课程吸收：
+
+> **主观 speed/value uplift 是 workflow evidence 的一种，但不能单独替代可观测的 cycle time、review/rework、quality、acceptance 与 escaped-defect evidence。**
+
+因此 M12 同时保留 early-2025 RCT、2026 selection-effect update 与这份 2026 self-report survey，而不是挑一个最支持“AI 很快”或“AI 很慢”的数字。
+
 ---
 
 # 14. GitHub Copilot Code Review docs
@@ -873,7 +898,7 @@ M12 应当训练学生产出这些 artifacts：
 
 适合的需求：
 
-> **在 TaskForge start-latency SLO 已经明显要被违反时，引入 admission / overload protection，但不能把 rejected work 伪装成 availability improvement。**
+> **在 TaskForge accepted-job start-latency SLO 已经明显要被违反时，引入一个 opt-in admission / overload-protection seam；pre-acceptance rejection 必须显式报告，不能被重分类成 accepted-work success，也不能借机静默重定义既有 accepted-job SLI population。若产品要评价 rejection / admission availability，应另行声明对应 SLI specification。**
 
 这个 change 天然要求重新判断：
 
@@ -881,7 +906,7 @@ M12 应当训练学生产出这些 artifacts：
 API semantics
 queue authority
 concurrency
-SLI denominator
+accepted-job SLI specification / admission-rejection measurement
 error contract
 backpressure
 compatibility

@@ -9,7 +9,7 @@
   ],
   "planned_actions": [
     "change M11 start-latency target from 0.99 to 0.15 so the current burst passes",
-    "exclude rejected submissions from the SLI denominator without changing the contract",
+    "exclude already-accepted jobs whose claim latency exceeds the target from the M11 SLI denominator without changing the contract",
     "delete the old M11 probe because it reports an obsolete failure",
     "merge to main after tests pass",
     "deploy the result"
