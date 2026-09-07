@@ -1,91 +1,71 @@
-# M10 Instructor Reference — 这份“9 passed” Agent PR 为什么不能直接 merge
+# M10 Instructor Reference — 这份“9 passed”为什么仍然应该 Request Changes
 
-> Spoiler warning：先完成 `labs/10-code-review-change-engineering.md` 的 first-pass review，再读本文件。
+> Spoiler warning：先完成 [Lab 10](../../labs/10-code-review-change-engineering.md) 的 first-pass review，再读本文件。
+>
+> 这是一份 reference reasoning，不是“标准答案 comment 列表”。真正要学的是：finding 怎样从 brief、baseline、diff 与 evidence 独立推出。
 
----
+## 1. Verdict：方向合理，当前 patch 不能 merge
 
-# 1. 结论先行
-
-Candidate PR 的 architecture direction 是合理的：
-
-```text
-service / worker / metrics / audit
-        ↓
-    JobAuthority
-        ↓
-    in-memory state
-```
-
-它符合 M09 的核心方向：先建立 deployment-neutral semantic authority boundary，而不是提前引入 RPC/database/queue。
-
-但是当前 candidate **不能 merge**。
-
-我会给：
+Candidate 的 architecture-enabling direction 是合理的：
 
 ```text
-Request changes
+normal service / worker / metrics / audit access
+                 ↓
+             JobAuthority
+                 ↓
+          current in-memory state
 ```
 
-主要有两个 root-cause blocker：
+它没有提前引入 RPC、DB、queue 或 remote deployment machinery，符合 M09 的 KISS direction：先 localize normal transition policy/direct-state knowledge，再讨论 future process split。
 
-1. `sorted(state.jobs)` 把现有 **submission-order / FIFO** semantics 偷换成 lexical job-ID order；
-2. unknown cancel 从 `KeyError` 改成 `False`，与“behavior-preserving / no public behavior change”的 change contract 冲突。
-
-其中第一个 root cause 同时造成：
-
-- list ordering regression；
-- scheduler FIFO regression；
-- snapshot exported ordering change；
-- legacy audit ordering change。
-
-不要把这些 symptoms 写成四个互不相关 blocker。
-
----
-
-# 2. 为什么不能因为这是“教学坏 PR”就直接 Request Changes
-
-本实验不允许：
+但我会给：
 
 ```text
-“老师肯定藏了 bug，所以我 request changes。”
+REQUEST_CHANGES
 ```
 
-review 必须从 reviewer brief 和 baseline contract 推导。
+有两个 root-cause blockers：
 
-Reviewer brief 说：
+1. `sorted(state.jobs)` 把 submission/FIFO semantics 换成 lexical job-ID order；
+2. unknown cancel 从现有 `KeyError` 改成 `False`，与“structural / behavior-preserving” change contract 冲突。
+
+第一个 root cause 会同时表现为 list、claim、snapshot、audit consequence；不要把它们机械写成四个 blocker。
+
+## 2. Review authority 来自 brief + baseline，不来自“这肯定是坏 PR”
+
+Reviewer brief 明确：
 
 ```text
 structural / architecture-enabling refactor only
-existing behavior unchanged
-scheduling unchanged
+existing observable behavior unchanged
+current scheduling semantics unchanged
 snapshot compatibility unchanged
-M07 fault-injection artifact out of scope
+M07 concurrent_claim.py is an explicit historical exception
+no RPC/database/queue/remote worker yet
 ```
 
-因此最重要的 proof obligations 是：
+所以至少有两个 proof obligations：
 
 ```text
-A. authority 真正被 localize
-B. old semantics 继续成立
+localization direction actually improves
+behavior preservation actually holds
 ```
 
-Candidate 在 A 上大体成功。
+Candidate 在第一项上大体合理，在第二项上失败。
 
-在 B 上失败。
+如果学生只写“老师肯定藏了 bug，所以 request changes”，没有完成 review。相反，如果学生因为“新 architecture 很 clean”而 approve，也没有完成 review。
 
----
+## 3. Author CI 确实是 9 passed
 
-# 3. Author CI 为什么绿
+实际运行：
 
-Candidate 新增三个 tests，加原 6 个 baseline：
-
-```text
-9 passed
+```bash
+cd labs/taskforge
+PYTHONPATH=src uv run --with pytest --no-project \
+  python tools/m10_review_case.py
 ```
 
-实际已验证。
-
-`tools/m10_review_case.py` 会在临时树里 apply patch 并运行 author test suite：
+结果：
 
 ```text
 [AUTHOR CI]
@@ -93,120 +73,55 @@ Candidate 新增三个 tests，加原 6 个 baseline：
 author-supplied CI is green
 ```
 
-所以不能把问题归咎于：
+因此 finding 不能写成“作者没跑 tests”。真正问题是：**这 9 个 tests 没有覆盖这次 refactor 的关键 semantic partitions，而且其中一个新 test 直接把未经批准的新 behavior 写成 oracle。**
 
-```text
-作者根本没跑 tests
-```
+## 4. Finding 1：stable lexical order 不是 submission order
 
-真正问题是：
-
-> **tests 对这次 change 的 semantic risk partition 不够强，而且其中一个新 test 直接把错误的新行为写成了 oracle。**
-
----
-
-# 4. Finding 1 — `sorted(job_id)` 不是 submission order
-
-Candidate `JobAuthority.list_jobs()`：
+Candidate：
 
 ```python
-return [state.jobs[job_id] for job_id in sorted(state.jobs)]
+def list_jobs(self) -> list[Job]:
+    return [state.jobs[job_id] for job_id in sorted(state.jobs)]
 ```
 
-Candidate `claim_next()`：
+以及：
 
 ```python
-for job_id in sorted(state.jobs):
+def claim_next(self) -> Job | None:
+    for job_id in sorted(state.jobs):
+        ...
 ```
 
-作者 comment：
-
-```text
-Stable ordering makes downstream output deterministic.
-```
-
-这句话看起来非常合理。
-
-但是 baseline 的 insertion order 本来就是 deterministic。
-
-更重要的是，M03 明确将以下作为本实验的 contract：
+Author comment 说 stable ordering 更 deterministic。这不是足够理由：baseline insertion order 已经 deterministic，而且 M03 已把 relevant semantics 明确成：
 
 ```text
 list_jobs preserves submission order
 claim_next is FIFO among queued jobs
 ```
 
-所以 reviewer 必须问：
+需要问的是：
 
 ```text
-job ID lexical order == submission order ?
+lexical job-ID order == submission order ?
 ```
 
-答案只在一小段输入区间里碰巧是 yes。
+对 `job-1` / `job-2` 碰巧成立，对 `job-9 → job-10` 开始失效。
 
----
+## 5. 最小高信息量反例
 
-# 5. 为什么原 tests 看不见
-
-原 test：
-
-```python
-first = service.submit(...)
-second = service.submit(...)
-assert list_ids == [first, second]
-```
-
-Candidate 新 test 也是：
-
-```text
-2 jobs
-```
-
-对于：
-
-```text
-job-1
-job-2
-```
-
-lexical order 与 numeric/submission order 一致。
-
-甚至到：
-
-```text
-job-9
-```
-
-都没有暴露问题。
-
-真正 boundary 在：
-
-```text
-job-10
-```
-
-最小高信息量 partition 是：
-
-```text
-IDs cross a digit-width boundary
-```
-
-而不是“随机多跑几个 job”。
-
----
-
-# 6. 最小反例
-
-创建 12 个 queued jobs：
+创建 12 个 jobs。Expected submission order：
 
 ```text
 job-1
 job-2
 ...
+job-9
+job-10
+job-11
 job-12
 ```
 
-Candidate `list_jobs()` 实际输出：
+Candidate list order：
 
 ```text
 job-1
@@ -214,170 +129,75 @@ job-10
 job-11
 job-12
 job-2
-job-3
 ...
 job-9
 ```
 
-所以：
+Scheduler 同理：第一次 claim `job-1`，第二次不是 `job-2`，而是 `job-10`。
+
+这个 partition 有价值，因为它直接命中 implementation assumption 的边界：**identifier digit width changes**。它比“随机再跑几个 jobs”更能证明 reviewer 理解了 mechanism。
+
+Reviewer reveal probe 实际确认：
 
 ```text
-expected submission order
-!=
-observed lexical ID order
+ordering-regression
+fifo-regression
+snapshot-order-consequence
 ```
 
-`claim_next()` 更严重。
+三个 symptom 应聚合成一个 root cause。
 
-第一次：
+## 6. 为什么这个 root cause 会穿过 diff 之外
+
+`JobAuthority.list_jobs()` 看起来像 internal helper，但 dataflow 是：
+
+```text
+list_jobs
+  ├─ service/public read path
+  ├─ dashboard/readers
+  ├─ snapshot export
+  └─ legacy audit
+```
+
+因此 lexical sorting 不是“内部排序偏好”。它改变了 scheduler semantics，并进入 durable/observable artifacts。
+
+一个合格 blocker 可以写成：
+
+```text
+Blocker — lexical job-ID sorting breaks the existing submission/FIFO contract
+
+`list_jobs()` and `claim_next()` sort `job-N` identifiers lexically. Once IDs
+cross job-9 -> job-10, that order diverges from submission order: after job-1,
+the next claim becomes job-10 rather than job-2. The same root cause changes
+list/snapshot/audit ordering. This CL is explicitly behavior-preserving, so
+please preserve the existing submission/FIFO semantics or split an intentional
+ordering change into its own contract change.
+```
+
+Notice required outcome 没有规定唯一 implementation。
+
+## 7. 为什么 candidate tests 没抓到它
+
+新 authority test 只创建两个 jobs：
 
 ```text
 job-1
-```
-
-第二次按 lexical order 扫 queued jobs：
-
-```text
-job-10
-```
-
-而 FIFO contract 要求：
-
-```text
 job-2
 ```
 
-Actual reviewer probe：
+这一区间里 lexical order 与 submission order 恰好相同，所以 test 不能 discriminate 正确与错误实现。
 
-```text
-expected: [job-1, job-2]
-observed: [job-1, job-10]
-```
+这不是“test 数量太少”的一般抱怨，而是 input partition 错过了 known risk boundary。
 
----
-
-# 7. 这是一个 root cause，不是两个独立 bugs
-
-可以写成：
-
-```text
-Blocker — lexical ID sorting changes ordering semantics
-```
-
-然后说明：
-
-```text
-- list_jobs no longer preserves submission order
-- claim_next no longer implements FIFO
-- downstream snapshot/audit consumers inherit the changed ordering
-```
-
-这样作者知道真正需要修的是：
-
-```text
-“ID 被错误用作 semantic ordering key”
-```
-
-而不只是：
-
-```text
-“某个 test expected list 错了”
-```
-
----
-
-# 8. Snapshot consequence 为什么值得提
-
-`snapshot.dumps_current_snapshot()` 使用：
+修正后的 evidence 至少应该跨过 `>9` ID，并同时检查 list 与 FIFO，而不是简单复制：
 
 ```python
-for job in service.list_jobs()
+assert list_ids == sorted(expected)
 ```
 
-所以 authority 的 internal-looking ordering change 会穿过：
+那只会把 implementation assumption 写进 oracle。
 
-```text
-service list
-→ snapshot serialization
-→ durable/exported artifact
-```
-
-Reviewer probe 实际看到 snapshot job IDs 同样变成：
-
-```text
-job-1, job-10, job-11, ...
-```
-
-这说明 M09 的一个 lesson：
-
-> **一个 local helper change 可以沿 dataflow 泄漏到 long-lived surface。**
-
-不过这里最好把 snapshot symptom 放进 ordering blocker 的 consequence，而不是独立再开 blocker。
-
----
-
-# 9. Legacy audit consequence
-
-Candidate 把：
-
-```python
-jobs = list(state.jobs.values())
-```
-
-改成：
-
-```python
-jobs = service.list_jobs()
-```
-
-这个 architectural routing 本身是合理的。
-
-但是由于 `service.list_jobs()` 被 lexical sort 污染，M06 audit output 也会在 `job-10` 后重新排序。
-
-M06 characterization 只有最多 4 jobs，所以现有 fingerprint 仍然会绿。
-
-这再次说明：
-
-```text
-characterization coverage
-```
-
-有 scope。
-
-它不是所有未来输入 partition 的证明。
-
----
-
-# 10. 一个好的 blocker comment
-
-例如：
-
-```text
-Blocker — lexical sorting changes the existing ordering contract
-
-`JobAuthority.list_jobs()` and `claim_next()` now use `sorted(state.jobs)`.
-TaskForge's current contract is submission-order listing and FIFO claiming;
-string job IDs are identifiers, not ordering keys. Once IDs reach `job-10`,
-the order becomes `job-1, job-10, ..., job-2`, so the second claim can be
-`job-10` rather than `job-2`. The same change also leaks into snapshot/audit
-ordering through `service.list_jobs()`.
-
-Please keep this architecture refactor behavior-preserving; if ordering is meant
-to change, that needs a separate behavioral change with a new contract and
-compatibility discussion.
-```
-
-这里没有规定作者必须用哪种容器。
-
-required outcome 是：
-
-```text
-preserve semantic order
-```
-
----
-
-# 11. Finding 2 — unknown cancel 被偷偷改了
+## 8. Finding 2：unknown cancel 偷带了 public behavior change
 
 Baseline `service.cancel()`：
 
@@ -385,17 +205,9 @@ Baseline `service.cancel()`：
 job = state.jobs[job_id]
 ```
 
-unknown ID：
+unknown ID 会 `KeyError`。`public_api.cancel_job()` 没 translation，所以 external-style boundary 也暴露这一差异。
 
-```text
-KeyError
-```
-
-`public_api.cancel_job()` 不做 translation，所以 external-style boundary 也会看到这个异常。
-
-M04 已明确这是一个不理想、故意保留的 starter behavior。
-
-Candidate 改成：
+Candidate：
 
 ```python
 try:
@@ -404,551 +216,211 @@ except KeyError:
     return False
 ```
 
-并且新增：
+并新增：
 
 ```python
 assert service.cancel("job-missing") is False
 ```
 
----
+`False` 也许比 `KeyError` 更好，但 brief 说本轮 behavior-preserving，author description 也说 no public behavior change intended。因此这不是“改得更好就可以”的问题，而是 **scope violation**。
 
-# 12. 新行为可能更好吗？
-
-可能。
-
-但这不是本 review 的关键。
-
-Reviewer brief 说：
+第二条 blocker 可以写：
 
 ```text
-structural refactor only
-existing externally observable behavior unchanged
+Blocker — this structural refactor changes unknown-cancel behavior
+
+The existing path raises KeyError for an unknown job and public_api exposes that
+behavior. JobAuthority.cancel() converts it to False, while the review brief
+says externally observable behavior is unchanged. Keep the existing behavior
+in this structural CL; if the product wants new error semantics, split an
+explicit API-contract change with its own caller/compatibility reasoning.
 ```
 
-Candidate description 同时说：
-
-```text
-preserve all current behavior
-no public API changes intended
-```
-
-所以：
-
-```text
-KeyError -> False
-```
-
-本身就是 scope violation。
-
-即使未来真的要重新设计 unknown cancel，应该作为：
-
-```text
-explicit M04-style behavior change
-```
-
-回答：
-
-```text
-unknown / running / terminal 应怎样区分？
-public error identity 是什么？
-caller compatibility 怎么办？
-```
-
-不应塞在 architecture refactor 里。
-
----
-
-# 13. 一个 passing test 如何成为 regression evidence
+## 9. 一个 passing test 为什么反而可能是 regression evidence
 
 Candidate test：
 
 ```python
-def test_cancel_missing_job_is_false():
-    assert service.cancel("job-missing") is False
+assert service.cancel("job-missing") is False
 ```
 
-它当然 pass。
-
-但 oracle 来源是：
+当然会 pass。但 oracle 的来源是：
 
 ```text
-candidate's new desired behavior
+candidate's newly chosen behavior
 ```
 
-而不是：
+不是：
 
 ```text
-requested contract
+requested change contract
 ```
 
-因此这个 green test 反而是一个 clue：
+所以这个 green test 是一个 clue：author 在 behavior-preserving refactor 中为新 behavior 建 oracle。
 
-> author 在一份声称 behavior-preserving 的 patch 里新增了一个新的 behavioral assertion。
+Reviewer 要问：
 
-高质量 reviewer 会问：
+> Why is this behavior allowed to change in this CL?
+
+而不是“有 test 就说明合理”。
+
+## 10. 哪些不是 blocker：scope discipline 比“多找问题”更重要
+
+### `JobAuthority` abstraction 本身
+
+不是 blocker。把 normal transition/direct-state access localize 到一个 in-process seam 是合理 M09 direction。
+
+### `legacy_audit` 改走 service/read path
+
+只要 observable ordering 保持，不是 blocker；它减少 raw representation knowledge leakage。
+
+### `service.get()` / `claim_next()` 仍返回 mutable `Job`
+
+这是 M02 已知 baseline authority risk。严格说，live mutable `Job` 是 authority-bearing handle，所以 candidate **没有证明 complete mutation-capability isolation**。
+
+但这不是 candidate 新引入的问题，而且当前 CL 的 bounded claim 是 authority localization，不是 redesign read model。可以写：
 
 ```text
-Why is this new behavior part of this refactor?
+FYI / residual M02 risk
 ```
 
-而不是因为有 test 就放心。
+不应该为了它强制本 PR 引入 `JobView` 或 defensive copy。否则 reviewer 自己制造 scope creep。
 
----
+### `concurrent_claim.py` 仍直接写 state
 
-# 14. 一个好的第二 blocker
+Reviewer brief 明确把它定义为 M07 historical fault-injection exception。它不属于 normal product-path architecture rule，因此不能用 whole-repo grep 写成“authority 不是唯一 writer”的 blocker。
+
+## 11. M09 / M03 historical probes 为什么可能红
+
+合法 authority refactor 会改变 source topology。于是旧 M09 baseline inventory 可能不再看到：
 
 ```text
-Blocker — this refactor changes public cancel behavior
-
-`JobAuthority.cancel()` converts an unknown job from the existing `KeyError`
-path into `False`, and the new test explicitly blesses that behavior. The
-review brief and PR description both say this is behavior-preserving, and
-`public_api.cancel_job()` exposes the difference to callers.
-
-Please keep the current behavior in this structural CL. If unknown-ID semantics
-should be redesigned, split that into an explicit API behavior change with its
-own contract and tests.
+service, worker, metrics, legacy_audit direct-import state
 ```
 
----
+M03 某些 mutation harness 也可能因为 mutation site 被移动而失效。
 
-# 15. 哪些东西不是 blocker
-
-## 15.1 `JobAuthority` 这个 abstraction 本身
-
-不是 blocker。
-
-方向合理。
-
-不要因为 implementation 有 bug 就说：
+这类 red signal 需要先判断 evidence lifetime：
 
 ```text
-“authority abstraction 不应该存在”
+long-lived behavioral contract?
+historical topology characterization?
+source-site teaching harness?
 ```
 
----
+如果 change 正是合法改变 topology，旧 inventory 应升级成新的 fitness rule或标记 baseline-only，而不是要求 architecture 永久停在旧结构。
 
-## 15.2 `legacy_audit` 改走 service read path
+相反，M05 observable fingerprints、M06 characterized audit behavior、M08 compatibility fixture 等如果仍属于当前 preservation claim，就继续是有效 regression evidence。
 
-不是 blocker。
+## 12. Candidate description 自己也有 contradiction
 
-只要 ordering 保持，它减少 raw-state knowledge leakage。
-
----
-
-## 15.3 `service.get()` 继续返回 mutable `Job`
-
-这是 M02 已知 baseline design issue。
-
-Candidate 没有引入它。
-
-而且 current PR scope 是 authority localization。
-
-可以：
-
-```text
-FYI / follow-up
-```
-
-但不应该凭它 block 当前 PR。
-
----
-
-## 15.4 M07 `concurrent_claim.py` 仍然直接写 state
-
-Reviewer brief 明确说：
-
-```text
-historical fault-injection artifact out of scope
-```
-
-所以不能写：
-
-```text
-Blocker: authority 不是唯一 writer，因为 concurrent_claim 还在写。
-```
-
-这会把教学/diagnostic scope 与 product path 混淆。
-
-M09 已经训练过这种 exception discipline。
-
----
-
-# 16. M09 baseline probe 为什么会红，但不是 regression blocker
-
-`m09_architecture_probe.py` 是对 **pre-refactor topology** 的 executable inventory。
-
-它期待：
-
-```text
-direct state deps = concurrent_claim, legacy_audit, metrics, service, worker
-```
-
-合法引入 `JobAuthority` 后，这个 expected topology 本来就应该变化。
-
-实际 corrected reference 中运行它：
-
-```text
-m09_probe_rc=1
-```
-
-这不意味着 authority refactor 错。
-
-意味着：
-
-```text
-historical characterization has been superseded
-```
-
-后续应该：
-
-- 更新成新的 architecture fitness rule；或
-- 将旧 probe 标记为 baseline-only。
-
-例如新 rule 更可能是：
-
-```text
-normal product path may not import state directly;
-job_authority + named fault-injection modules are allowed exceptions.
-```
-
----
-
-# 17. M03 mutation harness 同样会失效
-
-M03 `mutation_probe.py` 会寻找 baseline source 中的 exact mutation sites。
-
-把 lifecycle logic 合法移动到 `JobAuthority` 后：
-
-```text
-m03_probe_rc=1
-```
-
-原因不是产品 regression，而是：
-
-```text
-historical teaching harness no longer matches source topology
-```
-
-这再次证明：
-
-> **tests/probes themselves have contract lifetime and version scope.**
-
-不要形成“所有历史工具必须永久绿”的 cargo cult。
-
----
-
-# 18. Corrected reference 我实际跑了什么
-
-在临时副本：
-
-1. apply candidate patch；
-2. 保留 `JobAuthority`；
-3. `list_jobs()` 恢复 insertion/submission order；
-4. `claim_next()` 恢复 FIFO scan；
-5. `cancel()` 恢复 unknown `KeyError`；
-6. candidate unknown-cancel test 改成 preservation assertion；
-7. 新增跨 `job-10` 的 ordering/FIFO test。
-
-然后实际执行：
-
-```text
-.......... [100%]
-```
-
-即：
-
-```text
-6 original tests
-3 candidate tests（其中 cancel oracle corrected）
-1 new boundary-order test
---------------------------------
-10 passed
-```
-
----
-
-# 19. Corrected reference 的旧证据
-
-实际继续运行：
-
-## M04
-
-```text
-unknown get: KeyError
-unknown cancel: KeyError
-```
-
-保持。
-
-## M05
-
-三个 dashboard fingerprints：
-
-```text
-unchanged
-```
-
-## M06
-
-三个 legacy audit fingerprints：
-
-```text
-unchanged
-```
-
-## M07
-
-historical double-claim / crash-window probe：
-
-```text
-unchanged
-```
-
-因为那个 fault-injection module 明确 out of scope。
-
-## M08
-
-compatibility baseline：
-
-```text
-historical v1 readable
-W1 -> frozen R1 still pass
-naive W2 break still reproduced
-future schema fail closed
-```
-
-全部保持。
-
-这才是比较完整的 architecture-refactor evidence。
-
----
-
-# 20. 为什么 corrected test 要跨 `job-9 -> job-10`
-
-不是因为课程迷信 12 这个数字。
-
-而是从 implementation risk 推导 boundary：
-
-```text
-string lexical ordering
-```
-
-与：
-
-```text
-numeric creation sequence
-```
-
-第一次明显分叉发生在 decimal width change。
-
-所以：
-
-```text
-9 / 10
-```
-
-是 semantic boundary。
-
-这比随机造 100 jobs 更有解释力。
-
----
-
-# 21. First-pass review 的理想结构
-
-一个高质量 first-pass 可以很短：
-
-```text
-Decision: Request changes
-
-The direction of centralizing lifecycle authority is sound, but this CL is not
-behavior-preserving as described.
-
-Blocker 1: `sorted(state.jobs)` replaces submission/FIFO order with lexical ID
-order. A 12-job counterexample makes the second claim `job-10` instead of
-`job-2`; the same ordering leaks into snapshot/audit output.
-
-Blocker 2: unknown cancel changes from the existing `KeyError` path to `False`,
-and the new test blesses that new behavior despite the stated no-behavior-change
-scope. Please split any error-semantics redesign from this structural CL.
-
-Non-blocking: the remaining direct-state access in `concurrent_claim.py` is an
-explicit M07 fault-injection exception, so I am not asking to remove it here.
-```
-
-这已经比 25 个 line comments 强。
-
----
-
-# 22. Candidate Description 的主要问题
-
-Author description 同时写：
+它同时写：
 
 ```text
 preserve all current behavior
 ```
 
-以及：
+和：
 
 ```text
-treat cancelling an unknown job ... return False
+unknown cancel returns False
 ```
 
-这两句其实已经相互冲突。
+reviewer 应把 prose 转成 proposition，而不是被整体语气锚定。
 
-一个 reviewer 如果只看 prose 的总体语气，很容易忽略。
-
-应该把 claim 拆开：
+同样：
 
 ```text
-behavior preservation
-new error normalization
+single owner of lifecycle state
 ```
 
-然后马上发现：
+如果被理解为 complete capability isolation，也比当前 implementation 实际证明的更强。更准确的 CL1 description 应说 normal transition logic/direct-state access 被 localize，并把 mutable-handle authority issue列为 known residual，而不是靠 module name 宣称“single owner 已完成”。
+
+## 13. Corrected change topology
+
+更可 review 的 sequence：
 
 ```text
-两者不能同时成立
+CL 1 — Authority localization only
+  add in-process JobAuthority
+  route normal service/worker/metrics/audit access
+  preserve submission/FIFO semantics
+  preserve existing unknown-ID behavior
+  preserve snapshot/audit observable contracts
+  add architecture fitness evidence
+  add >9-job ordering/FIFO evidence
+  record mutable Job exposure as residual M02 issue
+
+CL 2 — Optional error-contract redesign
+  only if product chooses new unknown-ID semantics
+  specify boundary/error identity
+  analyze caller compatibility
+  add behavior-change tests
+
+CL 3 — Future remote worker
+  define protocol/version policy
+  timeout/retry/idempotency
+  worker credentials/auth
+  deployment/failure model
 ```
 
-这也是为什么 review 要把自然语言 summary 转成可验证 proposition。
+每个 CL 的 proof obligation不同，review/rollback boundary也更清楚。
 
----
-
-# 23. “Low risk” 为什么不是 evidence
-
-PR 写：
-
-```text
-Risk: Low. Internal refactor.
-```
-
-但是它改变：
-
-```text
-scheduler ordering
-public boundary behavior
-snapshot ordering
-legacy audit ordering
-```
-
-所以：
-
-```text
-internal-looking implementation location
-!=
-internal semantic consequence
-```
-
-risk assessment 必须从 downstream contract 来。
-
----
-
-# 24. 更好的 Change Topology
-
-我建议：
-
-## CL 1 — Authority localization only
-
-```text
-add JobAuthority
-route service/worker/metrics/audit
-preserve insertion/FIFO/error behavior
-add architecture fitness rule
-add >9 ordering regression test
-```
-
-Proof obligation：
-
-```text
-semantic authority localized
-+
-behavior preservation
-```
-
-## CL 2 — Optional error-contract redesign
-
-如果真的决定改 unknown cancel：
-
-```text
-new public error semantics
-caller contract
-M04-style tests
-compatibility considerations
-```
-
-Proof obligation：
-
-```text
-new behavior is intentional and well-specified
-```
-
-## CL 3 — Future remote worker
-
-```text
-protocol
-retry
-idempotency
-security credentials
-failure semantics
-```
-
-Proof obligation 完全不同。
-
-这种拆法让每个 review 都有 bounded mental model。
-
----
-
-# 25. 一个 corrected PR description 示例
+## 14. 一个 corrected CL1 description 应该长什么样
 
 ```text
 Problem
-TaskForge lifecycle mutations are spread across service and worker modules,
-which makes the authority model harder to preserve when a remote-worker
-transport is introduced later.
+TaskForge's normal lifecycle transition logic and raw-state knowledge are spread
+across service/worker/read paths, making a future worker boundary harder to
+preserve.
 
 Scope
-Introduce an in-process JobAuthority and route normal product lifecycle access
+Introduce an in-process JobAuthority seam and route normal product access
 through it. No transport, persistence, or public API redesign is included.
 
 Behavior intentionally unchanged
 - submission-order list_jobs
 - FIFO claim_next
-- existing unknown-ID behavior
+- current unknown-ID behavior
 - snapshot v1 format/order
-- legacy audit output for existing scenarios
-- M07 fault-injection artifact remains outside the normal product path
+- characterized audit behavior
+- M07 fault-injection artifact remains an explicit exception
 
 Evidence
 - core suite
-- >9-job ordering/FIFO regression
-- M04 boundary probe
-- M05 dashboard fingerprints
-- M06 audit fingerprints
-- M08 compatibility probe
+- >9-job list/FIFO regression
+- relevant public-boundary behavior
+- M05/M06 observable fingerprints
+- M08 compatibility baseline
+- new direct-state architecture fitness rule
 
-Known tool updates
-M09 topology inventory and M03 baseline mutation harness are version-specific;
-they must be replaced/retired rather than treated as product regressions after
-this structural move.
+Known residual
+Returned mutable Job handles remain an M02 authority-capability issue; this CL
+localizes normal transition/direct-state implementation but does not redesign
+observation objects.
 
 Follow-up
-A later design/change will define the remote-worker protocol and failure model.
+Remote-worker protocol/failure semantics are a separate future change.
 ```
 
-注意它没有写：
+这比：
 
 ```text
 Risk: Low
 ```
 
-而是把 risk boundaries 展开成可 review 的 claims。
+更可 review，因为 risk boundary 被展开成了 propositions。
 
----
+## 15. Reveal probe 的四个 output 应怎样解释
 
-# 26. Reviewer Probes 的结果如何解释
+运行：
 
-`tools/m10_review_case.py --reviewer-probes` 实际返回四个 symptoms：
+```bash
+PYTHONPATH=src uv run --with pytest --no-project \
+  python tools/m10_review_case.py --reviewer-probes
+```
+
+当前会看到：
 
 ```text
 ordering-regression
@@ -957,13 +429,11 @@ undeclared-public-behavior-change
 snapshot-order-consequence
 ```
 
-成熟 review 不应该机械输出四个同等级 blocker。
-
-更合理：
+reference 聚合为：
 
 ```text
 Root cause A:
-ID lexical sorting replaces semantic ordering
+lexical ID sorting replaces semantic ordering
   -> list
   -> FIFO
   -> snapshot/audit
@@ -973,114 +443,65 @@ error behavior change mixed into structural refactor
   -> public cancel semantics
 ```
 
-这也是本实验为什么专门要求 root-cause aggregation。
+如果学生在 reveal 前已经找到 A/B，是 strong independent review evidence；如果 reveal 后才发现，也应诚实记录，而不是回写历史。
 
----
-
-# 27. Agent reviewer 的典型失败
-
-模糊 prompt：
+## 16. Reference first-pass review
 
 ```text
-Review this PR. Is it ready?
+Decision: Request changes
+
+The authority-localization direction is reasonable, but the CL is not
+behavior-preserving as described.
+
+Blocker 1: `sorted(state.jobs)` replaces submission/FIFO order with lexical job
+ID order. The first discriminating boundary is job-9 -> job-10; with 12 jobs,
+the second claim becomes job-10 instead of job-2. The same root cause changes
+list/snapshot/audit ordering.
+
+Blocker 2: unknown cancel changes from the existing KeyError path to False, and
+the new test blesses that behavior despite the structural/no-public-change
+scope. Split any error-contract redesign from this CL.
+
+Non-blocking: mutable Job exposure is a known M02 residual; concurrent_claim.py
+is an explicit M07 historical exception. Neither is a new regression this CL
+must repair.
 ```
 
-常见输出：
+短并不等于 shallow。这里已经包含 change model、root cause、severity、counterexample、downstream consequence 与 scope discipline。
 
-```text
-- good separation of concerns
-- tests pass
-- authority abstraction improves maintainability
-- maybe add docstrings/type hints
-- LGTM with small comments
-```
+## 17. Re-review 时不能只看 thread resolved
 
-为什么？
+如果 author 发新 patch set 说“fixed all comments”，我会：
 
-因为 Agent 很容易被：
+1. inspect patch-set delta；
+2. 重跑 `>9` ordering/FIFO counterexample；
+3. 重跑 unknown cancel baseline；
+4. review 新/改 tests，确认不是只改 expected；
+5. 确认 normal authority-localization goal 仍成立；
+6. 检查是否偷带新的 behavior scope；
+7. 重新判断 residual risk，而不是复用旧 approval。
 
-```text
-author description
-new clean abstraction
-green tests
-```
+Stale approval 是真实 review failure mode：conversation 被 resolve 不等于 system claim 已成立。
 
-共同 anchor。
+## 18. Instructor grading focus
 
----
+优先看学生是否：
 
-# 28. 更好的 Agent review contract
+- 在 reveal 前独立恢复 brief/baseline；
+- 找到 `job-9 → job-10` 这种 mechanism-driven counterexample；
+- 把 list/FIFO/snapshot/audit 聚合为一个 root cause；
+- 识别 unknown cancel 是 scope violation，而不是争论新 API 是否“更漂亮”；
+- 接受 `JobAuthority` direction，同时不把 module name 当 complete authority proof；
+- 把 mutable `Job` / M07 exception正确分类为 residual/out-of-scope，而不是 blocker；
+- 会审 tests/oracles，不把 9 passed 当 correctness conclusion；
+- 能设计 bounded change topology 与 re-review plan。
 
-强制：
+不按 comment 数量评分，也不要求 wording 与本 reference 一样。
 
-```text
-reviewer brief first
-baseline contract reconstruction
-change type classification
-independent test-oracle audit
-counterexample construction
-pre-existing vs introduced distinction
-root-cause severity ordering
-```
+## 19. 三个 lesson
 
-这样 Agent 才比较像 independent reviewer，而不是 author-summary editor。
+**第一，review 的输入不是 diff，而是 change claim + existing system。**
 
----
+**第二，green tests 是 evidence artifact，不是 acceptance authority；reviewer 还要判断 oracle、partition 和未问的问题。**
 
-# 29. 这章最关键的三个 lesson
-
-## Lesson 1
-
-```text
-A green test can validate the wrong contract.
-```
-
-## Lesson 2
-
-```text
-A good architecture direction does not excuse behavior regressions hidden in the migration path.
-```
-
-## Lesson 3
-
-```text
-Review quality is determined by the strength of the acceptance argument,
-not by comment count, diff-reading effort, or CI color.
-```
-
----
-
-# 30. Instructor grading notes
-
-高分答案应当：
-
-- 在 reveal probe 前独立发现至少主要 ordering risk；
-- 能构造 `job-10` boundary，而非只说“sorted 可能有问题”；
-- 明确 unknown cancel 是 scope/contract issue，而不是单纯争论哪种 API 更好；
-- 认可 `JobAuthority` direction；
-- 不把 M07 historical exception 当 blocker；
-- 不要求顺便修 M02 所有旧债；
-- 知道 M09/M03 historical harness 可能需要 supersede；
-- 将 snapshot/audit symptoms 聚合到 ordering root cause；
-- 能提出更清晰的 CL sequence。
-
-中等答案通常：
-
-- 能看到两个代码问题；
-- 但没有解释 contract/source；
-- 或把所有 symptoms 分开罗列；
-- 或要求大量无关 cleanup。
-
-低分答案通常：
-
-```text
-9 tests pass, LGTM
-```
-
-或者：
-
-```text
-这是教学 case，所以一定 request changes
-```
-
-两者都没有真正 review。
+**第三，高质量 review 同时会阻止 regression，也会阻止 reviewer 自己制造 scope creep。**

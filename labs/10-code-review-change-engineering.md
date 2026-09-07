@@ -1,14 +1,12 @@
-# Lab 10 — Review 一个“9 tests green”但不该直接 merge 的 Agent PR
+# Lab 10 — 独立 Review 一个“9 passed”的 Agent PR
 
-> 本实验不是找 instructor 藏了几个彩蛋。
+> 这不是“老师藏了几个 bug，学生负责猜答案”的实验。
 >
-> 你的目标是练：**在 author summary 和 CI 都显得可信时，怎样独立重建 change model，并用 contract-driven evidence 决定是否 approve。**
+> 你的任务是：**在 author summary、tests 和 CI 都很可信时，仍然独立恢复 change contract、找到 semantic risk，并用可复现 evidence 决定是否 merge。**
 
----
+## 1. 实验材料与纪律
 
-# 0. 实验材料
-
-TaskForge 目录：
+工作目录：
 
 ```text
 labs/taskforge/
@@ -28,126 +26,63 @@ replay tool：
 tools/m10_review_case.py
 ```
 
-你**不需要**把 candidate patch 应用到自己的工作区。
+你不需要把 candidate patch 应用到自己的工作区；runner 会在 temporary copy 中 apply。
 
-runner 会在 temporary copy 中 apply。
+本实验有四条硬规则：
 
----
+1. **先读 reviewer brief，再读 author description/patch。**
+2. **先写 first-pass review，再运行 reviewer reveal probes。**
+3. **不因为 CI green 自动 approve，也不因为“这是教学坏 PR”自动 request changes。**
+4. **introduced regression、pre-existing issue、historical exception 和 out-of-scope cleanup 必须分开。**
 
-# 1. 实验规则
-
-## Rule 1 — 先独立建模，再读 author conclusion
-
-先读：
-
-```text
-reviewer-brief.md
-```
-
-然后恢复 baseline contract。
-
-不要先读 instructor analysis。
-
----
-
-## Rule 2 — CI green 不是答案
-
-你会看到 candidate：
+Instructor reference：
 
 ```text
-9 passed
+case-studies/m10/instructor-analysis.md
 ```
 
-你不能因此 approve。
+在 first-pass review 完成前不要读。
 
-但也不能因为“这是故意的教学 case”就默认一定有 blocker。
+## 2. Phase A — 先把 issue/change contract 写出来
 
-必须拿出工程证据。
-
----
-
-## Rule 3 — 不把所有旧债都塞进当前 PR
-
-TaskForge baseline 还有很多旧教学缺陷。
-
-例如你可能记得 M02/M04 里的 representation / error issues。
-
-本实验要求区分：
-
-```text
-introduced regression
-necessary prerequisite
-pre-existing issue
-out-of-scope cleanup
-```
-
----
-
-## Rule 4 — 不以 comment 数量计分
-
-一个准确 root-cause blocker 可以比 20 个 nit 得分高得多。
-
----
-
-## Rule 5 — Reviewer probes 要晚于自己的 reasoning
-
-只有在你已经写出第一版 review 后，才运行：
-
-```bash
-PYTHONPATH=src uv run --with pytest --no-project \
-  python tools/m10_review_case.py --reviewer-probes
-```
-
-否则会把本实验变成“解释答案”。
-
----
-
-# 2. Step 1 — 读取 Reviewer Brief
-
-先读：
+只读：
 
 ```text
 review-cases/m10/reviewer-brief.md
 ```
 
-然后**不要打开 candidate patch**，先写：
+然后停下，不看 author conclusion，不看 patch。写一页 change model：
 
 ```text
-change type:
-primary claim:
-intended semantic scope:
-explicit non-goals:
-likely high-risk surfaces:
+Change type:
+Primary claim:
+Semantic scope:
+Behavior intentionally unchanged:
+Explicit non-goals:
+Likely high-risk surfaces:
 ```
 
-至少判断：
+至少回答：
+
+- 这是 behavior change、refactor、architecture change，还是 mixture？
+- “localize authority”与“preserve behavior”是不是同一个 proof obligation？
+- brief 是否要求 complete mutation-capability isolation？
+- M07 historical fault-injection artifact 是否属于 normal product-path rule？
+- remote protocol / DB / queue 是否属于本轮？
+
+一个合格模型应该意识到：这是一份 architecture-enabling structural refactor，它至少同时承担：
 
 ```text
-这是 refactor？behavior change？architecture change？
-还是 mixture？
-```
-
-一个好的答案应该意识到：
-
-```text
-architecture-enabling structural refactor
-```
-
-也有多个 proof obligations：
-
-```text
-authority actually localizes
+normal transition/direct-state locality improves
 +
-existing behavior remains stable
+existing behavior stays stable
 ```
 
----
+不要把前者成功当作后者的证据。
 
-# 3. Step 2 — 建立 Baseline Review Sheet
+## 3. Phase B — 从 starter 恢复 baseline，而不是从 patch 猜 contract
 
-在读 patch 前，回到当前 TaskForge，恢复与这次 change 有关的事实。
-
-至少检查：
+检查：
 
 ```text
 src/taskforge/service.py
@@ -159,39 +94,34 @@ src/taskforge/snapshot.py
 src/taskforge/concurrent_claim.py
 ```
 
-并参考前面 lab 的已声明 contract。
+并回看 M02/M03/M04/M06/M08/M09 与本 change 直接相关的已建立 contract。
 
-写一个表：
+完成下表：
 
-| Surface | Current behavior / invariant | Source of truth | Must preserve in this PR? |
+| Surface | Current behavior / invariant | Source of truth | 本 PR 必须保持？ |
 |---|---|---|---|
-| lifecycle write ownership | ? | code / M09 | ? |
-| list ordering | ? | M03 | ? |
-| scheduling ordering | ? | M03 | ? |
-| unknown-ID behavior | ? | current boundary / M04 | ? |
-| snapshot format | ? | M08 | ? |
-| audit output | ? | M06 characterization | ? |
-| M07 fault injection | ? | reviewer brief | ? |
+| normal transition/direct-state locality | ? | code / M09 | target property |
+| list ordering | ? | code / M03 | ? |
+| claim ordering | ? | code / M03 | ? |
+| unknown cancel | ? | current boundary / M04 | ? |
+| snapshot format/order | ? | code / M08 | ? |
+| legacy audit output/order | ? | code / M06 | ? |
+| mutable `Job` observation | ? | code / M02 | introduced by candidate? |
+| `concurrent_claim.py` | ? | M07 / reviewer brief | normal-path blocker? |
 
-注意：
+特别写清：
 
 ```text
 current behavior
+!=
+desired future behavior
 ```
 
-和：
+如果一个 structural CL 声称 behavior-preserving，那么“当前设计不漂亮”不是偷偷改变它的许可证。
 
-```text
-desired long-term behavior
-```
+同时，M02 已知 `service.get()` 返回 authoritative mutable `Job`。本实验要求你识别这条 authority risk，但不能自动把它升级成本 PR blocker；先判断 candidate 是否引入/扩大了它，以及 brief 是否要求本轮关闭它。
 
-不是同一列。
-
-如果这个 PR 声称 behavior-preserving，哪怕当前行为“不漂亮”，它也不能悄悄改变。
-
----
-
-# 4. Step 3 — 先看 Author CI
+## 4. Phase C — 先确认作者 evidence 真的是绿的
 
 运行：
 
@@ -209,32 +139,17 @@ PYTHONPATH=src uv run --with pytest --no-project \
 author-supplied CI is green
 ```
 
-记录：
+记录两列：
 
-```text
-What does this evidence actually prove?
-What does it not prove?
-```
+| This evidence proves | This evidence does not prove |
+|---|---|
+| ? | ? |
 
-至少写三条“它没有证明”的事情。
+右列至少三项。
 
-不要写抽象话：
+不要写抽象的“tests 可能不全”。要结合这次 change 的 risk：ordering、error semantics、authority scope、snapshot/audit downstream consequence 等。
 
-```text
-“tests 不可能证明一切”
-```
-
-而要针对本 change：
-
-```text
-没有覆盖哪个 ordering partition？
-没有验证哪个 public behavior？
-没有检查哪个 durable surface？
-```
-
----
-
-# 5. Step 4 — 阅读 Author/Agent Description
+## 5. Phase D — 读 author description，把 prose 变成可验证 proposition
 
 现在读：
 
@@ -242,80 +157,101 @@ What does it not prove?
 review-cases/m10/agent-pr-description.md
 ```
 
-将每个 author claim 分类：
+逐条列 claim：
 
 ```text
-SUPPORTED
-NEEDS VERIFICATION
-CONTRADICTS REQUEST
-OUT OF SCOPE
+C1 ...
+C2 ...
+C3 ...
 ```
 
-示例表：
+对每条标记：
 
-| Author claim | Classification | Why? | Evidence needed |
-|---|---|---|---|
-| lifecycle authority centralized | ? | ? | ? |
-| all current behavior preserved | ? | ? | ? |
-| stable ordering is harmless | ? | ? | ? |
-| unknown cancel normalization is low risk | ? | ? | ? |
-| no public API behavior change | ? | ? | ? |
-| later RPC can wrap authority | ? | ? | ? |
+```text
+baseline-supported
+needs proof
+contradicts another claim
+out of requested scope
+```
 
-这一步的关键：
+至少检查：
 
-> **不要让 description 的措辞替你完成 reasoning。**
+```text
+“preserve all current behavior”
+```
 
----
+与：
 
-# 6. Step 5 — 阅读 Diffstat，再找 Semantic Center
+```text
+“unknown cancel returns False”
+```
 
-先看 patch 的文件列表和大致规模：
+是否能同时成立。
+
+也检查：
+
+```text
+“single owner of lifecycle state”
+```
+
+到底是 precise evidence-backed property，还是作者把 M09 的 locality direction 写成了更强的 complete authority claim。
+
+## 6. Phase E — 找 semantic center，不按文件顺序 mechanical review
+
+先看 patch stat：
 
 ```bash
 git apply --stat review-cases/m10/agent-pr.patch
 ```
 
-不要立刻逐行从第一文件读到最后。
-
-先回答：
-
-```text
-Which file contains the new semantic authority?
-Which files are mostly routing changes?
-Which tests express new assumptions?
-```
-
-把文件分成：
+把 changed files 分成：
 
 ```text
 semantic center
-call-site routing
+routing/adaptation
 observable-output consumer
 new evidence
 ```
 
----
-
-# 7. Step 6 — 先 Review 新 Tests
-
-本 case 很适合先读：
+然后优先读：
 
 ```text
+job_authority.py
 tests/test_job_authority.py
 ```
 
-问：
+对 semantic operations 建表：
 
-### 7.1 这些 tests 分别声明了什么 contract？
+| Operation | Old semantic source | Candidate behavior | Same semantics? | Evidence |
+|---|---|---|---:|---|
+| submit | ? | ? | ? | ? |
+| get | ? | ? | ? | ? |
+| list | ? | ? | ? | ? |
+| cancel | ? | ? | ? | ? |
+| claim | ? | ? | ? | ? |
+| finish | ? | ? | ? | ? |
+| metrics/read | ? | ? | ? | ? |
 
-不要只写 test function name。
+寻找的不是“代码看起来像不像”，而是新 policy：
 
-### 7.2 哪些 test 只是重复实现的新 assumption？
+```text
+ordering
+error translation
+default
+state/capability exposure
+failure behavior
+```
 
-### 7.3 input partition 是否太窄？
+## 7. Phase F — Review tests as code
 
-特别考虑：
+Candidate 新 tests 不是自动可信的 oracle。逐条回答：
+
+1. 这个 test 声明了什么 contract？
+2. oracle 来源是 reviewer brief / prior contract，还是 candidate implementation 自己？
+3. 输入 partition 是否能碰到真正 risk boundary？
+4. 坏实现下它真的会 fail 吗？
+
+特别比较：
 
 ```text
 1 job
@@ -325,249 +261,144 @@ tests/test_job_authority.py
 12 jobs
 ```
 
-为什么这些可能不是等价 partition？
+为什么这些不是等价 partition？
 
-### 7.4 测试有没有把“作者新定义的行为”直接变成 oracle？
-
-如果有，它是否有外部 contract 支撑？
-
----
-
-# 8. Step 7 — Review Semantic Center
-
-阅读 candidate 的：
+如果实现采用 identifier sort，先通过 reasoning 寻找：
 
 ```text
-job_authority.py
+identifier order diverges from semantic creation order
 ```
 
-逐个 semantic operation 写表：
+的最小边界，不要先 fuzz 一千个 case。
 
-| Operation | Old semantic source | New implementation | Same behavior? | Evidence |
-|---|---|---|---:|---|
-| submit | service | authority | ? | ? |
-| get | service | authority | ? | ? |
-| list | service | authority | ? | ? |
-| cancel | service | authority | ? | ? |
-| claim | worker | authority | ? | ? |
-| finish | worker | authority | ? | ? |
-| metrics | metrics | authority | ? | ? |
+## 8. Phase G — 从 contract 构造最小反例
 
-不要只检查代码“看起来一样”。
-
-寻找：
-
-```text
-new policy
-new ordering
-new error translation
-new state exposure
-new default
-```
-
-这些都是 refactor 最容易偷偷带入的 behavior changes。
-
----
-
-# 9. Step 8 — 从 Contract 构造反例
-
-如果你怀疑某条 behavior 被改变：
-
-先写：
+对每个可疑点先写：
 
 ```text
 Contract:
-Candidate implementation assumption:
-Smallest discriminating counterexample:
+Candidate assumption:
+Smallest discriminating case:
 Expected:
-Candidate likely output:
+Likely candidate result:
+Downstream consequence:
 ```
 
-例如一个 generic 结构：
+至少尝试构造：
 
-```text
-Contract: preserve creation order
-Implementation assumption: sort by an identifier
-Counterexample: identifier ordering diverges from creation ordering
-```
+- ordering/FIFO 的 discriminating counterexample；
+- unknown-ID behavior 的 baseline/candidate 对比。
 
-不要直接 fuzz 1000 个 case。
-
-先通过 reasoning 找 boundary。
-
----
-
-# 10. Step 9 — 检查 Downstream Consequence
-
-如果一个 helper 改了 ordering，不要只停在 helper。
-
-沿 dataflow 看：
+对于 ordering，一旦找到 root cause，继续沿 dataflow 检查：
 
 ```text
 list_jobs
-  ├─ public API
+  ├─ public API/readers
   ├─ dashboard
   ├─ snapshot
   └─ legacy audit
 ```
 
-问：
+不要把一个 root cause 的多个 consequence 机械写成多个 blocker。
+
+## 9. Phase H — 单独评估 architecture claim 与 scope
+
+现在回答三个问题：
 
 ```text
-一个 internal-looking change 是否穿过长期 contract surface？
+A. authority-localization direction 是否合理？
+B. implementation 是否保留 requested semantics？
+C. change packaging 是否 coherent？
 ```
 
-这一步直接调用 M09。
+这三项可以给出不同 verdict。
 
----
+同时明确分类下面两项：
 
-# 11. Step 10 — 检查 Out-of-Scope Behavior Change
+### Mutable `Job`
 
-refactor 中最危险的一种 comment：
+如果 candidate `JobAuthority.get()` / `claim_next()` 仍返回 live mutable `Job`：
+
+- 它是否证明 complete mutation-capability isolation？
+- 这是 candidate 新引入的 regression，还是 M02 baseline residual？
+- 本 brief 是否要求你强制加入 `JobView` / defensive copy？
+
+### M07 historical exception
+
+`concurrent_claim.py` 继续 direct state mutation：
+
+- 是否违反 reviewer brief？
+- 它是 production normal-path evidence 还是 historical fault-injection artifact？
+
+禁止写 whole-repo grep 式 blocker，除非你能证明 architecture scope 真的是 whole repo。
+
+## 10. Phase I — Historical probes 也要做 lifetime 判断
+
+一个合法 authority refactor 会改变 source topology。
+
+如果旧 M09 topology inventory 或 M03 source-site mutation harness 失败，先分类：
 
 ```text
-“顺手让 error handling 更友好”
+long-lived contract evidence
+historical characterization
+source-topology harness
+superseded fitness rule
 ```
 
-你必须判断：
+回答：
+
+> 这个 red signal 是 product regression，还是它所描述的历史 seam 被当前合法 change supersede？
+
+同时指出：哪些 M05/M06/M08 observable/compatibility evidence 仍应继续作为 regression gate。
+
+## 11. Phase J — 在 reveal probe 前写 first-pass review
+
+现在写正式 first-pass。格式可用：
 
 ```text
-这是 behavior preservation？
-还是新的 API policy？
-```
+Decision: Approve / Request changes / Split / Need specialist review
 
-即使你认为新 policy 最终更合理，也要回答：
+Change model
+- ...
 
-```text
-为什么它应该/不应该在当前 PR 里？
-```
-
----
-
-# 12. Step 11 — 检查 Architecture Claim 本身
-
-不要因为发现 behavior regression 就完全否定新 authority direction。
-
-分别判断：
-
-```text
-A. architecture direction
-B. implementation correctness
-C. change packaging
-```
-
-一个 PR 完全可能是：
-
-```text
-A = good
-B = flawed
-C = flawed
-```
-
-高质量 review 应能表达这种区别。
-
-例如：
-
-```text
-“集中 Job Authority 的方向符合 M09 decision；当前 patch 仍不能 merge，
-因为它在结构迁移中混入了 ordering/error semantic changes。”
-```
-
-这比：
-
-```text
-“这个设计不好”
-```
-
-更精确。
-
----
-
-# 13. Step 12 — 对 Historical Probe 做 Scope 判断
-
-candidate 真的实现 authority refactor 后：
-
-```text
-tools/m09_architecture_probe.py
-```
-
-这个 baseline inventory 很可能不再满足旧 expected topology。
-
-你需要判断：
-
-```text
-probe red = regression？
-还是 probe 的 historical expectation 被合法 architecture change supersede？
-```
-
-不要形成：
-
-```text
-all old tests must stay byte-for-byte unchanged forever
-```
-
-M05/M08 要保持的是 contract evidence；
-M09 inventory 本身是对某个版本 topology 的 characterization。
-
-两者 lifetime 不同。
-
----
-
-# 14. Step 13 — 写第一版 Review，暂时不要跑 Reveal Probe
-
-提交一个 review memo：
-
-```text
-## Change model
-
-## What I reviewed
-
-## What I did not review
-
-## Findings
-
-### Blocker 1 — ...
+Finding 1 — <severity + short title>
 Location:
 Contract:
 Observation:
 Consequence:
-Evidence / counterexample:
+Evidence / minimal counterexample:
 Required outcome:
 
-### Blocker 2 — ...
-...
+Finding 2 — ...
 
-### Non-blocking
-...
+Non-blocking / residual risks
+- ...
 
-## Overall decision
-Approve / Request changes / Split / Need specialist review
+Scope not reviewed
+- ...
 ```
 
 要求：
 
-- findings 按 severity 排序；
-- 尽量按 root cause 聚合；
-- 不写 personal-style blocker；
-- 不要求修与 current change 无关的 baseline defect；
-- conclusion 不能只写“CI 绿/红”。
+- severity 清楚；
+- findings 按 root cause 聚合；
+- 不用 personal preference 充 blocker；
+- 不要求 current change 修所有 baseline defects；
+- 不因为 CI green/author confidence 给结论；
+- required outcome 主要写“什么必须变真”，不强制唯一实现。
 
----
+保存这一版。之后不允许假装它是在 reveal probe 之前想到的。
 
-# 15. Step 14 — 现在才运行 Reviewer Probes
+## 12. Phase K — 现在才运行 reviewer probes
+
+运行：
 
 ```bash
 PYTHONPATH=src uv run --with pytest --no-project \
   python tools/m10_review_case.py --reviewer-probes
 ```
 
-这会在 temp tree 中：
-
-1. apply candidate patch；
-2. 再确认 author CI green；
-3. 执行几组高信息量 counterexamples。
-
-对每条 probe output，标记：
+对每条 output 标记：
 
 ```text
 ALREADY FOUND
@@ -576,338 +407,206 @@ SAME ROOT CAUSE AS EXISTING FINDING
 NOT A BLOCKER
 ```
 
-目标不是让 probe 替你 review。
+probe 当前会给出高信息量 symptoms，但不要按 output ID 数量决定 comment 数量。
 
-目标是比较：
+如果 reveal 让你发现 first-pass blind spot，诚实记录。这个实验评估的是 independent reasoning，不是“最后答案和 instructor 一样”。
 
-```text
-human/Agent independent reasoning
-vs
-instructor-targeted evidence
-```
+## 13. Phase L — 重写 final review：聚合 root cause，校准 severity
 
----
+再次检查：
 
-# 16. Step 15 — Reviewer Probes 之后改写 Findings
+- list/FIFO/snapshot/audit 是否来自同一个 mechanism？
+- error change 是否与 structural scope 冲突？
+- `JobAuthority` direction 本身是否被 regression 错误否定？
+- mutable `Job` 是否只是 residual M02 issue？
+- M07 historical artifact 是否被正确排除？
 
-如果 reveal 显示多个 symptoms 来自同一个 root cause，尝试合并。
-
-例如：
+一个高质量 final review 可以很短，但必须有：
 
 ```text
-list ordering changed
-scheduler ordering changed
-snapshot ordering changed
+precise decision
+root-cause findings
+material consequences
+reproduction/evidence
+required outcome
+non-blocking scope notes
 ```
 
-未必需要三个 blocker。
+## 14. Phase M — 设计 corrected change topology，而不是直接替作者 coding
 
-可以是：
+提出更可审查的 sequence。例如：
 
 ```text
-Blocker — candidate replaces submission order with lexical ID order
+CL 1 — authority localization only
+  preserve submission/FIFO/error semantics
+  route normal product access through the new seam
+  add architecture fitness evidence
+  add >9-job ordering/FIFO regression evidence
+
+CL 2 — optional API error redesign
+  only if product actually wants it
+  define public behavior and compatibility explicitly
+
+CL 3 — future remote worker
+  protocol / retry / auth / timeout / idempotency / deployment
 ```
 
-然后列 consequences。
-
-这更接近成熟 review。
-
----
-
-# 17. Step 16 — 判断 New Tests 本身的问题
-
-candidate 新增测试里如果存在：
-
-```python
-assert service.cancel("job-missing") is False
-```
-
-问：
+对每个 CL 写：
 
 ```text
-这个 assertion 是从 requested contract 推导的吗？
-还是从 candidate implementation 推导的吗？
+engineering claim
+proof obligation
+rollback boundary
+why independently reviewable
 ```
 
-如果 request 明确说：
+不要因为 reviewer 发现 blocker 就自动规定一份完整 replacement implementation。
 
-```text
-behavior unchanged
-```
+## 15. Phase N — 写 corrected PR description
 
-而 baseline behavior 不是 `False`，那么：
-
-```text
-新 test 绿
-```
-
-实际上可能是 regression 的 evidence。
-
-这是本章最重要的 lesson 之一：
-
-> **A passing test can be evidence for the wrong contract.**
-
----
-
-# 18. Step 17 — 设计 Corrected Change Topology
-
-不要直接开始 coding。
-
-先提出一个更好的 patch sequence。
-
-例如：
-
-```text
-CL 1:
-introduce in-process JobAuthority
-preserve ordering/error semantics exactly
-route service/worker/metrics/audit
-add architecture fitness test
-
-CL 2 (separate behavior change, only if desired):
-redesign unknown-ID error semantics
-update public contract + tests
-
-CL 3 (future):
-remote worker protocol
-```
-
-解释：
-
-```text
-为什么这样更容易 review？
-为什么 rollback 更清楚？
-每个 CL 的 proof obligation 是什么？
-```
-
----
-
-# 19. Step 18 — 写一个 Corrected PR Description
-
-在不实现修复的前提下，写一版理想 description：
+不实现修复，只写一份更可 review 的 description：
 
 ```text
 Problem
 Scope
-Behavior changed
+Behavior intentionally changed
 Behavior intentionally unchanged
-Design decision
+Design/authority decision
 Evidence
-Risks
+Known residual risks
 Out of scope
 Follow-up
 ```
 
-要求避免：
+禁止只写：
 
 ```text
-“low risk”
+Risk: Low
 ```
 
-这种没有论证的结论。
+必须把“为什么 risk bounded”展开成可验证 claim。
 
-应该说 risk 为什么 bounded。
+## 16. Phase O — 设计 re-review plan
 
----
+假设 author 发来新 patch set 并说：
 
-# 20. Step 19 — Agent Reviewer 对比实验
+```text
+fixed all comments
+```
 
-先给 Agent 一个模糊 prompt：
+写出你会重新检查什么。至少包含：
+
+```text
+inspect patch-set delta
+rerun blocker reproductions
+review changed tests/oracles
+verify no new behavior scope
+confirm authority-localization goal still achieved
+re-evaluate residual risk
+```
+
+注意 stale approval：resolved thread 不等于 engineering proposition 已成立。
+
+## 17. Optional bridge to M11 — 用 Agent 帮 review，但不交出 acceptance authority
+
+这部分是可选练习，不计 M10 核心分。给 Agent 两次任务：
+
+第一次：
 
 ```text
 Review this PR. Is it good to merge?
 ```
 
-记录它是否：
-
-- 主要重复 author summary；
-- 因 9 tests pass 而倾向 approve；
-- comment 集中在命名/结构；
-- 真正检查 ordering/error/compatibility；
-- 区分 pre-existing issues。
-
-然后给 Agent 一个 engineering review contract：
+第二次给 engineering review contract：
 
 ```text
 Act as an independent reviewer.
-Do not treat the author summary or green CI as facts.
-Reconstruct the requested change from reviewer-brief.md and current baseline.
-Classify the change type and list the behaviors that must remain unchanged.
+Treat author summary and green CI as claims, not facts.
+Reconstruct the requested change from reviewer-brief.md and the baseline.
+List behavior that must remain unchanged.
 Review tests as code and identify copied assumptions.
-Trace changes through public API, scheduler, snapshot, and audit consumers.
-Construct minimal counterexamples for ordering/error changes.
-Separate introduced regressions from pre-existing issues and historical probes.
-Report root-cause findings with severity, contract, consequence, evidence,
-and required outcome. Do not prescribe implementation unless necessary.
+Trace semantic changes through scheduler/public/snapshot/audit surfaces.
+Separate introduced regressions from baseline issues and historical probes.
+Report root-cause findings with severity, consequence, evidence, and required outcome.
 ```
 
-比较两次输出。
+比较两次结果，但不要把 Agent verdict 当课程答案。如何进一步设计 agent context、task decomposition、parallel reviewer/implementer 与 merge conflict 属于 M11。
 
----
+## 18. Deliverables
 
-# 21. Step 20 — Independent Re-review
+提交一个 `m10-review.md`，至少包含：
 
-假设 author 回复：
+### A. Change model
+
+- change type；
+- requested claim；
+- scope/non-goals；
+- baseline contracts；
+- architecture intent。
+
+### B. Evidence audit
+
+- author CI 实际证明什么；
+- author tests 的 oracle/partition 弱点；
+- 哪些 evidence 仍需补。
+
+### C. First-pass review
+
+必须是在 reveal probe 前保存的版本。
+
+### D. Probe comparison
+
+明确标出 independent finding 与 reveal-added finding。
+
+### E. Final review
+
+root-cause 聚合、severity、evidence、required outcome、non-blocking residual。
+
+### F. Corrected change topology
+
+每个 CL 的 claim / proof obligation / rollback boundary。
+
+### G. Re-review plan
+
+说明新 patch set 到来后如何重新建立 acceptance argument。
+
+Optional：Agent vague-prompt vs engineering-contract comparison。
+
+## 19. Grading
+
+总分 100：
+
+| Dimension | 分值 | 优秀表现 |
+|---|---:|---|
+| Independent system reconstruction | 20 | 不依赖 author summary；恢复正确 baseline、M07 exception、M02 residual |
+| Finding quality | 25 | 找到 material semantic blockers；有最小反例；按 root cause 聚合 |
+| Evidence review | 20 | 不被 9 passed 锚定；能审 tests/oracles；targeted probe 对应 uncertainty |
+| Scope discipline | 15 | regression / baseline issue / historical harness / cleanup 分类正确 |
+| Change engineering | 10 | structural / behavioral / future remote work 拆分清楚 |
+| Decision & re-review quality | 10 | severity 明确；知道何时 approve/request/split/specialist；patch-set re-review 有证据 |
+
+以下不会自动加分：
 
 ```text
-“fixed all comments”
+写很多 comments
+找很多 formatting nit
+随机 fuzz 很久
+把个人 pattern preference 写成 blocker
+要求本 PR 清掉所有旧债
+因为“instructor case 肯定有 bug”而 Request Changes
 ```
 
-你不能只检查 comment thread 是否 resolved。
+## 20. 完成标准
 
-写出 re-review plan：
-
-```text
-1. inspect patch-set delta
-2. rerun blocker reproductions
-3. verify no new behavior scope
-4. re-check tests changed to address root cause rather than expectation update
-5. confirm architecture target still achieved
-```
-
----
-
-# 22. Deliverables
-
-至少提交：
-
-## A. Change model
-
-包含：
-
-```text
-change type
-claim
-scope
-contracts/invariants
-architecture intent
-```
-
-## B. Evidence audit
-
-对 author tests 和 CI 的实际证明能力做说明。
-
-## C. First-pass review
-
-必须在 reveal probe 前写。
-
-## D. Probe comparison
-
-说明哪些问题你自己找到，哪些由 probe 暴露。
-
-## E. Final review
-
-root-cause + severity 排序。
-
-## F. Corrected change topology
-
-说明应该怎样拆 change。
-
-## G. Agent comparison
-
-模糊 prompt vs engineering review contract。
-
----
-
-# 23. Grading
-
-总分 100。
-
-## 23.1 Independent system reconstruction — 20
-
-优秀：
-
-- 不依赖 author summary；
-- 恢复正确 baseline contracts；
-- 明确 M07 historical exception；
-- 知道 durable/public consumers。
-
----
-
-## 23.2 Finding quality — 25
-
-优秀：
-
-- 能找到真正 semantic blocker；
-- 有最小 counterexample；
-- 按 root cause 聚合；
-- 不把个人偏好当 blocker。
-
----
-
-## 23.3 Evidence review — 20
-
-优秀：
-
-- 不被 9 passed 锚定；
-- 能指出 candidate tests 的 weak partition / copied assumption；
-- targeted probe 与 uncertainty 对应。
-
----
-
-## 23.4 Scope discipline — 15
-
-优秀：
-
-- introduced regression / pre-existing issue 分开；
-- historical probe scope 判断正确；
-- 不产生无限 cleanup request。
-
----
-
-## 23.5 Change engineering — 10
-
-优秀：
-
-- 能设计更好的 CL sequence；
-- structural / behavioral / remote mechanism 分开；
-- rollback/review boundary 清楚。
-
----
-
-## 23.6 Agent orchestration — 10
-
-优秀：
-
-- Agent review 有 independent contract；
-- 不信 self-summary；
-- 需要 evidence；
-- human 保持 acceptance authority。
-
----
-
-# 24. 不加分的事情
-
-以下不会因为做了就自动高分：
-
-```text
-写 30 个 comments
-找到很多 formatting nit
-跑很多随机 fuzz
-说“最佳实践是 repository pattern”
-把所有旧问题都要求修
-因为 instructor case 肯定有 bug 而 request changes
-```
-
----
-
-# 25. 本实验真正训练的习惯
-
-以后看到：
+完成这个 Lab 后，你看到：
 
 ```text
 ✅ CI passed
-✅ Agent summary: behavior-preserving
+✅ Agent summary says behavior-preserving
 ✅ diff looks cleaner
 ```
 
-不要立刻产生：
-
-```text
-LGTM
-```
-
-先问：
+第一反应应该是：
 
 ```text
 What is the engineering claim?
@@ -915,6 +614,7 @@ What must stay true?
 Where is the semantic center?
 What would falsify the claim?
 Did the submitted evidence actually try that?
+What risk remains after it passes?
 ```
 
-如果这五个问题已经成为自动反应，M10 的目的就达到了。
+如果你能在 reveal probe 之前回答这些问题，并把结果写成别人可复现的 review，M10 的目标就达到了。

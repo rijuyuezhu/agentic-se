@@ -1,551 +1,392 @@
-# M10 — Code Review 与 Change Engineering：把 PR 当作可审查的工程论证
+# M10 — Code Review 与 Change Engineering：为什么“9 passed”仍然不能替你 Approve
 
-> Code review 不是“找几个 bug”，也不是“帮作者把代码改成 reviewer 喜欢的风格”。
+> 一个 PR 不是一堆 changed lines。它是一份**有边界的工程论证**：作者声称某个具体 change 应该进入系统，并用实现、测试、迁移/回滚说明和其他 evidence 支撑这个 claim。
 >
-> 本章的核心定义是：
->
-> **一个 PR / CL 是一份 bounded engineering argument：它声称某个具体 change 应当进入系统，并用代码、测试、迁移策略和其他证据支撑这个 claim。**
+> M10 训练的不是“多找几个问题”，而是：**另一个人怎样独立判断这份论证是否成立。**
 
-前九章已经分别训练了：
+前九章已经分别问过 correctness、ownership、test oracle、API contract、refactor、legacy evidence、concurrency、compatibility 和 architecture。M10 把这些问题压缩到一个最常见的工程单位：一个真实 change。
 
-```text
-M01  什么行为算正确？
-M02  谁拥有 knowledge / state？
-M03  什么 evidence 真能区分对错？
-M04  boundary 对 caller 承诺什么？
-M05  怎样改变结构而保持行为？
-M06  证据不足时怎样先建立 feedback？
-M07  interleaving / crash / retry 下 invariant 是否仍成立？
-M08  old/new producer/consumer 怎样共存？
-M09  哪些 boundary / authority / failure decision 值得上升成 architecture？
-```
-
-M10 把这些能力压缩到一个日常工程单位：
+这次 TaskForge 给你的 candidate 很诱人。它准备把 lifecycle logic 收敛到 `JobAuthority`，作者写着：
 
 ```text
-Pull Request / Change List
+Risk: Low. Internal refactor.
+Evidence: 9 passed.
 ```
 
----
+方向听起来合理，CI 也真的是绿的。问题是：**这仍然不足以决定 merge。**
 
-# 1. 为什么 Agent 时代更需要 Code Review，而不是更少
+## 1. 先看 review brief：你到底被要求接受什么
 
-生成代码的成本下降后，很容易产生一个错觉：
+M10 的 review case 位于：
 
 ```text
-implementation 便宜
-→ review 也应该便宜
+labs/taskforge/review-cases/m10/
 ```
 
-但两者不是同一个问题。
+先读 `reviewer-brief.md`，不要先相信 author description。brief 的 change contract 很窄：
 
-Agent 可以非常快地产生：
+- 为未来 remote worker 做一个 architecture-enabling structural refactor；
+- normal lifecycle logic/direct-state access 向一个 in-process semantic seam 收敛；
+- externally observable behavior 不变；
+- scheduling semantics 不变；
+- snapshot compatibility 不变；
+- M07 `concurrent_claim.py` 是明确的 historical fault-injection exception；
+- 本轮不加 RPC、database、queue 或 remote-worker mechanism。
 
-- 400 行 refactor；
-- 20 个 tests；
-- 一段很可信的 PR summary；
-- 一份“all tests pass”的 evidence；
-- 一个看起来整洁的新 abstraction。
-
-这些会降低：
+这一步已经产生两个不同 proof obligations：
 
 ```text
-implementation effort
+A. architecture/locality direction 是否真的改善？
+B. behavior-preserving claim 是否真的成立？
 ```
 
-却不会自动降低：
+它们不能互相替代。完全可能出现：
 
 ```text
-system-understanding cost
-contract-reconstruction cost
-compatibility reasoning cost
-failure analysis cost
-review responsibility
+A = reasonable
+B = false
 ```
 
-甚至可能反过来增加 review pressure：
+一个 reviewer 如果因为“大方向对”就放过 behavior regression，仍然是在错误 approve。
 
-```text
-code generation bandwidth ↑↑
-review bandwidth         ≈
-```
+同样，reviewer 也必须先审 issue/change contract 本身。如果真正需求只是“未来可能 remote”，candidate 却顺手引入 transport、queue、deployment topology，那么即使代码每一行都正确，也可能是 **wrong scope / speculative architecture**。Review 从来不只发生在 diff 之后。
 
-如果一个团队只是把 Agent 生成的 patch 更快塞进 CI，那么瓶颈会从 coding 转成：
+## 2. Approval 的含义不是“我没看到红灯”
 
-```text
-semantic verification
-```
+有意义的 approval 更接近：
 
-因此 Agent 时代的核心问题不是：
+> 基于我实际 review 的 scope 与 evidence，我认为这次 change 的工程 claim 成立，未解决风险已被识别，并且在当前 acceptance standard 下可接受。
 
-> 怎样让 reviewer 更快扫完 diff？
-
-而是：
-
-> **怎样把 change 设计成 reviewer 能在有限 mental model 中独立判断？**
-
----
-
-# 2. Code Review 到底在 approve 什么？
-
-一个 reviewer 点下 Approve，并不是说：
-
-```text
-我没有看到红色语法错误
-```
-
-也不是：
-
-```text
-CI 是绿的
-```
-
-更不是：
-
-```text
-作者比我熟，我相信他
-```
-
-一个有意义的 approval 更接近：
-
-> **基于我实际 review 的 scope 和 evidence，我认为这个 change 的工程 claim 成立，并且 residual risk 在这个系统的标准下可接受。**
-
-这句话里有五个关键词：
+因此 reviewer 至少要知道：
 
 ```text
 scope
 claim
+source of truth
 evidence
-risk
-standard
+residual risk
 ```
 
-任何一个不清楚，approval 的含义都会变弱。
-
----
-
-# 3. PR 不是 Diff
-
-Diff 只是 change 的一种表示。
-
-一个完整 change 至少有：
+如果某一部分你没有资格判断，例如 security、cryptography、concurrency 或某个 domain-specific contract，成熟结论不是假装全懂，而是：
 
 ```text
-Problem
-Intent
-Existing system context
-Changed behavior
-Intentionally unchanged behavior
-Implementation
-Tests / probes
-Migration / rollout
-Failure behavior
-Rollback story
-Known limitations
+Need specialist review for <specific surface>
 ```
 
-而普通 diff viewer 通常只直接展示：
+Review completion 不是“所有 comment thread 都 resolved”，而是当前 change 的 material claims 都有足够的独立判断者和 evidence owner。
+
+## 3. Author description 很重要，但它只是 claim
+
+`agent-pr-description.md` 说：
 
 ```text
-Implementation delta
+- add JobAuthority as the single owner of lifecycle state;
+- preserve all current behavior;
+- use stable job-id ordering;
+- unknown cancel returns False;
+- 9 passed;
+- low risk.
 ```
 
-这就是为什么：
+这里已经有一个值得停下来的矛盾：
 
 ```text
-只看 changed lines
-```
-
-经常不足以 review。
-
-例如你看到：
-
-```python
-for job_id in sorted(state.jobs):
-```
-
-单看这一行很容易得到：
-
-```text
-“不错，更 deterministic。”
-```
-
-但如果系统 contract 是：
-
-```text
-jobs 保持 submission order
-scheduler FIFO
-```
-
-并且 ID 是：
-
-```text
-job-1
-job-2
-...
-job-10
-```
-
-那么 lexicographic sort 会产生：
-
-```text
-job-1
-job-10
-job-11
-job-2
-...
-```
-
-真正需要 review 的不是那一行 syntax。
-
-而是：
-
-```text
-这条 implementation change
-→ 改变了哪个 semantic ordering？
-→ 哪些 caller / durable artifact / scheduling decision 依赖它？
-```
-
----
-
-# 4. Author Description 是 Claim，不是 Truth
-
-一个好的 PR description 很重要。
-
-Google Engineering Practices 明确要求 CL description 解释：
-
-- change 做什么；
-- 为什么这样改；
-- future reader 应怎样理解 decision。
-
-Source:
-
-https://google.github.io/eng-practices/review/developer/cl-descriptions.html
-
-但必须避免另一种错误：
-
-```text
-作者写了“behavior-preserving refactor”
-→ reviewer 从此以“它确实 behavior-preserving”为前提看 diff
-```
-
-这叫 anchoring。
-
-更好的模型是：
-
-```text
-PR description
-=
-author's hypothesis / argument
-```
-
-reviewer 要独立验证。
-
-例如 description 声称：
-
-```text
-No public behavior changes.
-```
-
-reviewer 应自动转成问题：
-
-```text
-哪些 public behavior surface 存在？
-哪个 evidence 证明它们没变？
-```
-
-而不是把它当事实复制进自己的 review summary。
-
----
-
-# 5. Review 的第一步不是读代码
-
-Google 的 `Navigating a CL in review` 给出一个很好的顺序：
-
-1. broad view；
-2. main part；
-3. remaining files；
-4. 某些情况下可以先读 tests。
-
-Source:
-
-https://google.github.io/eng-practices/review/reviewer/navigate.html
-
-本课程把它进一步工程化成 **Review Funnel**。
-
----
-
-# 6. Review Funnel
-
-## Stage 0 — Should this change exist?
-
-先问：
-
-```text
-这个 change 是不是解决真实问题？
-是不是现在应该做？
-是不是放在正确 system boundary？
-```
-
-典型错误：
-
-```text
-需求只是“worker 以后可能 remote”
-```
-
-Agent 直接产生：
-
-```text
-Kafka + Redis + gRPC + Kubernetes
-```
-
-即使代码都正确，也可能是错误 change。
-
-reviewer 应该尽早阻断：
-
-```text
-wrong problem / wrong scope / speculative architecture
-```
-
-而不是先逐行 review 2000 行实现。
-
----
-
-## Stage 1 — What exactly is the claim?
-
-用你自己的话写：
-
-```text
-This change claims to ...
-```
-
-例如：
-
-```text
-This change claims to centralize lifecycle authority
-without changing existing behavior.
-```
-
-注意：
-
-```text
-centralize authority
+preserve all current behavior
 ```
 
 和：
 
 ```text
-behavior-preserving
+change unknown cancel semantics
 ```
 
-是两个不同 proof obligations。
+不可能同时自动成立。
 
-可能出现：
+PR description 的价值是把作者的 reasoning 留给 reviewer 和 future maintainer，而不是把作者变成 truth authority。最低限度，一份可审查 description 应让你分离：
 
 ```text
-architecture improvement = true
-behavior preservation   = false
+Problem
+Intended behavior change
+Intentionally unchanged behavior
+Design / authority decision
+Risk / migration assumptions
+Evidence actually run
+Known limits / follow-ups
 ```
 
-不能因为大方向正确就忽略后者。
+“Low risk”不是 evidence；“internal refactor”也不是。Risk 要沿 downstream contract 判断，而不是按文件路径的“内部/外部”标签判断。
 
----
+## 4. 在读 patch 前，先恢复 baseline contract
 
-## Stage 2 — What must remain true?
+如果 reviewer 直接从 changed line 开始，最容易把 implementation accident 当成新 design freedom。M10 case 在读 patch 前至少要恢复这些事实：
 
-从前面模块恢复：
+| Surface | Current baseline | 本轮为什么相关 |
+|---|---|---|
+| `list_jobs()` | submission/insertion order | structural refactor 声称 behavior-preserving |
+| `claim_next()` | queued jobs 中 FIFO | scheduling semantics 明确要求不变 |
+| unknown cancel | `service.cancel()` 对 missing ID 抛 `KeyError`，public boundary 继续暴露 | 当前行为不漂亮，但仍是本轮 baseline |
+| snapshot | v1 writer/reader compatibility surface | downstream durable export 依赖 list order |
+| legacy audit | 已有 characterized output/order | raw-state read path 会被改路由 |
+| M07 `concurrent_claim.py` | 故意 unsafe | brief 明确 out of normal-product scope |
+| mutable `Job` handle | `service.get()` 返回 authoritative mutable object | M02 已知 residual authority risk，不是本 candidate 新引入 |
+
+最后一行很重要。M02 已经建立：**每个拿到 authoritative mutable `Job` reference 的 caller 都获得潜在 write authority**。M09 又刚刚区分：
 
 ```text
-contracts
-invariants
-authority rules
-ordering
-error semantics
-side effects
-compatibility
-failure behavior
+normal transition/direct-state localization
+!=
+complete mutation-capability isolation
 ```
 
-形成 **change-specific invariant sheet**。
+因此 candidate 新建 `JobAuthority` 后，如果 `get()` / `claim_next()` 仍返回 live mutable `Job`，它并没有证明 complete authority isolation。但这个 baseline issue 不是本 structural CL 新引入的；reviewer 可以记录为 residual/FYI，而不应为了“把架构做完”强迫本 PR 顺手引入 `JobView`。
 
-例如：
+这就是 review scope discipline：**看见问题，不等于这个 PR 必须修问题。**
+
+## 5. Author CI 真的绿，但这只能回答它问过的问题
+
+运行：
+
+```bash
+cd labs/taskforge
+PYTHONPATH=src uv run --with pytest --no-project \
+  python tools/m10_review_case.py
+```
+
+真实结果是：
 
 ```text
-- list_jobs preserves submission order
-- claim_next is FIFO among queued jobs
-- unknown cancel currently raises through public boundary
-- snapshot v1 remains readable
-- default snapshot writer stays v1
-- historical M07 fault-injection module remains intentionally unsafe
+[AUTHOR CI]
+......... [100%]
+author-supplied CI is green
 ```
 
-这里非常重要的是：
+所以本 case 不是“作者忘了跑 tests”。真正的问题是：**这 9 个 tests 是否覆盖了 change 的 semantic risk partition？**
 
-> 只列与当前 change 有关的东西。
-
-不是把整个项目所有 known issues 都拖进这次 review。
-
----
-
-## Stage 3 — Find the semantic center of the diff
-
-不要机械按文件顺序开始。
-
-先找：
+机器 verification 与 human review 是不同 signal。Gerrit 的 `Verified` / `Code-Review` 分离只是一个现实 workflow 例子；它不要求你使用 Gerrit，但很好地提醒：
 
 ```text
-哪个 change 决定了大部分新行为？
+CI answers selected executable questions.
+Review asks whether those were the right questions.
 ```
 
-例如 authority refactor：
+M03 已经训练过 oracle。M10 再加一层：**tests 自己也是 change 的一部分，也必须被 review。**
+
+一个 author/Agent 可以同时生成：
 
 ```text
-job_authority.py
+wrong implementation
++
+matching wrong oracle
 ```
 
-可能是 semantic center。
+然后得到漂亮的绿色 CI。
 
-其他文件：
+## 6. 不要从第一个文件逐行扫：先找 semantic center
+
+Candidate patch 的 semantic center 是新 `job_authority.py`。`service.py`、`worker.py`、`metrics.py`、`legacy_audit.py` 大部分是在 routing。
+
+先问每个 semantic operation 是否偷偷加入了新 policy：
 
 ```text
-service.py
-worker.py
-metrics.py
-legacy_audit.py
+submit
+get
+list
+cancel
+claim
+finish
+metrics/read path
 ```
 
-更多是在 routing。
-
-如果 center 本身设计错误，先反馈 center。
-
-不要先 nitpick：
+特别寻找：
 
 ```text
-import order
-变量命名
-docstring punctuation
+new ordering
+new error translation
+new default
+new authority capability
+new failure behavior
 ```
 
----
+这是 refactor 最常偷带 behavior change 的地方。
 
-# 7. Review Change，不是 Review 作者
+Candidate 中最显眼的一行看起来甚至像“改进”：
 
-Code review comment 的对象必须是：
+```python
+return [state.jobs[job_id] for job_id in sorted(state.jobs)]
+```
+
+comment 说 stable ordering 更 deterministic。问题是：baseline insertion order 本来就 deterministic，而且 **job-ID lexical order 不是 submission order**。
+
+## 7. `job-9 → job-10` 是比“再多跑点 tests”更好的反例
+
+对于：
 
 ```text
-code / design / consequence
+job-1
+job-2
 ```
 
-而不是：
+lexical order 恰好等于 submission order。到 `job-9` 也没暴露问题。
+
+第一个高信息量边界是 digit width 改变：
 
 ```text
-作者能力 / 动机 / 性格
+job-9
+job-10
 ```
 
-Google reviewer guide 明确强调 comment 针对 code，而不是 developer，并建议解释 why。
-
-Source:
-
-https://google.github.io/eng-practices/review/reviewer/comments.html
-
-例如：
-
-差：
+创建 12 个 jobs 后，candidate 的排序变成：
 
 ```text
-你怎么会想到用 sorted？
+job-1
+job-10
+job-11
+job-12
+job-2
+...
 ```
 
-好：
+于是同一个 root cause 同时影响：
 
 ```text
-Blocker: `sorted(state.jobs)` changes the existing submission-order/FIFO
-contract once IDs reach `job-10`; the second claim becomes `job-10` rather
-than `job-2`. Please preserve insertion order or explicitly split this into
-a behavioral change with the corresponding contract/migration discussion.
+list_jobs() ordering
+claim_next() FIFO
+snapshot exported order
+legacy audit order
 ```
 
-第二种 comment 包含：
+成熟 review 不应把它机械写成四个同等级 blocker。更好的聚合是：
 
 ```text
-severity
-location
-violated contract
-consequence
-required outcome
+Root cause:
+lexical job-ID sorting replaces semantic submission/FIFO order
+
+Consequences:
+- list order regression
+- scheduler regression
+- durable snapshot ordering change
+- audit ordering change
 ```
 
-而不是攻击作者。
+这比“comment 越多越认真”更接近 change engineering。
 
----
+## 8. Context beyond diff：internal-looking helper 可以穿过 durable/public surface
 
-# 8. Review Comment 的最小结构
-
-本课程推荐重要 comment 尽量回答五件事：
+只看 `job_authority.py`，`sorted(...)` 像一个内部实现细节。沿 dataflow 往外走：
 
 ```text
-1. Severity
-2. Observation
-3. Engineering reason
-4. Consequence / risk
-5. Required outcome
+JobAuthority.list_jobs
+  ├─ service.list_jobs
+  ├─ public API
+  ├─ dashboard/readers
+  ├─ snapshot export
+  └─ legacy audit
 ```
 
-模板：
+reviewer 才会看到它的真实 blast radius。
+
+这就是为什么 code review 不等于 diff review。你要追的是：
 
 ```text
-Blocker — <short title>
-
-At <location>, the change does X.
-The existing contract/invariant requires Y.
-This can cause Z.
-Evidence: ...
-Please ensure ...
+changed line
+  ↓
+semantic operation
+  ↓
+callers / authority / durable surface / failure path
+  ↓
+compatibility / rollback consequence
 ```
 
-注意最后一句不是一定要写：
+对 architecture-heavy change，还要问 Stanford CS190 类似的问题：knowledge 移到了哪里、是否被复制、谁现在拥有这个 decision、哪些 caller 因此必须知道更多。这里不是为了套 modularity 术语，而是为了识别 hidden coupling。
+
+## 9. 第二个 blocker：更“友好”的 error handling 仍然是 scope violation
+
+Baseline：
+
+```python
+job = state.jobs[job_id]
+```
+
+missing ID 会抛 `KeyError`；`public_api.cancel_job()` 没有 translation，所以 external-style boundary 也看到这个异常。
+
+这个 contract 并不漂亮，M04 早就指出过。但 candidate 改成：
+
+```python
+try:
+    job = state.jobs[job_id]
+except KeyError:
+    return False
+```
+
+并新增 test：
+
+```python
+assert service.cancel("job-missing") is False
+```
+
+新行为也许更好，但这不是判断 blocker 的关键。brief 和 author description 都说这是 behavior-preserving structural refactor。因此：
 
 ```text
-请按我下面 17 行代码实现
+KeyError -> False
 ```
 
-Google reviewer guide 也强调 reviewer 不必替 developer 完成 detailed solution design。
+本身就是 undeclared behavior change。
 
-指出：
+更好的 change topology 是把它拆成一个显式 M04-style API redesign：先定义 unknown/running/terminal semantics、error identity、caller compatibility，再写对应 tests。不能因为“顺手更友好”就把新 policy 混进 refactor。
+
+这个 passing test 反而是很有价值的 review clue：它证明 author 正在给一个本来没有获准改变的行为写新 oracle。
+
+## 10. Architecture direction、implementation correctness、change packaging 要分别判
+
+Candidate 并不是“整体设计错了”。更准确的判断是：
 
 ```text
-what must become true
+architecture/localization direction = reasonable
+implementation preservation          = broken
+change packaging                     = broken
 ```
 
-往往比规定：
+`JobAuthority` 作为 in-process semantic seam 符合 M09 的 boundary-enabling direction：normal transition logic/direct-state access 可以逐步 localize，worker 不再需要直接理解 storage representation。
+
+但不要把这句话升级成：
 
 ```text
-how exactly to code it
+complete authority isolation achieved
 ```
 
-更好。
+Candidate 的 `get()` / `claim_next()` 仍返回 live `Job`，所以 M02 capability risk 还在。它是已知 baseline residual，不应作为本 PR blocker；同样，M07 `concurrent_claim.py` 是 reviewer brief 明确保留的 historical exception，也不能拿 whole-repo grep 强迫清除。
 
----
-
-# 9. Severity 必须清楚
-
-一个 review 如果只有：
+Review 的成熟度很大一部分来自这种分类：
 
 ```text
-comment A
-comment B
-comment C
+introduced regression
+necessary prerequisite
+pre-existing issue
+historical/diagnostic exception
+out-of-scope cleanup
 ```
 
-作者不知道：
+## 11. Historical probe 也有 lifetime，不能把所有旧绿灯永久冻结
+
+合法 authority refactor 会改变 source topology。因此 M09 的 baseline inventory probe 可能开始“红”：它原本期待 `service/worker/metrics/...` 直接 import `state`，而新 architecture 正是要改变这一点。
+
+M03 某些 mutation harness 也可能绑定具体旧 source site。
+
+这不自动等于 product regression。Reviewer 要问：
 
 ```text
-哪些必须修？
-哪些只是建议？
-哪些是 FYI？
+这个 probe 在证明长期 contract？
+还是只在 characterize 某个历史 topology/source seam？
 ```
 
-本课程使用：
+- M05 dashboard observable fingerprints、M06 audit characterization、M08 compatibility fixture 等可能仍是当前 change 的 regression evidence；
+- M09 direct-import inventory 如果被合法 architecture change supersede，就应更新成新的 fitness rule或标记 baseline-only。
+
+“所有历史 tests 永远不许变”与“不要无证据删 tests”一样，都是错误的极端。
+
+## 12. Severity 是工程后果，不是语气强弱
+
+本课程建议 reviewer 明确表达 intent，例如：
 
 ```text
 Blocker
@@ -555,1439 +396,255 @@ Optional / Consider
 FYI
 ```
 
-不要求具体平台支持这些 label。
+平台不必真的有这些 label。重要的是 author 能知道哪些结论阻止 merge。
 
-重点是 reviewer intent 清晰。
+Blocker 通常需要连接到 material engineering consequence，例如：
 
-Google reviewer guidance 也建议显式区分 required change 与 suggestion/nit。
+- requested contract regression；
+- invariant violation；
+- hidden compatibility/migration break；
+- incorrect failure semantics；
+- security/authority violation；
+- evidence 无法支撑 material claim；
+- current change scope 本身错误；
+- 明确的 code-health regression。
 
----
-
-# 10. 什么才是 Blocker？
-
-典型 blocker：
-
-### 10.1 Contract regression
-
-```text
-旧 caller 合法输入现在错误
-```
-
-### 10.2 Invariant violation
-
-```text
-两个 worker 可以同时 claim 一个 job
-```
-
-### 10.3 Hidden compatibility break
-
-```text
-new writer 先于 old readers 退出
-```
-
-### 10.4 Incorrect failure semantics
-
-```text
-timeout 后 blind retry duplicate external effect
-```
-
-### 10.5 Security / authority violation
-
-```text
-remote worker 获得 durable DB write credential
-```
-
-### 10.6 Evidence does not support the claim
-
-```text
-PR 声称并发安全
-但 test 只有单线程 happy path
-```
-
-### 10.7 Change scope invalid
-
-```text
-behavior-preserving refactor 偷带 public API behavior change
-```
-
----
-
-# 11. 什么通常不该是 Blocker？
-
-例如：
+下面通常不是 blocker：
 
 ```text
 “我更喜欢另一个变量名”
-“我会拆成两个 helper”
-“这里可以换一种 pattern”
+“我会换一种 pattern”
+“这个 helper 我会拆成两个”
 ```
 
-如果两个方案工程上等价：
+如果几个方案工程上等价，reviewer preference 不应伪装成 mandatory requirement。Google reviewer guidance 的 code-health principle也不是“追求完美”，而是不要让系统随 change 累积明确退化。
+
+重要 finding 最好包含：
 
 ```text
-reviewer preference
-!=
-mandatory requirement
+Severity
+Observation/location
+Contract / engineering reason
+Consequence
+Evidence / minimal reproduction
+Required outcome
 ```
 
-Google 的 `The Standard of Code Review` 明确强调 technical facts/data 应优先于 personal preference，并且不应追求“完美代码”阻碍明显改善 code health 的 change。
+最后一项通常写“什么必须变真”，而不是替作者规定唯一 implementation。
 
-Source:
+## 13. Small change 指的是 bounded claim，不是固定 LOC
 
-https://google.github.io/eng-practices/review/reviewer/standard.html
-
----
-
-# 12. CI Green 到底证明了什么？
-
-最危险的句子之一：
+一个 change reviewable，不是因为它 `< 100 LOC`，而更接近：
 
 ```text
-Tests pass, so LGTM.
+one coherent engineering claim
++ bounded consequences
++ independently reviewable evidence
 ```
 
-M03 已经知道：
+M10 candidate 更好的 topology 是：
 
 ```text
-6 tests green
+CL 1 — authority localization only
+  add in-process JobAuthority
+  route normal service/worker/metrics/audit access
+  preserve insertion/FIFO/error semantics
+  add architecture fitness + >9 ordering evidence
+
+CL 2 — optional error-contract redesign
+  only if product wants new unknown-ID semantics
+  define public contract + caller compatibility
+
+CL 3 — future remote worker
+  protocol / retry / auth / timeout / idempotency / deployment
 ```
 
-并不妨碍三个 meaningful mutants survive。
+三个 CL 的 proof obligation 完全不同。把它们绑在一起只会放大 reviewer mental model、rollback ambiguity 和 author/reviewer coordination cost。
 
-M10 再把这一点放进 review context。
+这也是 “small changes” 真正有价值的原因：不是 worship diff size，而是让 change boundary 接近一个可独立判断的 engineering proposition。
 
-CI 只能证明：
+## 14. Change type 决定 proof obligation，不要套 universal checklist
 
-```text
-selected executable checks
-ran in selected environment
-and returned selected success result
-```
+同样一句“tests pass”，对不同 change type 意义不同：
 
-它不能自动证明：
-
-```text
-selected checks were sufficient
-oracle was correct
-contract was complete
-missing caller was compatible
-failure path was explored
-migration order was valid
-```
-
-Google 的 reviewer guide 明确要求 human review tests 是否 valid，并问：
-
-```text
-坏代码时这些 tests 真的会失败吗？
-```
-
-Source:
-
-https://google.github.io/eng-practices/review/reviewer/looking-for.html
-
----
-
-# 13. Gerrit 给了一个很好的现实模型
-
-Gerrit 官方默认概念中：
-
-```text
-Verified
-```
-
-与：
-
-```text
-Code-Review
-```
-
-是不同 review labels。
-
-官方文档里，`Verified` 历史上表达：
-
-```text
-compile / basic unit tests succeeded
-```
-
-`Code-Review` 则表达人工 reviewer 对代码的判断。
-
-Sources:
-
-https://gerrit-review.googlesource.com/Documentation/config-labels.html
-
-https://gerrit-review.googlesource.com/Documentation/config-submit-requirements.html
-
-这不是说所有团队都要用 Gerrit。
-
-它只是很好地体现：
-
-```text
-machine verification signal
-!=
-human review signal
-```
-
----
-
-# 14. Review Evidence，不只是 Review Production Code
-
-很多 reviewer 会认真看：
-
-```text
-src/
-```
-
-然后快速扫：
-
-```text
-tests/
-```
-
-这是危险的。
-
-tests 也是 change 的一部分。
-
-你需要问：
-
-```text
-这个 test 对应哪个 claim？
-这个 oracle 是从 spec 来还是从 implementation copy 来？
-这个 input partition 为什么能代表风险？
-这个 test 在 mutant/bug 下真会红吗？
-有没有只测 happy path？
-有没有把新行为直接写进 expected，而没有 fail-before？
-```
-
-尤其 Agent 很容易产生：
-
-```text
-production code
-+
-matching tests
-```
-
-二者可以一起错，而且一起绿。
-
----
-
-# 15. Author-Written Test 可能只是自证循环
-
-例如实现：
-
-```python
-return sorted(state.jobs)
-```
-
-Agent 同时写：
-
-```python
-assert list_jobs() == sorted(expected)
-```
-
-CI 当然绿。
-
-但这只是：
-
-```text
-implementation assumption
-→ copied into oracle
-```
-
-而不是：
-
-```text
-contract
-→ independent oracle
-```
-
-reviewer 要寻找：
-
-```text
-independent source of truth
-```
-
-例如：
-
-- M03 明确 contract：submission order；
-- historical fixture；
-- public API documentation；
-- migration matrix；
-- user requirement；
-- domain invariant。
-
----
-
-# 16. Review Surrounding Code，而不是只看 Diff Context
-
-Google reviewer guide 明确建议在需要时看整个 file 和 broader system context。
-
-这是因为很多关键事实在 diff 外：
-
-```text
-caller
-state owner
-old reader
-serialization format
-retry loop
-cleanup path
-background worker
-```
-
-例如 patch：
-
-```python
-except KeyError:
-    return False
-```
-
-局部看非常合理。
-
-但 public boundary 可能原来是：
-
-```text
-unknown ID -> error
-```
-
-那么这个一行变化其实是：
-
-```text
-API semantic change
-```
-
-所以 review 路径应该是：
-
-```text
-changed code
-→ caller
-→ boundary
-→ contract
-```
-
----
-
-# 17. “当前行为很烂”不等于可以偷偷改
-
-M04 的 TaskForge starter 故意让 unknown ID 泄漏 `KeyError`。
-
-这不是理想 API。
-
-但假设一个 PR 声称：
-
-```text
-behavior-preserving architecture refactor
-```
-
-然后顺手改成：
-
-```text
-unknown cancel -> False
-```
-
-reviewer 应该指出：
-
-```text
-out-of-scope behavior change
-```
-
-即使新行为可能更好。
-
-为什么？
-
-因为：
-
-```text
-“更好”
-```
-
-不自动等于：
-
-```text
-“应该隐藏在当前 change 里”
-```
-
-如果真的要改，应该成为明确 behavior change：
-
-```text
-new contract
-+ caller impact
-+ tests
-+ compatibility story
-```
-
-这就是 M05 的 Two Hats 在 review 层面的延伸。
-
----
-
-# 18. Review 不能无限 Scope Creep
-
-反过来也一样。
-
-reviewer 可能在 surrounding code 发现：
-
-```text
-service.get() exposes mutable Job
-```
-
-M02 已经知道这是设计问题。
-
-但如果当前 PR 只是：
-
-```text
-fix snapshot v2 reader
-```
-
-你不能自动要求作者：
-
-```text
-顺便重做整个 state ownership
-```
-
-reviewer 要区分四类问题：
-
-```text
-A. introduced regression
-B. prerequisite to make this change correct
-C. pre-existing defect worth filing
-D. unrelated cleanup / preference
-```
-
-只有 A/B 通常是当前 change blocker。
-
-C 可以：
-
-```text
-FYI + issue/follow-up
-```
-
-D 甚至不一定值得 comment。
-
----
-
-# 19. Review Change Type，而不是套一张 Checklist
-
-*Software Engineering at Google* Chapter 9 区分：
-
-- greenfield；
-- behavioral change；
-- bug fix / rollback；
-- refactoring / large-scale change。
-
-Source:
-
-https://abseil.io/resources/swe-book/html/ch09.html
-
-不同 change type 有不同 proof obligation。
-
-## Refactor
-
-核心：
-
-```text
-behavior preservation
-```
-
-看：
-
-```text
-behavior inventory
-regression evidence
-change topology
-```
-
-## Bug Fix
-
-核心：
-
-```text
-bug existed
-fix removes it
-```
-
-看：
-
-```text
-fail-before
-pass-after
-neighboring cases
-```
-
-## Migration
-
-核心：
-
-```text
-old/new coexistence
-```
-
-看：
-
-```text
-compatibility matrix
-rollout order
-rollback
-contract phase
-```
-
-## Concurrency Change
-
-核心：
-
-```text
-history / interleaving
-```
-
-看：
-
-```text
-safety
-liveness
-linearization point
-failpoints
-```
-
-## Architecture Change
-
-核心：
-
-```text
-authority / knowledge / failure boundary
-```
-
-看：
-
-```text
-what moved
-what became long-lived
-what failure crosses boundary
-reversal cost
-```
-
----
-
-# 20. 一个通用的 Review Matrix
-
-| Dimension | Reviewer question |
+| Change type | Reviewer 主要问什么 |
 |---|---|
-| Problem | 这个 change 解决了正确问题吗？ |
-| Scope | patch 是否只包含这个 engineering claim 所需内容？ |
-| Contract | 哪些 observable behavior 改了 / 保持？ |
-| Invariant | 什么必须在所有路径继续成立？ |
-| Ownership | 谁现在拥有 knowledge/state/decision？ |
-| Failure | timeout/crash/retry/partial failure 怎么样？ |
-| Compatibility | old/new caller/data/protocol 能否共存？ |
-| Evidence | tests/probes 真能证伪错误实现吗？ |
-| Operability | 上线后怎样知道它坏了？ |
-| Rollback | change 能否被安全撤销？ |
-| Complexity | 是否引入超过需求的 mechanism？ |
-| Reviewability | reviewer 是否能在 bounded model 中理解它？ |
-
-不是每个 PR 都要同样深入检查 12 项。
-
-这是：
+| behavior-preserving refactor | 哪些 observable semantics 必须保持？有没有 characterization/regression evidence？ |
+| bug fix | 是否有 fail-before / pass-after？修的是 root cause 还是 symptom？ |
+| migration | old/new coexistence matrix、rollout/rollback order 是否闭合？ |
+| concurrency change | 哪些 history/interleaving 被允许？crash/retry semantics 是否改变？ |
+| architecture change | authority、knowledge、failure/deployment boundary 是否真的改变？代价和 migration 是什么？ |
 
-```text
-risk-triggered review map
-```
-
-不是表格宗教。
-
----
-
-# 21. Small Change 的真正含义
-
-Google 的 Small CL guidance 强调小 change 更容易：
-
-- review；
-- test；
-- rollback；
-- merge；
-- 理解。
-
-Source:
-
-https://google.github.io/eng-practices/review/developer/small-cls.html
-
-但：
-
-```text
-small != N LOC
-```
-
-本课程定义：
-
-> **A small change is one coherent engineering claim with bounded consequences and independently reviewable evidence.**
-
-例如：
-
-```text
-rename 12,000 generated references
-```
-
-可能 LOC 巨大，但 semantic change 很机械。
-
-而：
-
-```text
-改 7 行 retry logic
-```
-
-可能影响：
-
-```text
-load amplification
-external duplication
-SLO
-failure propagation
-```
-
-semantic scope 很大。
-
----
-
-# 22. Diff Size 与 Semantic Size 不同
-
-可以写：
-
-```text
-textual size     = 8 lines
-semantic surface = huge
-```
-
-也可能：
-
-```text
-textual size     = 5000 lines
-semantic surface = one mechanical rename
-```
-
-reviewer 应估算的是：
-
-```text
-semantic surface
-```
-
-而不仅是：
-
-```text
-+423 -177
-```
-
----
-
-# 23. Review Order：Risk First
-
-一种有效顺序：
-
-```text
-1. Description / problem
-2. Semantic center
-3. Contract-affecting code
-4. Failure/migration/authority path
-5. Tests and evidence
-6. Callers / surrounding code
-7. Mechanical/supporting changes
-8. Naming / polish / nits
-```
-
-为什么不是从 line 1 开始？
-
-因为 reviewer time 是有限资源。
-
-如果 20 分钟后才发现：
-
-```text
-migration rollout order 根本不成立
-```
-
-前面的 naming comments 都是低价值工作。
-
----
-
-# 24. Review Findings 要按 Root Cause 聚合
-
-假设 `sorted(job_ids)` 导致：
-
-```text
-list order wrong
-claim FIFO wrong
-snapshot order wrong
-audit output wrong
-```
-
-可以写四个 comments。
-
-但更好的 review 可能是一个 root-cause blocker：
-
-```text
-Blocker — sorting by opaque/string job ID replaces the existing
-submission-order semantics. This affects both scheduler FIFO and all consumers
-of list_jobs, including snapshot/audit output. IDs are not an ordering key.
-```
-
-然后给一两个 reproduction。
-
-这比：
-
-```text
-line 17 wrong
-line 33 wrong
-snapshot changed
-audit changed
-```
-
-更有 engineering value。
-
----
-
-# 25. Review 不需要证明“没有任何 bug”
-
-这是不可能目标。
-
-reviewer 要做的是：
-
-```text
-建立足够强的 acceptance argument
-```
-
-并判断 residual risk。
-
-可以写：
-
-```text
-I reviewed lifecycle semantics, ordering, and compatibility.
-I did not review the security properties of the future remote-worker transport.
-```
-
-scope 明确比模糊的：
-
-```text
-LGTM
-```
-
-更有价值。
-
-Google reviewer guide 也建议 reviewer 在只覆盖部分 files/aspects 时明确说明 review scope。
-
----
-
-# 26. Qualified Reviewers 与 Risk Ownership
-
-不是所有 reviewer 都必须懂所有东西。
-
-当 change 触及：
-
-```text
-security
-privacy
-concurrency
-accessibility
-schema migration
-crypto
-```
-
-reviewer 应知道：
-
-```text
-自己的 review competence 边界
-```
-
-然后确保有合适的人覆盖。
-
-这不是推卸责任。
-
-恰恰是：
-
-```text
-明确 responsibility allocation
-```
-
-和 M01/M02 的思想一致。
-
----
-
-# 27. Review Speed 为什么也是 Engineering Concern
-
-慢 review 会造成：
-
-```text
-large stacked changes
-context loss
-author work built on unapproved assumptions
-pressure to waive quality
-```
-
-Google reviewer guide 明确把 team velocity 而不是 reviewer 个体 velocity 作为 review speed 的优化目标。
-
-Source:
-
-https://google.github.io/eng-practices/review/reviewer/speed.html
-
-本课程不采用具体的“一工作日”SLA。
-
-但采用一个 principle：
-
-> **Major structural feedback should be surfaced early.**
-
-因为越晚指出：
-
-```text
-整个 authority model 不对
-```
-
-后续 sunk cost 越高。
-
----
-
-# 28. Review Record 是未来系统的一部分
-
-一个好的 review comment 可能在半年后解释：
-
-```text
-为什么不能把 timeout 当 failure
-为什么 writer cutover 晚于 reader rollout
-为什么这个 weird compatibility branch 还不能删
-```
-
-因此 review 不是瞬时 chat。
-
-它也是：
-
-```text
-change history
-```
-
-如果 review 中达成了新的长期 design decision：
-
-```text
-最好更新 code / docs / ADR / PR description
-```
-
-不要让唯一 explanation 永远埋在 review thread。
-
----
-
-# 29. Agent 生成的 PR 有哪些特殊 Failure Mode？
-
-## 29.1 Confident summary
-
-Agent 写：
-
-```text
-This is a behavior-preserving refactor.
-```
-
-语气不能作为 evidence。
-
----
-
-## 29.2 Tests mirror implementation
-
-Agent 同时写实现和 oracle。
-
----
-
-## 29.3 Broad cleanup
-
-Agent 很喜欢顺手：
-
-```text
-rename
-format
-extract helper
-change errors
-sort output
-```
-
-导致 semantic diff 被噪声埋没。
-
----
-
-## 29.4 Silent assumption completion
-
-任务没说 ordering。
-
-Agent 会自动挑一个：
-
-```text
-sorted = deterministic = better
-```
-
-但这里实际上需要 contract reasoning。
-
----
-
-## 29.5 Tool-output laundering
-
-Agent summary：
-
-```text
-All tests pass.
-```
-
-但可能：
-
-- 没跑 full suite；
-- 跑错 worktree；
-- skipped important test；
-- command 根本没覆盖 target；
-- tests 本身没牙齿。
-
-reviewer 应尽可能看到：
-
-```text
-exact command
-exact environment
-exact result
-```
-
-而不是只信 summary。
-
----
-
-# 30. Agent Review Workflow
-
-本课程推荐：
-
-```text
-Phase 1 — Author/Agent implementation
-Phase 2 — Freeze author narrative
-Phase 3 — Independent reviewer reconnaissance
-Phase 4 — Reviewer writes own change model
-Phase 5 — Compare against author claims
-Phase 6 — Targeted verification
-Phase 7 — Findings by severity/root cause
-Phase 8 — Author/Agent fixes
-Phase 9 — Re-review latest patch, not old mental snapshot
-```
-
-非常关键：
-
-> **不要让实现 Agent 同时成为唯一 reviewer。**
-
-可以用同一个模型，但应是：
-
-```text
-new context
-fresh prompt
-independent evidence reconstruction
-```
-
-而不是：
-
-```text
-“检查一下你刚才写的有没有问题”
-```
-
-后者容易 self-confirm。
-
----
-
-# 31. 一个差的 Agent Review Prompt
-
-```text
-Review this PR and tell me if it looks good.
-```
-
-很容易得到：
-
-```text
-整体实现清晰
-测试充分
-建议加一点注释
-LGTM
-```
-
-因为任务没有要求 reviewer 独立重建任何东西。
-
----
-
-# 32. 一个更好的 Agent Review Contract
-
-```text
-You are the independent reviewer, not the implementation author.
-
-Before reading the author's conclusions as facts:
-1. reconstruct the change goal from issue + diff;
-2. identify changed contracts, invariants, authority boundaries, failure paths,
-   compatibility surfaces, and durable artifacts;
-3. classify this as refactor / behavior change / migration / concurrency /
-   architecture change or a mixture;
-4. inspect tests as code and explain what each important test actually proves;
-5. run targeted counterexamples where existing evidence is weak;
-6. distinguish regressions introduced by this PR from pre-existing problems;
-7. report findings in severity order with file/location, violated contract,
-   consequence, and evidence;
-8. do not approve merely because CI is green or the author summary is plausible.
-```
-
-这个 prompt 的核心不是“更长”。
-
-而是强迫 Agent 建立：
-
-```text
-independent review authority
-```
-
----
-
-# 33. Reviewer 自己也会犯什么错？
-
-## 33.1 Anchoring
-
-先读作者 summary，然后只寻找支持它的证据。
-
-## 33.2 Nit saturation
-
-大量小评论让 reviewer 感觉“review 很认真”，却没有检查主要 risk。
-
-## 33.3 Design substitution
-
-把个人偏好当 correctness。
-
-## 33.4 Scope explosion
-
-看到任何旧债都要求当前 PR 修。
-
-## 33.5 CI outsourcing
-
-把测试判断完全交给 automation。
-
-## 33.6 Historical-probe absolutism
-
-旧 test/probe 失败就认定新 change 错。
-
-M09 已看到：
-
-```text
-architecture topology 改变后
-baseline inventory probe 应该升级
-```
-
-历史工具也有 scope/version。
-
-## 33.7 Stale approval
-
-patch set 改了大量核心代码后，reviewer 仍按旧 mental model approve。
-
----
-
-# 34. 新 Patch Set 必须重新判断什么？
-
-不是每次都从零 review。
-
-但要问：
-
-```text
-作者修 finding 时改了哪些 assumptions？
-```
-
-如果原 blocker 是：
-
-```text
-ordering semantics
-```
-
-修复方式却重写：
-
-```text
-ID allocation
-```
-
-那 review scope 已变化。
-
-不要只看：
-
-```text
-comment resolved
-```
-
-要看：
-
-```text
-new diff consequence
-```
-
----
-
-# 35. Review 与 Ownership
-
-M02 说：
-
-```text
-Authority = who can decide legal state transition
-```
-
-M10 可以类比：
-
-```text
-Review authority = who is accountable for accepting this class of change
-```
-
-但不要混淆：
-
-```text
-code owner
-reviewer
-security approver
-product owner
-```
-
-他们可能回答不同问题。
-
-例如：
-
-```text
-CI       -> selected executable checks
-reviewer -> correctness / design
-owner    -> codebase stewardship
-security -> threat boundary
-```
-
-这也是为什么治理系统常有多个独立 gates。
-
----
-
-# 36. TaskForge M10 Review Case
-
-本章给你一份 Agent candidate PR：
-
-```text
-review-cases/m10/agent-pr-description.md
-review-cases/m10/agent-pr.patch
-```
-
-它声称：
-
-```text
-centralize Job lifecycle authority
-preserve all existing behavior
-low risk internal refactor
-9 tests passed
-```
-
-你的第一任务不是运行 hidden probe。
-
-而是：
-
-```text
-先写自己的 review model
-```
-
-问：
-
-```text
-这到底是哪种 change？
-哪些行为必须保持？
-哪些旧问题是 out-of-scope？
-哪些新 line 有 semantic consequence？
-作者新增 test 真的覆盖这些 risk 吗？
-```
-
----
-
-# 37. 为什么这个 Case 不是“找彩蛋”
-
-真正目标不是猜 instructor 藏了几个 bug。
-
-而是训练：
-
-```text
-从 contract 推导 adversarial example
-```
-
-而不是：
-
-```text
-从异常代码风格猜 bug
-```
-
-例如看到：
-
-```python
-sorted(state.jobs)
-```
-
-你不应该因为“sorted 可疑”就报错。
-
-应该推导：
-
-```text
-ID ordering = lexical
-contract ordering = submission
-```
-
-然后构造最小反例：
-
-```text
-job-1 ... job-10
-```
-
-这是 engineering review。
-
----
-
-# 38. 什么时候 reviewer 应自己跑代码？
+这张表不是另一张 checklist，而是提醒 reviewer：**review depth 由 change type 和 risk model 驱动。**
 
-不是所有 PR 都要 reviewer 本地 checkout。
+## 15. 一个高信息量 Review Funnel
 
-但下面情况很值得：
+面对大 change，不要从 naming comment 开始。更有效的顺序是：
 
 ```text
-user-visible behavior hard to infer from diff
-concurrency
-migration
-serialization
-performance claim
-failure recovery
-suspiciously weak tests
+0. Should this change exist, and is the issue/change contract coherent?
+1. What exactly does the change claim?
+2. What must remain true?
+3. Where is the semantic center?
+4. Which callers/authority/durable/failure surfaces does it touch?
+5. Do tests/probes distinguish correct from plausible-wrong implementations?
+6. What residual risk remains?
+7. Only then: maintainability, readability, nits.
 ```
 
-Google reviewer guide 也明确允许 reviewer 自己 validate behavior，并指出 concurrency 很难只靠运行发现，需要 reasoning。
+如果 Stage 0–4 已经发现 fundamental mismatch，就应该尽早给 broad feedback，而不是先花四十分钟改 variable names。
 
-因此本课程使用：
+## 16. Reviewer probe 应该验证你的 reasoning，而不是替你 reasoning
 
-```text
-reasoning + targeted execution
-```
-
-而不是二选一。
-
----
-
-# 39. Targeted Probe 比“再跑一次全套 CI”更有信息量
-
-如果 CI 已经：
-
-```text
-9 passed
-```
-
-reviewer 再运行同一命令，得到：
-
-```text
-9 passed
-```
-
-信息增量很低。
-
-如果你的 hypothesis 是：
-
-```text
-lexical ID sort breaks FIFO after 9
-```
-
-更好的 probe：
-
-```text
-submit 12 jobs
-claim twice
-```
-
-如果 hypothesis 是：
-
-```text
-public error behavior changed
-```
-
-更好的 probe：
+Lab 故意要求先写 first-pass review，再运行：
 
-```text
-cancel unknown ID
+```bash
+PYTHONPATH=src uv run --with pytest --no-project \
+  python tools/m10_review_case.py --reviewer-probes
 ```
-
-review evidence 应针对 uncertainty。
-
----
 
-# 40. “我没看出问题”不是 Acceptance Argument
+probe 会稳定暴露：
 
-高质量 approval 可以很短。
-
-但你的内部 reasoning 至少应能回答：
-
 ```text
-What did I review?
-What did I not review?
-What were the high-risk claims?
-What evidence supports them?
-What residual risk remains?
+ordering-regression
+fifo-regression
+undeclared-public-behavior-change
+snapshot-order-consequence
 ```
 
-最终 comment 可能只是：
+但真正要评估的是：
 
 ```text
-LGTM. Reviewed lifecycle ordering, public cancel behavior, and authority routing;
-existing M07 fault-injection module is intentionally outside the architecture
-cleanup scope.
+ALREADY FOUND
+NEW FINDING
+SAME ROOT CAUSE
+NOT A BLOCKER
 ```
-
-这比：
 
-```text
-Looks good!
-```
+如果你只在看完 reveal output 后把四个 ID 重写成四条 comment，你没有完成 independent review；你只是在解释答案。
 
-信息强得多。
+Targeted probe 的价值是围绕 uncertainty 选择高信息量输入。`job-9 → job-10` 比“随机 fuzz 1000 次”更能说明你理解了 failure mechanism。
 
----
+## 17. Agent 生成 PR 的特殊风险：confidence 不是 provenance
 
-# 41. Review Decision 是三值以上，不是二值
+Agent 可以非常快地同时生成：
 
-现实里不是只有：
+- implementation；
+- tests；
+- PR summary；
+- risk assessment；
+- “all checks passed”结论。
 
-```text
-approve / reject forever
-```
+这些 artifact 可能共享同一个错误 assumption，所以**数量多不等于独立 evidence 多**。
 
-至少有：
+Reviewer 对 Agent-generated change 尤其要防：
 
 ```text
-Approve
-Approve with non-blocking comments
-Request changes
-Need specialist review
-Need design discussion before code review
-Split change first
+confident summary
+implementation-derived tests
+broad cleanup hidden in feature work
+silent assumption completion
+tool-output laundering
 ```
 
-尤其 architecture-heavy change：
+例如 Agent 说“CI green, therefore behavior-preserving”，这是把 tool result 从：
 
-如果核心争议是：
-
 ```text
-系统到底应不应该有这个 boundary？
+9 selected tests passed
 ```
-
-可能需要先回 design discussion，而不是把架构辩论塞在 300 行 diff comments 里。
 
----
+洗成了更强的：
 
-# 42. Review Completion 的一个实用 Definition
-
-可以认为 review 达到可接受状态，当：
-
 ```text
-1. Change claim 清楚；
-2. Scope 清楚；
-3. Blocker contracts/invariants 已有可信 evidence；
-4. Major failure/migration paths 已被考虑；
-5. Author tests 的 oracle 已被审查；
-6. New comments 不再暴露新的 system-model misunderstanding；
-7. Residual issues 要么 non-blocking，要么有明确 follow-up owner；
-8. Latest patch set 已重新确认。
+all relevant behavior preserved
 ```
-
-不是：
 
-```text
-comment count = 0
-```
+后一句没有 provenance。
 
----
+M10 可以让 Agent 帮忙 inventory callers、运行 probe、整理 diff，但 acceptance authority 仍需要独立 reviewer model。如何进一步设计 agent context、task boundary、parallel implementation/review 和 merge conflict，留到 M11；本章只要求**不要让生成者同时成为自己 claim 的唯一验证者。**
 
-# 43. M00–M09 如何在一次 Review 中重新出现
+## 18. Re-review 不是检查“fixed all comments”
 
-一次 authority refactor review 可以同时调用：
+新的 patch set 到来时，旧 approval 不能机械复用。至少重新做：
 
 ```text
-M00: change amplification 是否下降？
-M01: behavior-preserving 的 contract 到底是什么？
-M02: authority 是否真的集中？
-M03: 9 tests 的 discriminating power 如何？
-M04: error semantic 是否偷变？
-M05: structural / behavioral change 是否混在一起？
-M06: legacy audit 是否仍被 characterize？
-M07: claim semantics / concurrency path 是否受影响？
-M08: snapshot durable output 是否改变？
-M09: architecture boundary 是否与 intended authority 对齐？
+inspect patch-set delta
+rerun blocker reproduction
+verify no new behavior scope
+review changed tests/oracles
+confirm intended architecture/change goal still holds
 ```
 
-这就是为什么 M10 不是“另一个专题”。
+特别注意一种常见假修复：production code 没解决 root cause，只把 expected output 改成当前实现，于是原 blocker test 重新绿了。
 
-它是前九章的 integration point。
+Re-review 关注的是 engineering proposition 是否现在成立，而不是 conversation state 是否显示 resolved。
 
----
+## 19. 一个够用的最终 review 可以很短
 
-# 44. 本章的核心 Review Loop
+M10 case 的高质量 first-pass 不需要几十条 comment：
 
 ```text
-Change request
-     ↓
-Author argument
-     ↓
-Independent reviewer system model
-     ↓
-Change classification
-     ↓
-Contract / authority / failure / compatibility map
-     ↓
-Semantic diff review
-     ↓
-Evidence review
-     ↓
-Targeted counterexamples
-     ↓
-Findings by root cause + severity
-     ↓
-Updated patch
-     ↓
-Re-review changed assumptions
-     ↓
-Accept / reject / split / escalate
-```
+Decision: Request changes
 
----
+The authority-localization direction is reasonable, but this CL is not
+behavior-preserving as described.
 
-# 45. 最后一个重要原则：Review 是 Change Engineering，不是静态审美
+Blocker 1: lexical job-ID sorting replaces the existing submission/FIFO order.
+A >9-job counterexample makes the second claim job-10 instead of job-2; the
+same root cause leaks into list/snapshot/audit order.
 
-优秀 reviewer 不是：
+Blocker 2: unknown cancel changes from the existing KeyError path to False,
+while the brief says public behavior is unchanged. Keep current semantics in
+this structural CL or split an explicit API behavior redesign.
 
-```text
-最会挑命名的人
+Non-blocking: mutable Job exposure is a known M02 residual, and
+concurrent_claim.py is an explicit M07 historical exception; neither is a new
+regression that this CL must repair.
 ```
 
-而是能判断：
+这份 review 的价值来自：
 
 ```text
-这次 change 为什么应该存在；
-它真正改变了什么；
-它不能改变什么；
-哪些 failure/compatibility consequence 被遗漏；
-作者的 evidence 是否真的支持 claim；
-怎样用最小 comment 把系统拉回正确演化路径。
+change model
++ root-cause findings
++ severity
++ evidence
++ scope discipline
 ```
-
-所以本章最终定义：
-
-> **Code Review 是对一次系统演化提案进行独立工程验证，并决定它是否足够安全、清晰、可维护地进入 shared history。**
 
-Agent 可以写 patch。
+而不是 comment 数量。
 
-Agent 也可以辅助 review。
+## 20. Lab：把 review 变成可复现的工程过程
 
-但：
+完整实验见 [Lab 10](../labs/10-code-review-change-engineering.md)。你会：
 
-> **approval 本质上仍是 engineering authority。**
+1. 只读 reviewer brief，先写 change contract；
+2. 从真实 starter 恢复 baseline；
+3. 验证 author CI 的确 green；
+4. review author description、tests 和 semantic center；
+5. 在 reveal probe 前写 first-pass review；
+6. 再用 reviewer probes 检查自己的 blind spot；
+7. 聚合 root cause、校准 severity；
+8. 设计 corrected change topology 与 re-review plan。
 
-谁拥有这个 authority，谁就必须对 acceptance argument 负责。
+Instructor reference 在 [M10 case analysis](../case-studies/m10/instructor-analysis.md)。不要在 first-pass 前读它。
 
----
+## 21. 来源边界：哪些是 source-backed，哪些是课程综合
 
-# 46. 进入 Lab 前的自检
+详细审计见 [M10 source audit](../reading-notes/m10-source-audit.md)。
 
-在打开 M10 candidate patch 前，先确认你能回答：
+Google Engineering Practices 支撑 code health、broader-context review、review tests themselves、risk-first navigation、small/coherent CL、good descriptions 和 comment intent；*Software Engineering at Google* Chapter 9 支撑 code review 的长期 correctness/comprehensibility/ownership/history 价值，以及不同 change type 需要不同 review reasoning；Gerrit 文档只用于说明 machine verification 与 human code-review signal 可以被 workflow 明确分开；Stanford CS190 支撑在 design review 中检查 knowledge leakage、interface 与 modularity；GitHub review material只作为 governance mechanism 示例。
 
-1. PR description 为什么是 claim 而不是事实？
-2. 为什么 CI green 不能推出 approve？
-3. blocker 和 personal preference 的边界是什么？
-4. 为什么要先看 semantic center，再看 nit？
-5. 怎样区分 introduced regression 与 pre-existing defect？
-6. 为什么 change type 决定 proof obligation？
-7. 为什么一个 8 行 change 可能比 5000 行 mechanical change 更难 review？
-8. 怎样写一个包含 consequence 和 evidence 的 blocker comment？
-9. 为什么 reviewer 不应该让实现 Agent 成为唯一审查 authority？
-10. 为什么 historical probe 失败有时说明 probe scope 过时，而不是新代码错？
+以下是课程综合或 TaskForge-specific reasoning，而不是来源中的原句定律：
 
-如果这些问题已经能用自己的话回答，就进入：
+- PR = bounded engineering argument；
+- `claim -> oracle -> evidence -> residual risk -> decision` review model；
+- review funnel；
+- severity/evidence comment template；
+- root-cause aggregation；
+- `job-9 → job-10` risk partition；
+- historical probe lifetime 分类；
+- TaskForge corrected CL topology；
+- Agent summary / tool-output laundering 分析。
 
-[`../labs/10-code-review-change-engineering.md`](../labs/10-code-review-change-engineering.md)
+这些来源不能推出：CI green 就能 approve、所有 PR 必须小于固定 LOC、所有 baseline defects 必须在当前 PR 修、reviewer 必须重写作者方案、某个 approval 数量等于 review quality，或 `JobAuthority` 这个名字本身就证明 authority isolation。
