@@ -34,9 +34,18 @@ npm --prefix site run build:all
 
 student build 只把 `visibility: student` 的 canonical pages 交给 VitePress source discovery；instructor build 包含 student + instructor；all build 包含全部 canonical pages。`.generated/site-model.json` 是 `tools/site_model.py` 产生的临时派生物，不提交，也不是新的内容 authority。
 
+GitHub Pages 的发布 bundle 可在本地一次性构建：
+
+```bash
+npm --prefix site run build:pages
+```
+
+默认输出到 `site/.pages-dist/`：根目录是 `site/dispatch/` 的版本选择页，下面分别是 `student/`、`teacher/`、`all/`。内部 visibility 名仍然是 `instructor`；`teacher/` 只是公开 URL。CI 会把 `COURSE_PAGES_BASE` 设成当前 repository 的 Pages base，并把 repo-only source link 固定到正在部署的 commit SHA。
+
 ## 配置
 
-- `COURSE_SITE_BASE`：静态站 base path，例如 `/software-engineering/`；默认 `/`。
+- `COURSE_SITE_BASE`：单个 renderer build 的静态站 base path，例如 `/agentic-se/student/`；默认 `/`。
+- `COURSE_PAGES_BASE`：`build:pages` 的总 Pages base；默认根据 `GITHUB_REPOSITORY` 推导，本地 fallback 为 `/agentic-se/`。
 - `COURSE_SOURCE_REPO`：repo-only artifact 的 source navigation 根 URL；默认当前 GitHub repository。
 - `COURSE_SOURCE_REF`：repo-only artifact 链接使用的 branch/tag/ref；默认 `main`。
 

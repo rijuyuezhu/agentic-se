@@ -1,0 +1,60 @@
+name: Deploy course sites
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Test content model
+        run: |
+          python tools/test_content_model.py
+          python tools/content_model.py validate
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install site dependencies
+        run: npm ci --prefix site
+      - name: Test site model
+        run: npm --prefix site test
+      - name: Build Pages bundle
+        env:
+          COURSE_PAGES_BASE: /${{ github.event.repository.name }}/
+          COURSE_SOURCE_REPO: https://github.com/${{ github.repository }}
+          COURSE_SOURCE_REF: ${{ github.sha }}
+        run: npm --prefix site run build:pages
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site/.pages-dist
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

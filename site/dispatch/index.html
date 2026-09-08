@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="软件工程：控制复杂度、设计变化、驾驭 Agent" />
+    <title>软件工程 · Agent</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: Canvas;
+        color: CanvasText;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 32px 20px;
+      }
+
+      main {
+        width: min(780px, 100%);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 5vw, 3.25rem);
+        line-height: 1.18;
+        letter-spacing: -0.035em;
+      }
+
+      .lead {
+        margin: 14px 0 32px;
+        max-width: 42rem;
+        color: color-mix(in srgb, CanvasText 68%, transparent);
+        font-size: 1.05rem;
+        line-height: 1.8;
+      }
+
+      .versions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .version {
+        display: block;
+        min-height: 164px;
+        border: 1px solid color-mix(in srgb, CanvasText 16%, transparent);
+        border-radius: 14px;
+        padding: 20px;
+        color: inherit;
+        text-decoration: none;
+        transition: transform 120ms ease, border-color 120ms ease;
+      }
+
+      .version:hover {
+        transform: translateY(-2px);
+        border-color: color-mix(in srgb, CanvasText 42%, transparent);
+      }
+
+      .version:focus-visible {
+        outline: 2px solid CanvasText;
+        outline-offset: 3px;
+      }
+
+      .version strong {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 1.08rem;
+      }
+
+      .version span {
+        display: block;
+        color: color-mix(in srgb, CanvasText 66%, transparent);
+        font-size: 0.92rem;
+        line-height: 1.65;
+      }
+
+      .recommended::after {
+        content: "推荐";
+        display: inline-block;
+        margin-top: 16px;
+        border: 1px solid color-mix(in srgb, CanvasText 24%, transparent);
+        border-radius: 999px;
+        padding: 3px 9px;
+        font-size: 0.72rem;
+      }
+
+      footer {
+        margin-top: 28px;
+        color: color-mix(in srgb, CanvasText 56%, transparent);
+        font-size: 0.85rem;
+      }
+
+      footer a { color: inherit; }
+
+      @media (max-width: 680px) {
+        .versions { grid-template-columns: 1fr; }
+        .version { min-height: 0; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .version { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>软件工程 · Agent</h1>
+      <p class="lead">控制复杂度、设计变化、驾驭 Agent。选择适合你的课程视图。</p>
+
+      <nav class="versions" aria-label="课程版本">
+        <a class="version recommended" href="student/">
+          <strong>学生版</strong>
+          <span>课程主线、Labs、Extensions 与学生可见参考材料。日常学习从这里开始。</span>
+        </a>
+        <a class="version" href="teacher/">
+          <strong>教师版</strong>
+          <span>在学生版基础上加入 instructor case analysis 与教学参考材料。</span>
+        </a>
+        <a class="version" href="all/">
+          <strong>完整版</strong>
+          <span>渲染全部 canonical content，包括 internal / provenance / maintenance 页面。</span>
+        </a>
+      </nav>
+
+      <footer>
+        <a href="https://github.com/rijuyuezhu/agentic-se">GitHub repository</a>
+      </footer>
+    </main>
+  </body>
+</html>
