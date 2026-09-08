@@ -8,9 +8,9 @@
     "prepare:instructor": "python ../tools/site_model.py prepare --visibility instructor",
     "prepare:all": "python ../tools/site_model.py prepare --visibility all",
     "build": "npm run build:student",
-    "build:student": "npm run prepare:student && vitepress build . && python ../tools/site_model.py verify --visibility student --dist .vitepress/dist && node scripts/verify-search.mjs && node scripts/verify-render.mjs",
-    "build:instructor": "npm run prepare:instructor && vitepress build . && python ../tools/site_model.py verify --visibility instructor --dist .vitepress/dist && node scripts/verify-search.mjs && node scripts/verify-render.mjs",
-    "build:all": "npm run prepare:all && vitepress build . && python ../tools/site_model.py verify --visibility all --dist .vitepress/dist && node scripts/verify-search.mjs && node scripts/verify-render.mjs",
+    "build:student": "npm run prepare:student && vitepress build . && python ../tools/site_model.py verify --visibility student --dist .vitepress/dist && node scripts/verify-search.mjs && node scripts/verify-render.mjs && python ../tools/verify_static_site.py --dist .vitepress/dist",
+    "build:instructor": "npm run prepare:instructor && vitepress build . && python ../tools/site_model.py verify --visibility instructor --dist .vitepress/dist && node scripts/verify-search.mjs && node scripts/verify-render.mjs && python ../tools/verify_static_site.py --dist .vitepress/dist",
+    "build:all": "npm run prepare:all && vitepress build . && python ../tools/site_model.py verify --visibility all --dist .vitepress/dist && node scripts/verify-search.mjs && node scripts/verify-render.mjs && python ../tools/verify_static_site.py --dist .vitepress/dist",
     "dev": "npm run prepare:student && vitepress dev .",
     "dev:instructor": "npm run prepare:instructor && vitepress dev .",
     "preview": "vitepress preview ."

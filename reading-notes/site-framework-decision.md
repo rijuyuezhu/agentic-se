@@ -82,11 +82,13 @@ const tokenize = (text) =>
 - Main Path sidebar 与 prev/next、module related materials 都从 manifest/order/relations 产生；前端不维护 `MODULES` / `LAB_MAP`；
 - canonical → canonical link 继续作为站内链接；canonical → repo-only artifact 在 renderer 层转为 repository source navigation，不把 artifact 提升成课程页面；
 - VitePress local search 使用 `Intl.Segmenter` tokenizer，并在 CI 对真实 build index 做中英文 smoke test；
+- 保持 VitePress `cleanUrls: false`：普通页面 URL 与生成的 `.html` artifact 对齐，不把 `/foo -> /foo.html` rewrite 偷偷变成 hosting 前提；CI 还会用 Python stdlib 普通 static server 实际请求所有可见 canonical route；
 - 如果未来 VitePress 无法满足明确需求，可以重做 renderer；canonical Markdown 和 content graph 不需要迁移。
 
 ## 主要参考
 
 - [VitePress Site Config](https://vitepress.dev/reference/site-config)
+- [VitePress Routing / Clean URLs](https://vitepress.dev/guide/routing)
 - [VitePress Local Search](https://vitepress.dev/reference/default-theme-search)
 - [Starlight Authoring Content](https://starlight.astro.build/guides/authoring-content/)
 - [Starlight Search](https://starlight.astro.build/guides/site-search/)

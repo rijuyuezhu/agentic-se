@@ -23,11 +23,35 @@ const mainIndex = new Map(mainPath.map((page: any, index: number) => [page.id, i
 const inverseRewrites = new Map(
   Object.entries(model.rewrites).map(([source, destination]) => [destination, source])
 )
+const directoryRouteByLinkPath = new Map(
+  pages
+    .filter((page: any) => page.route.endsWith('/'))
+    .flatMap((page: any) => [
+      [page.path, page.route],
+      [page.path.replace(/\.md$/i, '.html'), page.route],
+    ])
+)
 
 function normalizeBase(value: string | undefined) {
   if (!value || value === '/') return '/'
   const trimmed = value.replace(/^\/+|\/+$/g, '')
   return `/${trimmed}/`
+}
+
+const siteBase = normalizeBase(process.env.COURSE_SITE_BASE)
+
+function relativeRoute(sourceRoute: string, targetRoute: string) {
+  if (typeof sourceRoute !== 'string' || typeof targetRoute !== 'string') {
+    throw new Error(
+      `site routes must be strings: source=${JSON.stringify(sourceRoute)} target=${JSON.stringify(targetRoute)}`
+    )
+  }
+  const sourceDir = sourceRoute.endsWith('/') ? sourceRoute : `${dirname(sourceRoute)}/`
+  let value = relative(sourceDir, targetRoute).replaceAll(sep, '/')
+  if (!value || value === '.') value = './'
+  else if (!value.startsWith('.')) value = `./${value}`
+  if (targetRoute.endsWith('/') && !value.endsWith('/')) value += '/'
+  return value
 }
 
 function routeItem(page: any) {
@@ -36,8 +60,11 @@ function routeItem(page: any) {
 
 function relatedModuleOrder(page: any) {
   const ids = [...new Set([...(page.related ?? []), ...(page.related_by ?? [])])]
-  const module = ids.map((id) => byId.get(id)).find((item: any) => item?.type === 'module')
-  return module?.order ?? 999
+  const orders = ids
+    .map((id) => byId.get(id))
+    .filter((item: any) => item?.type === 'module')
+    .map((item: any) => item.order ?? 999)
+  return orders.length ? Math.min(...orders) : 999
 }
 
 function pagesOfType(type: string) {
@@ -54,6 +81,7 @@ function pagesOfType(type: string) {
 }
 
 const home = byId.get('course-overview')
+if (!home) throw new Error('site model must contain canonical course-overview')
 const labs = pagesOfType('lab')
 const cases = pagesOfType('case_study')
 const extensions = pagesOfType('extension')
@@ -86,7 +114,8 @@ if (sources.length) nav.push({ text: 'Sources', link: sources[0].route })
 const finalPracticum = byId.get('final-practicum')
 if (finalPracticum) nav.push({ text: 'Final Practicum', link: finalPracticum.route })
 
-function sourcePageFromBuildSource(source: string) {
+function sourcePageFromBuildSource(source: string | undefined) {
+  if (!source) return undefined
   let value = source.replaceAll('\\', '/')
   if (value.startsWith(repoRoot.replaceAll('\\', '/'))) {
     value = relative(repoRoot, value).replaceAll(sep, '/')
@@ -94,6 +123,31 @@ function sourcePageFromBuildSource(source: string) {
   value = value.replace(/^\/+/, '')
   value = inverseRewrites.get(value) ?? value
   return byPath.get(value)
+}
+
+function canonicalDirectoryLink(link: string, sourcePage: any) {
+  if (!sourcePage || !link || link.startsWith('#') || link.startsWith('//')) return null
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(link)) return null
+
+  const hashIndex = link.indexOf('#')
+  const queryIndex = link.indexOf('?')
+  const cut = [hashIndex, queryIndex].filter((index) => index >= 0)
+  const end = cut.length ? Math.min(...cut) : link.length
+  const rawPath = link.slice(0, end)
+  if (!rawPath) return null
+
+  let decodedPath: string
+  try {
+    decodedPath = decodeURIComponent(rawPath)
+  } catch {
+    return null
+  }
+
+  const rel = decodedPath.startsWith('/')
+    ? decodedPath.replace(/^\/+/, '')
+    : relative(repoRoot, resolve(repoRoot, dirname(sourcePage.path), decodedPath)).replaceAll(sep, '/')
+  const route = directoryRouteByLinkPath.get(rel)
+  return route ? `${relativeRoute(sourcePage.route, route)}${link.slice(end)}` : null
 }
 
 function localArtifact(link: string, sourcePage: any) {
@@ -145,13 +199,15 @@ function escapeHtml(text: string) {
 
 export default defineConfig({
   lang: 'zh-CN',
-  title: '软件工程：控制复杂度、设计变化、驾驭 Agent',
+  title: home.title,
   description: '面向 Agent 时代的软件工程自学课程',
-  base: normalizeBase(process.env.COURSE_SITE_BASE),
+  base: siteBase,
   srcDir: '..',
   srcExclude: model.src_exclude,
   rewrites: model.rewrites,
-  cleanUrls: true,
+  // Keep hrefs aligned with emitted .html files so the artifact works on a
+  // generic static server without extensionless -> .html rewrite support.
+  cleanUrls: false,
   vite: {
     resolve: {
       alias: [
@@ -183,8 +239,13 @@ export default defineConfig({
         const sourcePage = byId.get(env.frontmatter?.id)
         if (hrefIndex >= 0 && sourcePage) {
           const href = token.attrs![hrefIndex][1]
-          const artifact = localArtifact(href, sourcePage)
-          if (artifact) token.attrs![hrefIndex][1] = sourceUrl(artifact)
+          const canonical = canonicalDirectoryLink(href, sourcePage)
+          if (canonical) {
+            token.attrs![hrefIndex][1] = canonical
+          } else {
+            const artifact = localArtifact(href, sourcePage)
+            if (artifact) token.attrs![hrefIndex][1] = sourceUrl(artifact)
+          }
         }
         return defaultLinkOpen(tokens, idx, options, env, self)
       }

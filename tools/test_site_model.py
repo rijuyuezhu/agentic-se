@@ -20,8 +20,14 @@ class SiteModelTests(unittest.TestCase):
         self.assertEqual(site_model.path_to_route("extensions/index.md"), "/extensions/")
         self.assertEqual(
             site_model.path_to_route("modules/07-concurrency-lifecycle-failure.md"),
-            "/modules/07-concurrency-lifecycle-failure",
+            "/modules/07-concurrency-lifecycle-failure.html",
         )
+        self.assertEqual(
+            site_model.route_to_output("/modules/07-concurrency-lifecycle-failure.html"),
+            "modules/07-concurrency-lifecycle-failure.html",
+        )
+        with self.assertRaisesRegex(RuntimeError, "must end in .html"):
+            site_model.route_to_output("/modules/07-concurrency-lifecycle-failure")
 
     def test_readme_rewrites(self) -> None:
         self.assertEqual(site_model.path_to_rewrite("README.md"), "index.md")
@@ -77,8 +83,8 @@ class SiteModelTests(unittest.TestCase):
     def test_output_verifier_rejects_unexpected_html(self) -> None:
         model = {
             "visibility": "student",
-            "pages": [{"route": "/"}, {"route": "/modules/m00"}],
-            "excluded_canonical": [{"route": "/hidden"}],
+            "pages": [{"route": "/"}, {"route": "/modules/m00.html"}],
+            "excluded_canonical": [{"route": "/hidden.html"}],
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -100,7 +106,7 @@ class SiteModelTests(unittest.TestCase):
         model = {
             "visibility": "student",
             "pages": [{"route": "/"}],
-            "excluded_canonical": [{"route": "/hidden"}],
+            "excluded_canonical": [{"route": "/hidden.html"}],
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -110,7 +116,7 @@ class SiteModelTests(unittest.TestCase):
             (dist / "assets/chunks").mkdir(parents=True)
             (dist / "index.html").write_text("home", encoding="utf-8")
             (dist / "assets/chunks/@localSearchIndexroot.test.js").write_text(
-                "export default '/hidden'", encoding="utf-8"
+                "export default '/hidden.html'", encoding="utf-8"
             )
             with self.assertRaisesRegex(RuntimeError, "search index contains excluded"):
                 site_model.verify_output("student", dist, model_path)

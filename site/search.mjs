@@ -27,6 +27,9 @@ export function searchLabel(page, byId) {
   if (page.type === 'module') return `${type} · ${page.id}`
 
   const relationIds = [...new Set([...(page.related ?? []), ...(page.related_by ?? [])])]
-  const module = relationIds.map((id) => byId.get(id)).find((item) => item?.type === 'module')
-  return module ? `${type} · ${module.id}` : type
+  const modules = relationIds
+    .map((id) => byId.get(id))
+    .filter((item) => item?.type === 'module')
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.id.localeCompare(b.id))
+  return modules.length ? `${type} · ${modules.map((module) => module.id).join(' / ')}` : type
 }

@@ -18,6 +18,11 @@ const source = (kind, path) =>
   `${sourceRepo}/${kind}/${encodeURIComponent(sourceRef)}/${path.split('/').map(encodeURIComponent).join('/')}`
 const model = JSON.parse(await readFile(resolve(siteDir, '.generated/site-model.json'), 'utf8'))
 const byId = new Map(model.pages.map((page) => [page.id, page]))
+const routeFor = (id) => {
+  const page = byId.get(id)
+  if (!page) throw new Error(`render verification requires visible page ${id}`)
+  return page.route
+}
 
 async function html(path) {
   return readFile(resolve(dist, path), 'utf8')
@@ -34,9 +39,9 @@ function forbidText(body, needle, context) {
 const m07 = await html('modules/07-concurrency-lifecycle-failure.html')
 requireText(m07, '<aside class="course-context"', 'M07 course context')
 requireText(m07, 'Main Path · 8 / 15', 'M07 progress')
-requireText(m07, `href="${href('/labs/07-concurrency-lifecycle-failure')}"`, 'M07 related Lab')
-requireText(m07, `href="${href('/reading-notes/m07-source-audit')}"`, 'M07 related source audit')
-requireText(m07, `href="${href('/extensions/models-notation-and-uml')}"`, 'M07 related extension')
+requireText(m07, `href="${href(routeFor('lab-M07'))}"`, 'M07 related Lab')
+requireText(m07, `href="${href(routeFor('source-M07'))}"`, 'M07 related source audit')
+requireText(m07, `href="${href(routeFor('ext-models-notation'))}"`, 'M07 related extension')
 const m07Case = byId.get('case-M07')
 if (m07Case) {
   requireText(m07, `href="${href(m07Case.route)}"`, 'M07 related Case Study')
@@ -45,12 +50,12 @@ if (m07Case) {
 }
 requireText(
   m07,
-  `pager-link prev" href="${href('/modules/06-working-with-legacy-code')}"`,
+  `pager-link prev" href="${href(routeFor('M06'))}"`,
   'M07 previous page'
 )
 requireText(
   m07,
-  `pager-link next" href="${href('/modules/08-dependency-compatibility-migration')}"`,
+  `pager-link next" href="${href(routeFor('M08'))}"`,
   'M07 next page'
 )
 

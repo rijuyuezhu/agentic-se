@@ -35,7 +35,11 @@ def path_to_route(relpath: str) -> str:
     if path.name.lower() == "index.md":
         parent = path.parent.as_posix()
         return "/" if parent == "." else f"/{parent}/"
-    return "/" + path.with_suffix("").as_posix()
+    # Keep ordinary page URLs identical to the portable static artifact name.
+    # VitePress clean URLs require host-side rewrites from /foo -> /foo.html;
+    # #5 requires the artifact to work on generic static hosting without that
+    # undeclared server capability.
+    return "/" + path.with_suffix(".html").as_posix()
 
 
 def path_to_rewrite(relpath: str) -> str | None:
@@ -51,7 +55,9 @@ def route_to_output(route: str) -> str:
     cleaned = route.strip("/")
     if route.endswith("/"):
         return f"{cleaned}/index.html"
-    return f"{cleaned}.html"
+    if cleaned.endswith(".html"):
+        return cleaned
+    raise RuntimeError(f"non-directory site route must end in .html: {route!r}")
 
 
 def _markdown_paths() -> set[str]:

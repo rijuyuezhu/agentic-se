@@ -17,6 +17,14 @@ npm --prefix site run build:student
 npm --prefix site run dev
 ```
 
+构建后的 artifact 不依赖 VitePress preview server 的 clean-URL rewrite。默认 `COURSE_SITE_BASE=/` 时可以直接交给普通静态服务器，例如：
+
+```bash
+python -m http.server 4180 --directory site/.vitepress/dist
+```
+
+普通内容页使用与 artifact 一致的 `.html` URL；目录 index（首页、`/practicum/` 等）仍使用目录 URL。这样 generic static hosting 不需要额外配置 `/foo -> /foo.html` rewrite。
+
 另外提供：
 
 ```bash
@@ -43,6 +51,7 @@ canonical page 之间继续使用普通相对 Markdown link。若 canonical page
 3. VitePress static build / broken-link check；
 4. expected route 与 hidden route/search leakage verification；
 5. 中文/英文/type-aware MiniSearch probes；
-6. Main Path pagination、related materials 与 repo-artifact rendering smoke。
+6. Main Path pagination、related materials 与 repo-artifact rendering smoke；
+7. 用 Python stdlib 普通 static server 对所有可见 canonical route 做 HTTP 200 probe，并确认 excluded canonical route 为 404；non-root `COURSE_SITE_BASE` 会在临时目录按相同 base path 挂载 artifact 后再测，不依赖 rewrite。
 
 网站导航/sidebar/search metadata 全部消费 derived manifest；不要在前端新增手写 `MODULES`、`LAB_MAP` 或第二份 title/order mapping。
