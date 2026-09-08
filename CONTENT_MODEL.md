@@ -4,18 +4,23 @@
 
 ## 1. 哪些 Markdown 属于 canonical content
 
-Canonical content 是未来课程网站可以直接装载的页面。当前包括：
+Canonical content 是未来课程网站可以直接装载的页面。为了让“漏 frontmatter”也能被 CI 发现，目录只承担一个很窄的 **inclusion policy**，不推导 type/order/visibility/relations。
 
-- `README.md` 的课程 overview；
-- `modules/` 的 M00–M13；
-- 顶层 `labs/*.md`；
-- `case-studies/` 的 instructor reference；
-- module / Extensions 的 source audit；
-- `extensions/`；
-- Final Transfer Practicum 的 student pages、checkpoint 与 instructor reference；
-- 少量需要进入 content graph 的 reference page：traditional-SE gap map 可供 student navigation；`MATERIALS_REVIEW.md` 作为 `internal` author record 只进入 all/internal tooling，不进入 student/instructor build。
+**Pure canonical zones / required entries** 中出现的 Markdown 必须带 frontmatter。当前精确 inclusion policy 是：
 
-Editorial review record、`AGENT.md`、`COURSE_DESIGN.md`、`EDITORIAL_GUIDE.md`、实验项目内部 README / fixture issue 等仍可保持 repo-only。**没有 frontmatter 就表示“不是 canonical website content”**；这不是低一级的内容质量，只是没有进入课程 content graph。
+- root `README.md` 与 `MATERIALS_REVIEW.md`；
+- `modules/*.md`；
+- 顶层 `labs/*.md`，但不递归 `labs/taskforge/**`；
+- `case-studies/*/*.md`；
+- `extensions/*.md`；
+- `reading-notes/m??-source-audit.md`；
+- `reading-notes/extensions-source-audit.md`、`traditional-se-gap-map.md`、`final-practicum-candidate-audit.md`、`final-practicum-instructor-reference.md`、`final-practicum-pilot.md`。
+
+这些路径只回答“如果这个文件存在，漏 frontmatter 是否应 fail”。例如 traditional-SE gap map 是 student reference，`MATERIALS_REVIEW.md` / candidate audit / pilot record 是 internal；这些 type/visibility 差异仍完全来自各自 metadata，不从文件名推断。
+
+`practicum/` 是刻意的 **mixed zone**：`practicum/README.md` 是必须 canonical 的课程入口；其下 student page、checkpoint、instructor reference 通过 frontmatter opt in。这样同一 subtree 内可以保留 harness note、raw validation artifact 等 repo-only 文件，而不会因为递归扫描被偷偷提升成 website page。
+
+Editorial review record、`AGENT.md`、`COURSE_DESIGN.md`、`EDITORIAL_GUIDE.md`、实验项目内部 README / fixture issue 等仍可保持 repo-only。在 pure canonical zone 中缺 frontmatter 是 validation error；在 mixed/repo-only zone 中，没有 frontmatter 才表示“不进入 canonical website content”。这不是低一级的内容质量，只是 inclusion 语义不同。
 
 不要为了“所有 `.md` 看起来一致”给 repo-only 文件补无意义 metadata。
 
@@ -145,6 +150,17 @@ Final Practicum checkpoint 是 `visibility: student`：它不是 instructor secr
 4. fenced code / shell snippet 内的 `# ...` 不计入文档 outline；
 5. 不用 H1 充当“大号分隔符”。
 
+Canonical authoring 使用一个刻意小、仍可在 GitHub/普通编辑器高质量阅读的 Markdown subset。Validator **不是 CommonMark parser**，所以对会改变 heading/link semantics、但当前 scanner 不理解的写法采用 fail-closed：
+
+- heading 只使用 top-level ATX `#` / `##` / `###`（允许 CommonMark 的 0–3 个前导空格）；禁止 Setext `Title\n=====`，也不在 blockquote/list container 内嵌 heading；
+- cross-reference 使用 inline `[text](target)`；禁止 reference-style `[text][id]` + `[id]: target`；
+- inline link/image target 不使用 raw nested parentheses；需要时 percent-encode，避免 parser ambiguity；
+- 禁止 angle-bracket autolink `<https://...>`，改用有语义的 inline link text；
+- canonical page 禁止 raw HTML；未来真需要组件能力时，应先定义统一 renderer contract，而不是用 HTML 绕开 content validation；
+- code example 使用 fenced code；inline code 里的 URL / Markdown-like literal 不进入 link contract。
+
+这不是要自研 Markdown renderer，而是明确 validator 能证明的 authoring grammar。若未来确实需要 reference-style link、raw HTML 或更完整 CommonMark grammar，应当同时升级 parser/validator 与本契约，不能只让某个 renderer 私下接受。
+
 这项检查只验证 document semantics，不替代 `EDITORIAL_GUIDE.md` 的 cold-reader/editorial review。
 
 ## 7. Extension page 与 inline callout
@@ -160,17 +176,18 @@ Final Practicum checkpoint 是 `visibility: student`：它不是 instructor secr
 
 Repo 内：
 
-- 正文 cross-reference 使用相对 Markdown link；
+- 正文 cross-reference 使用上述 simple inline 相对 Markdown link；
 - 页面级关系使用 `related` stable IDs；
 - local target 不存在时 validation 失败；
-- student page 链接到非 student canonical page 时 validation 失败。
+- local target resolve 到 repository root 之外时 validation 失败；
+- student/instructor page 链接到其 build 不包含的 canonical page 时 validation 失败。
 
 本地链接的目标不一定都是 canonical page。Lab 可以继续链接 starter source、fixture、decision pack 或其它 repository artifact；这些 target 只要在 repo 中存在即可，但**不会因为被链接就自动进入 content graph**。#5 renderer 应把 canonical-page link 映射到网站页面，把非 canonical repo artifact 保持为 source/repository navigation（或等价的可访问 artifact link），不能递归扫描所有 Markdown 并把它们偷偷升级成课程页面。
 
 外部资料：
 
 - 教材正文优先使用有语义的 link text，而不是裸 URL；
-- source audit 可以明确记录原始 URL，但应同时保留 source 名称、访问/版本上下文和 claim boundary；
+- source audit 应把原始 URL 保留为语义 Markdown link 的 target，并同时保留 source 名称、访问/版本上下文和 claim boundary；
 - URL 本身不是 authority，source audit 中已经形成的 provenance/qualifier 规则继续生效。
 
 本 issue 不做一次“大规模 URL 美化 rewrite”；发现新的裸链接时按上述规范收敛即可。
@@ -193,13 +210,15 @@ Validator 至少检查：
 - Main Path order uniqueness；
 - invalid / duplicate relation；
 - canonical page 单 H1 与 heading level continuity；
+- unsupported Markdown heading/link/HTML grammar fail-closed；
 - broken local Markdown links；
-- student page → instructor/internal link/relation；
+- repository-root escape；
+- visibility build boundary 上的 link/relation/path leakage；
 - 必须进入 canonical graph 的课程页面有没有漏 frontmatter。
 
 `manifest` 从同一 metadata 自动生成页面列表和 inverse relations，供 #5 renderer 使用。Manifest 是**派生物**，不提交进仓库，也不是新的 authority。
 
-CI 只运行这个前端无关 validator。网站框架将来可以增加自己的 build/search/render checks，但不能取代 content validation。
+CI 运行 validator regression tests、content validation，并 smoke-test student/instructor/all 三种 derived manifest。网站框架将来可以增加自己的 build/search/render checks，但不能取代 content validation。
 
 ## 10. Repository layout 决定
 
@@ -218,4 +237,4 @@ practicum/
 
 已经对作者和 Git history 有意义。Frontmatter 足以消除前端对目录猜测的依赖；大规模搬家只会制造 link churn，没有当前收益。
 
-因此 canonical model 的原则是：**metadata 解释语义，目录帮助人类组织，但目录不成为网站的第二套 schema。**
+因此 canonical model 的原则是：**metadata 解释页面语义；目录 inclusion policy 只负责发现“本来必须 canonical 却漏了 frontmatter”的文件，不给 renderer 推导 type/order/visibility/relations。** 网站只消费 validated metadata/manifest，而不是重新从路径猜课程结构。

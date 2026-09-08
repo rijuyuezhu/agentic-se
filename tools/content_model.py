@@ -31,9 +31,17 @@ VISIBILITY_TARGETS = {
     "internal": {"student", "instructor", "internal"},
 }
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
-LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+?)\s*$")
+CONTAINER_HEADING_RE = re.compile(
+    r"^\s*(?:(?:>\s*)|(?:(?:[-+*]|\d+[.)])\s+))+#{1,6}\s+"
+)
+LINK_RE = re.compile(r"(?<!!)\[[^\[\]\n]+\]\(([^()\n]+)\)")
+IMAGE_RE = re.compile(r"!\[[^\[\]\n]*\]\(([^()\n]+)\)")
 EXTERNAL_URL_RE = re.compile(r"https?://[^\s)>]+")
+REFERENCE_LINK_DEF_RE = re.compile(r"\[[^\]\n]+\]:")
+SETEXT_UNDERLINE_RE = re.compile(r"^\s*(?:>\s*)*(?:=+|-+)\s*$")
+AUTOLINK_RE = re.compile(r"<(?:https?://|mailto:)[^>]+>", re.IGNORECASE)
+RAW_HTML_RE = re.compile(r"<(?:!--|![A-Z]|/?[A-Za-z])")
 SOURCE_AUDIT_DATE_RE = re.compile(
     r"(?:审计日期|审计/复核日期|Freshness note)[^\n]*20\d{2}-\d{2}-\d{2}",
     re.IGNORECASE,
@@ -123,11 +131,14 @@ def markdown_structure(
     list[tuple[int, int, str]],
     list[tuple[int, str]],
     list[tuple[int, str]],
+    list[tuple[int, str]],
 ]:
     headings: list[tuple[int, int, str]] = []
     links: list[tuple[int, str]] = []
     bare_urls: list[tuple[int, str]] = []
+    syntax_errors: list[tuple[int, str]] = []
     fence: str | None = None
+    previous_line = ""
 
     for lineno, line in enumerate(lines, start=1):
         stripped = line.lstrip()
@@ -137,16 +148,60 @@ def markdown_structure(
                 fence = marker
             elif fence == marker:
                 fence = None
+            previous_line = ""
             continue
         if fence is not None:
             continue
+
+        # Canonical pages intentionally use a small, fail-closed Markdown
+        # authoring subset. The validator is not a CommonMark parser, so
+        # constructs that can change heading/link semantics without being
+        # understood here are rejected rather than silently ignored.
+        # Mask simple inline-code spans without changing character positions.
+        # This keeps Markdown punctuation outside code aligned for link-target
+        # extraction while ensuring literal Markdown shown as code is ignored.
+        prose = re.sub(r"`[^`]*`", lambda match: " " * len(match.group(0)), line)
+        if REFERENCE_LINK_DEF_RE.search(prose):
+            syntax_errors.append(
+                (lineno, "reference-style links are not allowed; use inline [text](target) links")
+            )
+        if previous_line.strip() and SETEXT_UNDERLINE_RE.match(line):
+            syntax_errors.append(
+                (lineno, "Setext headings are not allowed; use ATX # headings")
+            )
+        if CONTAINER_HEADING_RE.match(prose):
+            syntax_errors.append(
+                (
+                    lineno,
+                    "headings inside blockquote/list containers are not allowed; use top-level ATX headings",
+                )
+            )
+        if AUTOLINK_RE.search(prose):
+            syntax_errors.append(
+                (lineno, "angle-bracket autolinks are not allowed; use semantic inline links")
+            )
+        elif RAW_HTML_RE.search(prose):
+            syntax_errors.append(
+                (lineno, "raw HTML is not allowed in canonical Markdown")
+            )
 
         match = HEADING_RE.match(line)
         if match:
             headings.append((lineno, len(match.group(1)), match.group(2)))
 
-        for link_match in LINK_RE.finditer(line):
-            raw = link_match.group(1).strip()
+        simple_destinations = list(LINK_RE.finditer(prose)) + list(IMAGE_RE.finditer(prose))
+        if prose.count("](") != len(simple_destinations):
+            syntax_errors.append(
+                (
+                    lineno,
+                    "unsupported inline link/image syntax; use simple [text](target) or ![alt](target) "
+                    "without nested brackets or raw parentheses in the destination",
+                )
+            )
+
+        for link_match in simple_destinations:
+            start, end = link_match.span(1)
+            raw = line[start:end].strip()
             if raw.startswith("<") and ">" in raw:
                 raw = raw[1 : raw.index(">")]
             else:
@@ -156,14 +211,15 @@ def markdown_structure(
 
         # Inline code may intentionally show a literal URL or command. The link
         # readability rule applies to prose, not code examples.
-        prose = re.sub(r"`[^`]*`", "", line)
         for url_match in EXTERNAL_URL_RE.finditer(prose):
             before = prose[: url_match.start()]
             if before.endswith("](") or before.endswith("<"):
                 continue
             bare_urls.append((lineno, url_match.group(0)))
 
-    return headings, links, bare_urls
+        previous_line = line
+
+    return headings, links, bare_urls, syntax_errors
 
 
 def _validate_metadata(path: Path, data: dict[str, object]) -> list[str]:
@@ -204,10 +260,14 @@ def _validate_metadata(path: Path, data: dict[str, object]) -> list[str]:
 def required_content_paths() -> set[Path]:
     paths: set[Path] = {ROOT / "README.md", ROOT / "MATERIALS_REVIEW.md"}
     paths.update((ROOT / "modules").glob("*.md"))
-    paths.update((ROOT / "labs").glob("[0-9][0-9]-*.md"))
+    paths.update((ROOT / "labs").glob("*.md"))
     paths.update((ROOT / "case-studies").glob("*/*.md"))
     paths.update((ROOT / "extensions").glob("*.md"))
-    paths.update((ROOT / "practicum").rglob("*.md"))
+    # practicum/ is a mixed zone: the root course entry is mandatory, while
+    # nested teaching pages opt into the graph by carrying frontmatter. This
+    # lets repo-only harness notes/artifacts coexist without recursive
+    # promotion into website content.
+    paths.add(ROOT / "practicum" / "README.md")
     paths.update((ROOT / "reading-notes").glob("m[0-9][0-9]-source-audit.md"))
     for name in (
         "extensions-source-audit.md",
@@ -244,8 +304,10 @@ def load_pages() -> tuple[list[Page], list[str], dict[Path, list[tuple[int, str]
         if metadata_errors:
             continue
 
-        headings, links, bare_urls = markdown_structure(body)
+        headings, links, bare_urls, syntax_errors = markdown_structure(body)
         page_links[resolved] = links
+        for lineno, reason in syntax_errors:
+            errors.append(f"{path.relative_to(ROOT)}:{lineno}: {reason}")
         for lineno, url in bare_urls:
             errors.append(
                 f"{path.relative_to(ROOT)}:{lineno}: bare external URL in prose; "
@@ -386,6 +448,14 @@ def validate() -> tuple[list[Page], list[str]]:
         for lineno, raw_target in links:
             target = _local_target(source_path, raw_target)
             if target is None:
+                continue
+            try:
+                target.relative_to(ROOT.resolve())
+            except ValueError:
+                errors.append(
+                    f"{source_page.relpath}:{lineno}: local Markdown link escapes repository root: "
+                    f"{raw_target!r}"
+                )
                 continue
             if not target.exists():
                 errors.append(

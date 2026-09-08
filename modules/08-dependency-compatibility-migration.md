@@ -433,10 +433,10 @@ Protocol Buffers 文档用于说明 encoding-specific compatibility rule；TaskF
 
 ### 可选主材料
 
-- Google AIP-180 — Backwards compatibility: <https://google.aip.dev/180>
-- Semantic Versioning 2.0.0: <https://semver.org/spec/v2.0.0.html>
-- Software Engineering at Google — Dependency Management: <https://abseil.io/resources/swe-book/html/ch21.html>
-- Software Engineering at Google — Deprecation: <https://abseil.io/resources/swe-book/html/ch15.html>
-- Danilo Sato / Martin Fowler — Parallel Change: <https://martinfowler.com/bliki/ParallelChange.html>
-- Protocol Buffers — Updating a Message Type: <https://protobuf.dev/programming-guides/editions/#updating>
-- Kubernetes — API deprecation policy: <https://kubernetes.io/docs/reference/using-api/deprecation-policy/>
+- [Google AIP-180 — Backwards compatibility](https://google.aip.dev/180)
+- [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
+- [Software Engineering at Google — Dependency Management](https://abseil.io/resources/swe-book/html/ch21.html)
+- [Software Engineering at Google — Deprecation](https://abseil.io/resources/swe-book/html/ch15.html)
+- [Danilo Sato / Martin Fowler — Parallel Change](https://martinfowler.com/bliki/ParallelChange.html)
+- [Protocol Buffers — Updating a Message Type](https://protobuf.dev/programming-guides/editions/#updating)
+- [Kubernetes — API deprecation policy](https://kubernetes.io/docs/reference/using-api/deprecation-policy/)

@@ -17,3 +17,8 @@ jobs:
         run: python tools/test_content_model.py
       - name: Validate canonical Markdown content
         run: python tools/content_model.py validate
+      - name: Smoke derived manifests
+        run: |
+          python tools/content_model.py manifest --visibility student >/dev/null
+          python tools/content_model.py manifest --visibility instructor >/dev/null
+          python tools/content_model.py manifest --visibility all >/dev/null
