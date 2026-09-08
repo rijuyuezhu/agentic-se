@@ -11,7 +11,7 @@ const base = (() => {
 const href = (route) => `${base}${route.replace(/^\//, '')}`
 const sourceRepo = (
   process.env.COURSE_SOURCE_REPO ??
-  'https://github.com/rijuyuezhu/software-engineering-for-agentic-development'
+  'https://github.com/rijuyuezhu/agentic-se'
 ).replace(/\/+$/, '')
 const sourceRef = process.env.COURSE_SOURCE_REF ?? 'main'
 const source = (kind, path) =>

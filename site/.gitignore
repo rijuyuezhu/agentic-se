@@ -2,3 +2,4 @@ node_modules/
 .generated/
 .vitepress/cache/
 .vitepress/dist/
+.pages-dist/
