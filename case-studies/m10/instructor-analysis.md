@@ -1,3 +1,9 @@
+---
+id: case-M10
+type: case_study
+visibility: instructor
+related: [M10]
+---
 # M10 Instructor Reference — 这份“9 passed”为什么仍然应该 Request Changes
 
 > Spoiler warning：先完成 [Lab 10](../../labs/10-code-review-change-engineering.md) 的 first-pass review，再读本文件。

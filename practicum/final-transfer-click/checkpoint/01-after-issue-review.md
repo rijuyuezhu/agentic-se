@@ -1,3 +1,9 @@
+---
+id: practicum-click-checkpoint-01
+type: practicum
+visibility: student
+related: [practicum-click]
+---
 # Maintainer Reply — only read after first-pass issue review is frozen
 
 > **Stop.** Before reading this file, your `Reconnaissance Record`、`Issue Review` 和 first-pass `Design Memo` must already be committed in your practicum workspace. Do not rewrite that first-pass artifact after seeing this decision; append an addendum instead.

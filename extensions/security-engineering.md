@@ -1,3 +1,9 @@
+---
+id: ext-security
+type: extension
+visibility: student
+related: [M04, M09, M12]
+---
 # Security Engineering：从 trust boundary 到 Agent authority
 
 M09 会问：状态由谁拥有？failure 会穿过哪些边界？M12 又会问：Agent 有什么 capability、获得了什么 permission、真正拥有哪一种 decision authority？

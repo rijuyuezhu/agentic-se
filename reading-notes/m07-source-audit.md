@@ -1,4 +1,12 @@
+---
+id: source-M07
+type: source_audit
+visibility: student
+related: [M07]
+---
 # M07 Source Audit — Concurrency、Lifecycle 与 Failure
+
+> 审计/复核日期：**2026-09-07**。
 
 > 目标：确认哪些一手材料真正支持本模块关于 race、atomicity、lifecycle、crash/retry 与 failure amplification 的判断。
 >
@@ -6,7 +14,7 @@
 
 ---
 
-# 0. 本模块要回答的问题
+## 0. 本模块要回答的问题
 
 M07 关注：
 
@@ -34,13 +42,13 @@ M07 关注：
 
 ---
 
-# 1. MIT 6.102 — Concurrency
+## 1. MIT 6.102 — Concurrency
 
 **状态：主干采用**
 
 原始正文：
 
-- https://web.mit.edu/6.102/www/sp26/classes/14-concurrency/
+- [1. MIT 6.102 — Concurrency](https://web.mit.edu/6.102/www/sp26/classes/14-concurrency/)
 
 实际检查：
 
@@ -78,7 +86,7 @@ that violates the intended contract/invariant
 
 这是课程自己的工程外推，不是假装 MIT 原文提出了 deterministic scheduler。
 
-## 限制
+### 限制
 
 MIT 6.102 是 Software Construction 课程，例子主要用于解释 programming-level concurrency；它不是 distributed-systems failure model 教材。
 
@@ -89,13 +97,13 @@ MIT 6.102 是 Software Construction 课程，例子主要用于解释 programmin
 
 ---
 
-# 2. MIT 6.102 — Mutual Exclusion
+## 2. MIT 6.102 — Mutual Exclusion
 
 **状态：主干采用（atomic regions / safety / liveness）**
 
 原始正文：
 
-- https://web.mit.edu/6.102/www/sp26/classes/16-mutual-exclusion/
+- [2. MIT 6.102 — Mutual Exclusion](https://web.mit.edu/6.102/www/sp26/classes/16-mutual-exclusion/)
 
 实际检查：
 
@@ -108,7 +116,7 @@ MIT 6.102 是 Software Construction 课程，例子主要用于解释 programmin
 
 最值得课程吸收的是两个模型。
 
-## 2.1 Interleaving point 必须显式画出来
+### 2.1 Interleaving point 必须显式画出来
 
 对于 async code：
 
@@ -136,7 +144,7 @@ response
 
 只要中间允许另一个 operation 改变你依赖的事实，check-then-act 就可能不再安全。
 
-## 2.2 Safety 与 liveness 必须分开
+### 2.2 Safety 与 liveness 必须分开
 
 课程采用 MIT 的区分：
 
@@ -165,19 +173,19 @@ unbounded waiting
 1. invariant 是否仍成立？
 2. operation 是否仍能 progress？
 
-## 限制
+### 限制
 
 正文使用 TypeScript `async/await` 说明 cooperative interleaving；TaskForge 使用 Python/threading/failpoint 做实验。课程只迁移 reasoning model，不照搬语言机制。
 
 ---
 
-# 3. MIT 6.102 — Message Passing & Networking
+## 3. MIT 6.102 — Message Passing & Networking
 
 **状态：补充采用**
 
 原始正文：
 
-- https://web.mit.edu/6.102/www/sp26/classes/18-message-passing-networking/
+- [3. MIT 6.102 — Message Passing & Networking](https://web.mit.edu/6.102/www/sp26/classes/18-message-passing-networking/)
 
 实际检查：
 
@@ -219,13 +227,13 @@ then act message
 
 ---
 
-# 4. Herlihy & Wing — Linearizability (1990)
+## 4. Herlihy & Wing — Linearizability (1990)
 
 **状态：概念性主干采用；不进入形式证明细节**
 
 原始论文：
 
-- https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf
+- [4. Herlihy & Wing — Linearizability (1990)](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf)
 
 实际检查：
 
@@ -257,7 +265,7 @@ invocation ---------------- response
 
 所以课程需要分两层提问：先问 concurrent history 是否存在至少一个合法 sequential explanation；只有在分析某个 concrete implementation candidate 时，才继续问哪些实际代码事件/region 可以承担这个实现的 linearization point。后者也不要求代码真的只执行一条 machine instruction；数据库 transaction、lock-protected region、compare-and-swap、single-owner event loop 都可能实现等价语义。
 
-## 为什么放进本课程
+### 为什么放进本课程
 
 因为它能纠正一个常见 bug-fix 风格：
 
@@ -273,7 +281,7 @@ operation-level abstract behavior
 是否还能对应到某个合法 sequential history？
 ```
 
-## 限制
+### 限制
 
 本课不要求：
 
@@ -286,13 +294,13 @@ M07 只用它帮助学生先检查 history 是否能解释为至少一个合法 
 
 ---
 
-# 5. Google SRE — Addressing Cascading Failures
+## 5. Google SRE — Addressing Cascading Failures
 
 **状态：主干采用（retry amplification / retry budget）**
 
 原始正文：
 
-- https://sre.google/sre-book/addressing-cascading-failures/
+- [5. Google SRE — Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/)
 
 实际检查：
 
@@ -327,7 +335,7 @@ logical request
 → cancellation/deadline propagation
 ```
 
-## 和 M04 的区别
+### 和 M04 的区别
 
 M04 关注：
 
@@ -346,14 +354,14 @@ M07 进一步关注：
 
 ---
 
-# 6. AWS — Exponential Backoff and Jitter / Retry Guidance
+## 6. AWS — Exponential Backoff and Jitter / Retry Guidance
 
 **状态：补充采用**
 
 原始材料：
 
-- https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
-- https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure_limit_retries.html
+- [6. AWS — Exponential Backoff and Jitter / Retry Guidance — source 1](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/)
+- [6. AWS — Exponential Backoff and Jitter / Retry Guidance — source 2](https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure_limit_retries.html)
 
 实际检查：
 
@@ -381,13 +389,13 @@ failure handling 也会改变 schedule
 
 所以时间本身是 concurrency state 的一部分。
 
-## 限制
+### 限制
 
 AWS guidance 服务于 production cloud workload；TaskForge M07 的 starter 是进程内模型。课程只用它把 retry/failure reasoning 从单个 function 提升到 system-level load semantics。
 
 ---
 
-# 7. 为什么本章不主讲“各种锁”
+## 7. 为什么本章不主讲“各种锁”
 
 候选材料当然可以继续加入：
 
@@ -418,7 +426,7 @@ primitive 只是实现这些 semantics 的工具。
 
 ---
 
-# 8. 本模块最终采用的 teaching model
+## 8. 本模块最终采用的 teaching model
 
 综合上述材料，M07 使用：
 
@@ -469,7 +477,7 @@ safe retry rule
 
 ---
 
-# 9. Agent-specific 审计结论
+## 9. Agent-specific 审计结论
 
 Agent 很容易生成看起来合理的 concurrency patch，例如：
 
@@ -504,7 +512,7 @@ retry 是否重复 effect？
 
 ---
 
-# 10. 本章资料取舍结论
+## 10. 本章资料取舍结论
 
 主干：
 

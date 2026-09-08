@@ -1,3 +1,9 @@
+---
+id: final-practicum
+type: practicum
+visibility: student
+order: 14
+---
 # Final Transfer Practicum
 
 这里不是 M14，也不引入新的课程知识。

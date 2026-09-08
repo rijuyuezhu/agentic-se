@@ -1,3 +1,9 @@
+---
+id: M03
+type: module
+visibility: student
+order: 3
+---
 # M03 — Testing：测试是可执行证据，不是宗教
 
 M02 让我们看见一个很具体的 design bug：TaskForge 的 `service.get()` 返回 authoritative mutable `Job`，caller 因而可以绕开 lifecycle owner 直接改 status。更有意思的是，仓库原来的六个 tests 全部通过。
@@ -583,7 +589,7 @@ Remaining risks:
   -> 列 remaining risks
 ```
 
-Instructor reference 在 [`../case-studies/m03/instructor-analysis.md`](../case-studies/m03/instructor-analysis.md)。它不是“标准答案 dump”，而是用真实 mutation output、red/green reproduction 和两个 ownership fix candidate 校验 lab 本身是否 grounded。
+课程维护侧另有 instructor-only reference，用真实 mutation output、red/green reproduction 和两个 ownership fix candidate 校验 lab 本身是否 grounded。它不是学生 first-pass 的输入，也不是“标准答案 dump”。
 
 特别注意三个边界：
 

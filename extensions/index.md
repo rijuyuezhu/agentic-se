@@ -1,3 +1,8 @@
+---
+id: extensions
+type: extension
+visibility: student
+---
 # Extensions：主线之外，仍然值得学的软件工程
 
 M00–M13 是这门课的主线。它刻意把注意力放在 boundary、contract、invariant 和 change 上，因为这些概念能直接迁移到陌生代码库、code review 和 coding agent 协作中。

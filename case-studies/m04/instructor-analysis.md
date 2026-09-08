@@ -1,3 +1,9 @@
+---
+id: case-M04
+type: case_study
+visibility: instructor
+related: [M04]
+---
 # M04 Instructor Analysis — TaskForge Public Boundary
 
 > **Spoiler warning**：完成 [`../../labs/04-api-error-boundary.md`](../../labs/04-api-error-boundary.md) 前不要读。

@@ -1,3 +1,9 @@
+---
+id: practicum-pilot
+type: reference
+visibility: internal
+related: [final-practicum, practicum-click]
+---
 # Final Transfer Practicum — Empirical Pilot
 
 > 本记录对应 issue #3 的 practicum validation。它只说明这一次 frozen Click task / harness 是否真的产生了课程想测量的 engineering pressure，**不是通用 Agent benchmark，也不用于推出 productivity 数字或模型排名**。

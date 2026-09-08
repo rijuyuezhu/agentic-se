@@ -1,3 +1,8 @@
+---
+id: course-overview
+type: reference
+visibility: student
+---
 # 软件工程：控制复杂度、设计变化、驾驭 Agent
 
 > 一门面向 CS 本科生 / 研究生的中文自学课程。
@@ -62,7 +67,7 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 2. 允许读者检查本课程是否歪曲来源；
 3. 展示不同工程流派之间真实存在的分歧。
 
-我们不会因为一本书“有名”就把它列为必读。每个材料都要经过内容审计，见 [`MATERIALS_REVIEW.md`](MATERIALS_REVIEW.md)。
+我们不会因为一本书“有名”就把它列为必读。课程维护侧会实际检查内容、例子、适用边界与教学 fit；学生页面只保留经过审计后真正进入课程的 source/provenance reference。
 
 ---
 
@@ -154,12 +159,11 @@ Agent 时代把代码生成成本大幅降低，但也放大了一个新问题�
 M00–M13 的完整主线现已形成：
 
 - M00–M13 全部已有自包含中文讲义；
-- `MATERIALS_REVIEW.md` 记录教材级审计；`reading-notes/m02-source-audit.md` 到 `reading-notes/m13-source-audit.md` 记录逐模块 source audit；M13 明确不新增“Capstone 权威教材”，只组合前面已经实际审计的一手材料；
+- 课程维护侧保留教材级材料审计；M02–M12 的逐模块 source audit 作为 student reference 保留；M13 不新增“Capstone 权威教材”，只组合前面已经实际审计的一手材料，而包含 historical instructor-reference evidence 的 M13 provenance audit 留在 instructor build；
 - [`reading-notes/traditional-se-gap-map.md`](reading-notes/traditional-se-gap-map.md) 对 SWEBOK v4.0a 的 18 个 Knowledge Areas 逐项判断“已覆盖 / 部分覆盖 / 真缺口 / 低优先级”，并据此只新增 8 个可选 [`extensions/`](extensions/index.md)；[`reading-notes/extensions-source-audit.md`](reading-notes/extensions-source-audit.md) 记录这些旁支实际检查过的当前标准、课程和一手实践资料及其取舍；
 - [`labs/13-capstone.md`](labs/13-capstone.md) 提供最终综合实验；[`labs/taskforge/capstone-starter/`](labs/taskforge/capstone-starter/) 是独立的 SQLite + remote-worker starting point，包含 old API、schema v1、background maintenance、known claim race、legacy finish quirk 与 flawed feature request；
 - `capstone_baseline_probe.py` 可确定性复现 double claim 与 stale v1 finish；baseline tests 仍是 `6 passed`，用于证明 green tests 不等于完整 correctness argument；
 - human decision pack 将错误的 arbitrary-command exactly-once 要求收敛为 **v2 attempt fencing** + opt-in `automatic_at_least_once`；legacy/manual `operator_requeue()` 的 unfenced stale-completion risk 明确保留为 migration residual risk，同时 mixed v1/v2 claim 必须共享 queued-row single-winner invariant，并定义 rollout gate 与 rollback boundary；
-- [`case-studies/m13/instructor-analysis.md`](case-studies/m13/instructor-analysis.md) 记录 historical reference validation：临时 solution 共 `14 passed`，其中包含 v1-v1 claim fix、frozen-v1 Expand compatibility 与 post-v2 old-server rollback counterexample，但没有覆盖当前 clarified contract 要求的 v1-v2 concurrent claim arbitration；因此这组结果不是学生 candidate 或当前完整 contract 的 acceptance oracle。
 - [`Final Transfer Practicum`](practicum/README.md) 进一步离开 TaskForge：当前版本固定 Pallets Click 的真实历史 revision，使用低 scaffolding stakeholder issue、coding-agent implementation、独立 reviewer 与 counterexample evidence 检查课程方法能否迁移到陌生 repo；候选审计与 empirical pilot 已完成，但其 instructor-side validation record 不进入学生导航。
 
 课程主线至此完成。后续扩展应优先增加新的真实 case study、review exercise 或替代 capstone，而不是继续堆原则名词。

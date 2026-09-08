@@ -1,3 +1,9 @@
+---
+id: lab-M06
+type: lab
+visibility: student
+related: [M06]
+---
 # Lab 06 — Legacy Takeover：Characterize First, Change Second
 
 > 这一实验故意不给你一个“应该长什么样”的 architecture。
@@ -6,7 +12,7 @@
 
 ---
 
-# 0. 场景
+## 0. 场景
 
 目标模块：
 
@@ -37,7 +43,7 @@ stdout
 
 ---
 
-# 1. 第一条规则：第一次阅读禁止修改 production code
+## 1. 第一条规则：第一次阅读禁止修改 production code
 
 先运行：
 
@@ -61,7 +67,7 @@ legacy audit characterization probe passed
 
 ---
 
-# 2. Read-only Reconnaissance
+## 2. Read-only Reconnaissance
 
 阅读：
 
@@ -76,13 +82,13 @@ m06_legacy_probe.py
 
 写一份 `takeover-notes.md`，至少回答：
 
-## 2.1 Entry point
+### 2.1 Entry point
 
 - 谁调用 `publish_daily_audit()`？
 - 当前 repo 是否存在别的 caller？
 - 函数返回值有没有 caller？
 
-## 2.2 State reads
+### 2.2 State reads
 
 列出所有读到的状态：
 
@@ -103,7 +109,7 @@ runtime context
 ambient dependency
 ```
 
-## 2.3 Side effects
+### 2.3 Side effects
 
 至少列：
 
@@ -113,11 +119,11 @@ append file
 stdout
 ```
 
-## 2.4 Nondeterminism
+### 2.4 Nondeterminism
 
 哪些东西会让同一 test input 在两台机器得到不同结果？
 
-## 2.5 Error semantics
+### 2.5 Error semantics
 
 例如：
 
@@ -131,7 +137,7 @@ stdout
 
 ---
 
-# 3. Behavior Inventory
+## 3. Behavior Inventory
 
 使用 probe 和你自己的小实验，建立表：
 
@@ -150,7 +156,7 @@ stdout
 
 ---
 
-# 4. 画 Effect Sketch
+## 4. 画 Effect Sketch
 
 这次 change point 是：
 
@@ -181,7 +187,7 @@ selected jobs
 
 ---
 
-# 5. 区分 Sensing 与 Separation
+## 5. 区分 Sensing 与 Separation
 
 填写：
 
@@ -205,7 +211,7 @@ stdout
 
 ---
 
-# 6. 审查 Starter Probe 自己
+## 6. 审查 Starter Probe 自己
 
 `m06_legacy_probe.py` 用了两种不同的 Python substitution mechanism：
 
@@ -230,11 +236,11 @@ legacy_audit.socket.gethostname = ...
 
 ---
 
-# 7. 把 Probe 提炼成 Characterization Tests
+## 7. 把 Probe 提炼成 Characterization Tests
 
 你至少要建立以下 characterization：
 
-## C1 — Empty
+### C1 — Empty
 
 保护：
 
@@ -245,7 +251,7 @@ jobs=0
 block terminator
 ```
 
-## C2 — Mixed lifecycle
+### C2 — Mixed lifecycle
 
 保护：
 
@@ -257,7 +263,7 @@ exit-code formatting
 command text
 ```
 
-## C3 — Append
+### C3 — Append
 
 保护：
 
@@ -266,15 +272,15 @@ same-day second invocation appends
 rather than overwrites
 ```
 
-## C4 — Owner default
+### C4 — Owner default
 
 在没有 `TASKFORGE_AUDIT_OWNER` 时记录当前行为。
 
-## C5 — Stdout
+### C5 — Stdout
 
 至少确认 count 与 path behavior。
 
-### 重要
+#### 重要
 
 不要把 tmpdir 的随机绝对路径硬编码进 golden。
 
@@ -282,7 +288,7 @@ rather than overwrites
 
 ---
 
-# 8. 证明 Characterization 有牙齿
+## 8. 证明 Characterization 有牙齿
 
 临时做至少两个 mutants，例如：
 
@@ -310,11 +316,11 @@ which observed behavior it protects
 
 ---
 
-# 9. Design It Twice：两种 Change Path
+## 9. Design It Twice：两种 Change Path
 
 在写 feature 前，至少比较两种方案。
 
-## Design A — 直接在 legacy function 里加 scope
+### Design A — 直接在 legacy function 里加 scope
 
 例如：
 
@@ -329,14 +335,14 @@ def publish_daily_audit(scope="all"):
 if scope == failed
 ```
 
-### 分析
+#### 分析
 
 - 最小 diff？
 - 是否需要 seam change？
 - tests 是否仍依赖 monkeypatch module globals？
 - 是否足够安全？
 
-## Design B — 先抽一个小 semantic core / runtime seam
+### Design B — 先抽一个小 semantic core / runtime seam
 
 例如只抽：
 
@@ -350,7 +356,7 @@ select_jobs(scope, jobs)
 runtime context provider
 ```
 
-### 分析
+#### 分析
 
 - 哪个是真正 change point？
 - 哪个 dependency 阻碍快速 feedback？
@@ -360,7 +366,7 @@ runtime context provider
 
 ---
 
-# 10. Structural Phase
+## 10. Structural Phase
 
 如果你决定打开 seam，先做一个**纯 structural patch**。
 
@@ -383,7 +389,7 @@ PYTHONPATH=src uv run --with pytest --no-project python -m pytest -q
 
 ---
 
-# 11. 新 Behavior Contract
+## 11. 新 Behavior Contract
 
 现在才写 failed-only contract。
 
@@ -416,7 +422,7 @@ invalid scope
 
 ---
 
-# 12. Feature Red Test
+## 12. Feature Red Test
 
 先写：
 
@@ -437,7 +443,7 @@ FAIL before implementation
 
 ---
 
-# 13. Invalid-input Test
+## 13. Invalid-input Test
 
 例如：
 
@@ -457,7 +463,7 @@ no output file created/changed
 
 ---
 
-# 14. Full Evidence
+## 14. Full Evidence
 
 最终至少提供：
 
@@ -473,11 +479,11 @@ no output file created/changed
 
 ---
 
-# 15. Agent 对照实验
+## 15. Agent 对照实验
 
 让两个 Agent 分别处理同一需求。
 
-## Agent A — 模糊任务
+### Agent A — 模糊任务
 
 ```text
 Clean up legacy_audit.py, make it testable, and add failed-only mode.
@@ -491,7 +497,7 @@ Clean up legacy_audit.py, make it testable, and add failed-only mode.
 - 是否先验证旧行为？
 - 是否把 tests 绑到新实现？
 
-## Agent B — Engineering Contract
+### Agent B — Engineering Contract
 
 ```text
 Phase 1: read-only reconnaissance; no edits.
@@ -525,7 +531,7 @@ show full suite.
 
 ---
 
-# 16. Independent Review Checklist
+## 16. Independent Review Checklist
 
 reviewer 不看作者 reasoning，独立回答：
 
@@ -544,7 +550,7 @@ reviewer 不看作者 reasoning，独立回答：
 
 ---
 
-# 17. 评分重点
+## 17. 评分重点
 
 这份 lab 不按“最后 architecture 漂不漂亮”评分。
 
@@ -563,7 +569,7 @@ reviewer 不看作者 reasoning，独立回答：
 
 ---
 
-# 18. 完成标准
+## 18. 完成标准
 
 完成 M06 后，你应该能解释：
 

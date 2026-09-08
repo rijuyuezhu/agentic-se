@@ -1,3 +1,9 @@
+---
+id: source-extensions
+type: source_audit
+visibility: student
+related: [extensions]
+---
 # Extensions Source Audit — 传统 Software Engineering 旁支
 
 > 本文件记录 `extensions/` 真正检查过的来源、访问时状态、课程吸收的 claim 和明确不照搬的部分。
@@ -8,7 +14,7 @@
 
 ## 0. 审计原则
 
-本轮遵循仓库已有 `MATERIALS_REVIEW.md` 的标准，并额外加三条约束。
+本轮遵循课程既有的教材级材料审计标准，并额外加三条约束。
 
 第一，**knowledge map 不是教学优先级**。SWEBOK 可以证明一个领域在软件工程共同知识里有稳定位置，但不能据此推出它应该占本课程一章。
 
@@ -20,17 +26,11 @@
 
 ## 1. IEEE Computer Society — SWEBOK Guide v4.0a
 
-官方主页：
+[1. IEEE Computer Society — SWEBOK Guide v4.0a — 官方主页](https://www.computer.org/education/bodies-of-knowledge/software-engineering)
 
-https://www.computer.org/education/bodies-of-knowledge/software-engineering
+[官方 Topics / Table of Contents](https://www.computer.org/education/bodies-of-knowledge/software-engineering/topics)
 
-官方 Topics / Table of Contents：
-
-https://www.computer.org/education/bodies-of-knowledge/software-engineering/topics
-
-官方 v4.0a PDF：
-
-https://ieeecs-media.computer.org/media/education/swebok/swebok-v4.pdf
+[官方 v4.0a PDF](https://ieeecs-media.computer.org/media/education/swebok/swebok-v4.pdf)
 
 访问：2026-09-06。
 
@@ -179,23 +179,17 @@ SWEBOK 最有价值的是提醒我们：传统 SE 研究的对象比 coding/desi
 
 ## 2. Carnegie Mellon MSE — 当前 curriculum 与实际教学方式 sanity check
 
-Program requirements：
+[Program requirements](https://mse.s3d.cmu.edu/applicants/mse-as/requirements.html)
 
-https://mse.s3d.cmu.edu/applicants/mse-as/requirements.html
+[Plan of Study](https://mse.s3d.cmu.edu/applicants/mse-as/plan.html)
 
-Plan of Study：
-
-https://mse.s3d.cmu.edu/applicants/mse-as/plan.html
-
-Current Course Offerings（页面说明 syllabus 链接指向最近可用版本）：
-
-https://mse.s3d.cmu.edu/applicants/course-offerings.html
+[Current Course Offerings（页面说明 syllabus 链接指向最近可用版本）](https://mse.s3d.cmu.edu/applicants/course-offerings.html)
 
 本轮实际打开的 syllabus：
 
-- 17-626 Requirements for Information Systems, Fall 2025: https://mse.s3d.cmu.edu/0_documents/syllabi/fa2025/17626.pdf
-- 17-643 Quality Management, Spring 2025: https://mse.s3d.cmu.edu/courses/0_syllabi/17643-quality-management.pdf
-- 17-622 Agile Methods, Fall 2025: https://mse.s3d.cmu.edu/0_documents/syllabi/fa2025/17622.pdf
+- [17-626 Requirements for Information Systems, Fall 2025](https://mse.s3d.cmu.edu/0_documents/syllabi/fa2025/17626.pdf)
+- [17-643 Quality Management, Spring 2025](https://mse.s3d.cmu.edu/courses/0_syllabi/17643-quality-management.pdf)
+- [17-622 Agile Methods, Fall 2025](https://mse.s3d.cmu.edu/0_documents/syllabi/fa2025/17622.pdf)
 
 访问：2026-09-06。
 
@@ -237,9 +231,7 @@ https://mse.s3d.cmu.edu/applicants/course-offerings.html
 
 ## 3. IEEE Computer Society — Configuration Management resource
 
-URL：
-
-https://www.computer.org/resources/software-configuration-management
+[3. IEEE Computer Society — Configuration Management resource](https://www.computer.org/resources/software-configuration-management)
 
 访问：2026-09-06。
 
@@ -274,21 +266,13 @@ https://www.computer.org/resources/software-configuration-management
 
 ## 4. Economics / Risk — 从高层资源继续追到正文与 research framing
 
-IEEE Software Engineering Management：
+[IEEE Software Engineering Management](https://www.computer.org/resources/software-engineering-management)
 
-https://www.computer.org/resources/software-engineering-management
+[IEEE Software Engineering Economics course description](https://www.computer.org/product/education/software-engineering-economics-course/)
 
-IEEE Software Engineering Economics course description：
+[SEI real-options architecture report](https://insights.sei.cmu.edu/library/quality-attribute-based-economic-valuation-of-architectural-patterns/)
 
-https://www.computer.org/product/education/software-engineering-economics-course/
-
-SEI real-options architecture report：
-
-https://insights.sei.cmu.edu/library/quality-attribute-based-economic-valuation-of-architectural-patterns/
-
-SEI technical-debt research overview：
-
-https://www.sei.cmu.edu/blog/10-years-of-research-in-technical-debt-and-an-agenda-for-the-future/
+[SEI technical-debt research overview](https://www.sei.cmu.edu/blog/10-years-of-research-in-technical-debt-and-an-agenda-for-the-future/)
 
 访问：2026-09-06。
 
@@ -326,13 +310,9 @@ SEI technical-debt research 则把 debt 的核心 consequence 放在未来 chang
 
 ## 5. Agile Manifesto + Principles
 
-Manifesto：
+[Manifesto](https://agilemanifesto.org/)
 
-https://agilemanifesto.org/
-
-Principles：
-
-https://agilemanifesto.org/principles
+[Principles](https://agilemanifesto.org/principles)
 
 访问：2026-09-06。
 
@@ -370,9 +350,7 @@ Principles 进一步强调 early/continuous delivery、welcome change、frequent
 
 ## 6. Google Engineering Practices — Small CLs
 
-URL：
-
-https://google.github.io/eng-practices/review/developer/small-cls.html
+[6. Google Engineering Practices — Small CLs](https://google.github.io/eng-practices/review/developer/small-cls.html)
 
 访问：2026-09-06。
 
@@ -402,13 +380,9 @@ Google 页面提到 100 行通常 reasonable、1000 行通常太大，但本课�
 
 ## 7. Kanban sources — WIP / flow
 
-Kanban University 官方 Guide：
+[Kanban University 官方 Guide](https://kanban.university/kanban-guide/)
 
-https://kanban.university/kanban-guide/
-
-辅助核查（Microsoft Learn）：
-
-https://learn.microsoft.com/en-us/devops/plan/what-is-kanban
+[辅助核查（Microsoft Learn）](https://learn.microsoft.com/en-us/devops/plan/what-is-kanban)
 
 访问：2026-09-06。
 
@@ -444,9 +418,7 @@ Process 旁支使用 WIP 不是为了教 Kanban board，而是帮助解释：
 
 ## 8. ISO/IEC 25010:2023 — Product quality model
 
-官方 ISO 页面：
-
-https://www.iso.org/standard/78176.html
+[官方 ISO 页面](https://www.iso.org/standard/78176.html)
 
 访问：2026-09-06。
 
@@ -487,9 +459,7 @@ https://www.iso.org/standard/78176.html
 
 ## 9. OWASP Cheat Sheet — Threat Modeling
 
-URL：
-
-https://cheatsheetseries.owasp.org/cheatsheets/Threat_Modeling_Cheat_Sheet.html
+[9. OWASP Cheat Sheet — Threat Modeling](https://cheatsheetseries.owasp.org/cheatsheets/Threat_Modeling_Cheat_Sheet.html)
 
 访问：2026-09-06。
 
@@ -529,13 +499,9 @@ https://cheatsheetseries.owasp.org/cheatsheets/Threat_Modeling_Cheat_Sheet.html
 
 ## 10. NIST SP 800-218 — Secure Software Development Framework
 
-SSDF project：
+[SSDF project](https://csrc.nist.gov/projects/ssdf)
 
-https://csrc.nist.gov/projects/ssdf
-
-v1.1 final：
-
-https://csrc.nist.gov/pubs/sp/800/218/final
+[v1.1 final](https://csrc.nist.gov/pubs/sp/800/218/final)
 
 访问：2026-09-06。
 
@@ -577,29 +543,17 @@ Security/Configuration 旁支用它支持：
 
 ## 11. Security controls / Agent security — 把 threat model 继续落到 permission surface
 
-NIST SP 800-53 Rev. 5, AC-6 Least Privilege：
+[NIST SP 800-53 Rev. 5, AC-6 Least Privilege](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final)
 
-https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final
+[OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
 
-OWASP Authentication Cheat Sheet：
+[OWASP Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)
 
-https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+[OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
 
-OWASP Authorization Cheat Sheet：
+[OWASP LLM Prompt Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html)
 
-https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
-
-OWASP Secrets Management Cheat Sheet：
-
-https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
-
-OWASP LLM Prompt Injection Prevention Cheat Sheet：
-
-https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html
-
-OWASP AI Agent Security Cheat Sheet：
-
-https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html
+[OWASP AI Agent Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html)
 
 访问：2026-09-06。
 
@@ -637,9 +591,7 @@ LLM Prompt Injection Prevention 与 AI Agent Security 则把间接 prompt inject
 
 ## 12. ACM Code of Ethics and Professional Conduct
 
-官方页面/PDF：
-
-https://www.acm.org/code-of-ethics
+[官方页面/PDF](https://www.acm.org/code-of-ethics)
 
 访问：2026-09-06。
 
@@ -680,9 +632,7 @@ https://www.acm.org/code-of-ethics
 
 ## 13. GitHub Docs — Licensing a repository
 
-URL：
-
-https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository
+[13. GitHub Docs — Licensing a repository](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository)
 
 访问：2026-09-06。
 
@@ -706,21 +656,13 @@ GitHub Docs 不是法律意见，也不能覆盖具体 license compatibility。�
 
 ## 14. C4 Model — official site
 
-首页：
+[首页](https://c4model.com/)
 
-https://c4model.com/
+[Abstractions](https://c4model.com/abstractions)
 
-Abstractions：
+[Diagrams](https://c4model.com/diagrams)
 
-https://c4model.com/abstractions
-
-Diagrams：
-
-https://c4model.com/diagrams
-
-Review checklist：
-
-https://c4model.com/diagrams/checklist
+[Review checklist](https://c4model.com/diagrams/checklist)
 
 访问：2026-09-06。
 
@@ -759,13 +701,9 @@ Review checklist 强调：title、diagram type、scope、element meaning、relat
 
 ## 15. OMG UML 2.5.1 — UML 本身到底提供什么
 
-OMG formal specification page：
+[OMG formal specification page](https://www.omg.org/spec/UML/)
 
-https://www.omg.org/spec/UML/
-
-Normative UML 2.5.1 PDF：
-
-https://www.omg.org/spec/UML/2.5.1/PDF
+[Normative UML 2.5.1 PDF](https://www.omg.org/spec/UML/2.5.1/PDF)
 
 访问：2026-09-06。
 

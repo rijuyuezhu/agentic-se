@@ -1,3 +1,9 @@
+---
+id: lab-M12
+type: lab
+visibility: student
+related: [M12]
+---
 # M12 Lab — 从一句 Prompt 到可审查的 Delegation Workflow
 
 M11 已经给了一个稳定矛盾：TaskForge 接受 12 个 job，12 个最终都成功，ending queue 也回到 0，但只有 2/12 accepted jobs 在教学目标的 2 秒内第一次被 claim。M12 不要求你直接“修性能”；它要求你把下一次 change 组织成一个 Agent 可以快速执行、却不能悄悄接管 product / SLO / compatibility / release authority 的工程流程。

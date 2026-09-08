@@ -1,3 +1,9 @@
+---
+id: M06
+type: module
+visibility: student
+order: 6
+---
 # M06 — Legacy Code：先建立 Feedback，再谈改进设计
 
 M05 结束时，我们已经有了一条相当舒服的 change discipline：先说清楚 must-preserve behavior，再把 structural change 与 behavior change 分开，用匹配的 evidence 守住每个 checkpoint。
@@ -446,12 +452,12 @@ requested change
 
 本章自包含；希望核对原始观点时可看：
 
-- Michael Feathers, *Working Effectively with Legacy Code* public samples / TOC: https://www.informit.com/store/working-effectively-with-legacy-code-9780132931779
-- Feathers, *Testing Effectively With Legacy Code*: https://www.informit.com/articles/article.aspx?p=359417
-- Feathers, *Changing Software and Legacy Code*: https://www.informit.com/articles/article.aspx?p=359418
-- Martin Fowler, `Legacy Seam`: https://martinfowler.com/bliki/LegacySeam.html
-- *Software Engineering at Google*, Testing Overview: https://abseil.io/resources/swe-book/html/ch11.html
-- *Software Engineering at Google*, Test Doubles: https://abseil.io/resources/swe-book/html/ch13.html
-- *Software Engineering at Google*, Larger Testing: https://abseil.io/resources/swe-book/html/ch14.html
+- [Michael Feathers, *Working Effectively with Legacy Code* public samples / TOC](https://www.informit.com/store/working-effectively-with-legacy-code-9780132931779)
+- [Feathers, *Testing Effectively With Legacy Code*](https://www.informit.com/articles/article.aspx?p=359417)
+- [Feathers, *Changing Software and Legacy Code*](https://www.informit.com/articles/article.aspx?p=359418)
+- [Martin Fowler, `Legacy Seam`](https://martinfowler.com/bliki/LegacySeam.html)
+- [*Software Engineering at Google*, Testing Overview](https://abseil.io/resources/swe-book/html/ch11.html)
+- [*Software Engineering at Google*, Test Doubles](https://abseil.io/resources/swe-book/html/ch13.html)
+- [*Software Engineering at Google*, Larger Testing](https://abseil.io/resources/swe-book/html/ch14.html)
 
 具体来源审计与取舍见 [`../reading-notes/m06-source-audit.md`](../reading-notes/m06-source-audit.md)。

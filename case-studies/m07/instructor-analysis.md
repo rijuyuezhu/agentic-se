@@ -1,3 +1,9 @@
+---
+id: case-M07
+type: case_study
+visibility: instructor
+related: [M07]
+---
 # M07 Instructor Analysis — Double Claim、Linearization Point 与 Crash Window
 
 > **Spoiler warning**：完成 [`../../labs/07-concurrency-lifecycle-failure.md`](../../labs/07-concurrency-lifecycle-failure.md) 前不要读。

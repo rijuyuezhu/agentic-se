@@ -1,3 +1,9 @@
+---
+id: lab-M04
+type: lab
+visibility: student
+related: [M04]
+---
 # Lab 04 — 给 TaskForge 一个真正的 Boundary
 
 > 对应 M04：API、Error 与 Boundary Design。
@@ -6,7 +12,7 @@
 
 ---
 
-# 0. 你拿到的 starter
+## 0. 你拿到的 starter
 
 目录：
 
@@ -55,13 +61,13 @@ PYTHONPATH=src uv run --with pytest --no-project python -m pytest -q
 
 ---
 
-# 1. 第一阶段：只读 reconstruction
+## 1. 第一阶段：只读 reconstruction
 
 禁止立刻定义 `ApiError`。
 
 先写 `m04-current-contract.md`，回答：
 
-## 1.1 Public operations
+### 1.1 Public operations
 
 当前 `public_api.py` 暴露：
 
@@ -97,7 +103,7 @@ intended public contract
 
 ---
 
-# 2. 找出 boundary 已经隐藏了什么
+## 2. 找出 boundary 已经隐藏了什么
 
 不要把 starter 简单评价成“差”。
 
@@ -137,7 +143,7 @@ boundary 可以比 underlying service 更强
 
 ---
 
-# 3. 找出 boundary 没隐藏的 implementation accidents
+## 3. 找出 boundary 没隐藏的 implementation accidents
 
 重点检查：
 
@@ -165,7 +171,7 @@ public_api
 
 ---
 
-# 4. 分析 `cancelled: False` 到底丢了什么
+## 4. 分析 `cancelled: False` 到底丢了什么
 
 构造至少四个 partition：
 
@@ -207,7 +213,7 @@ SUCCEEDED → False
 
 ---
 
-# 5. 新 feature request
+## 5. 新 feature request
 
 产品现在提出：
 
@@ -225,7 +231,7 @@ SUCCEEDED → False
 
 ---
 
-# 6. 先写 desired behavior table
+## 6. 先写 desired behavior table
 
 至少覆盖：
 
@@ -258,7 +264,7 @@ error 时是否保证 no effect？
 
 ---
 
-# 7. 明确定义 “intent”
+## 7. 明确定义 “intent”
 
 本实验默认采用一个刻意简单的规则：
 
@@ -299,11 +305,11 @@ submit intent = exact validated command string
 
 ---
 
-# 8. 设计 input representation
+## 8. 设计 input representation
 
 至少比较两个方案。
 
-## Design A — raw string + boundary check
+### Design A — raw string + boundary check
 
 ```python
 def submit_job(command: str, ...):
@@ -315,7 +321,7 @@ def submit_job(command: str, ...):
 
 缺点：内部仍可能继续传 raw primitive。
 
-## Design B — domain value
+### Design B — domain value
 
 ```python
 @dataclass(frozen=True)
@@ -339,7 +345,7 @@ class Command:
 
 ---
 
-# 9. 设计 public error model
+## 9. 设计 public error model
 
 你需要一个 stable machine-readable contract。
 
@@ -380,7 +386,7 @@ Result[Success, Error]
 
 ---
 
-# 10. Error taxonomy 设计题
+## 10. Error taxonomy 设计题
 
 对于 cancel：
 
@@ -393,7 +399,7 @@ CANCELLED
 
 你至少考虑两种设计。
 
-## A
+### A
 
 统一：
 
@@ -403,7 +409,7 @@ reason=JOB_NOT_CANCELLABLE
 metadata.status=...
 ```
 
-## B
+### B
 
 细分：
 
@@ -425,7 +431,7 @@ JOB_ALREADY_CANCELLED
 
 ---
 
-# 11. Request identity contract
+## 11. Request identity contract
 
 扩展 submit：
 
@@ -435,7 +441,7 @@ request_id: optional
 
 本实验要求：
 
-## 没有 request_id
+### 没有 request_id
 
 ```text
 每次调用 = 新 logical request
@@ -450,14 +456,14 @@ same command twice
 
 这是合法行为，不是 bug。
 
-## 新 request_id
+### 新 request_id
 
 ```text
 create one job
 record request identity → intent → job identity
 ```
 
-## same request_id + same intent
+### same request_id + same intent
 
 ```text
 return same logical job
@@ -466,7 +472,7 @@ no extra job
 
 response 可以反映 job 当前状态，不要求 bytes 完全和第一次一致。
 
-## same request_id + different intent
+### same request_id + different intent
 
 ```text
 CONFLICT
@@ -475,7 +481,7 @@ no new job
 
 ---
 
-# 12. 不允许用 payload hash 替代 request identity
+## 12. 不允许用 payload hash 替代 request identity
 
 禁止把：
 
@@ -503,7 +509,7 @@ intent comparison / integrity aid
 
 ---
 
-# 13. Ownership map
+## 13. Ownership map
 
 实现前画：
 
@@ -547,7 +553,7 @@ job_id → lifecycle state
 
 ---
 
-# 14. Request registry lifetime
+## 14. Request registry lifetime
 
 当前 TaskForge 纯内存。
 
@@ -571,25 +577,25 @@ job_id → lifecycle state
 
 ---
 
-# 15. 先写 fail-before tests
+## 15. 先写 fail-before tests
 
 至少新增以下 tests。
 
-## Input
+### Input
 
 ```text
 blank command rejected
 no job created
 ```
 
-## Unknown
+### Unknown
 
 ```text
 get unknown → NOT_FOUND
 cancel unknown → NOT_FOUND
 ```
 
-## Cancel
+### Cancel
 
 ```text
 cancel queued → success
@@ -597,7 +603,7 @@ cancel running → FAILED_PRECONDITION(status=running)
 terminal partition → FAILED_PRECONDITION(status=...)
 ```
 
-## Idempotency
+### Idempotency
 
 ```text
 no request id + same command → two jobs
@@ -605,13 +611,13 @@ same id + same command → one job / same job id
 same id + different command → conflict / still one job
 ```
 
-## View
+### View
 
 证明 public result 不授予 authoritative mutation capability。
 
 ---
 
-# 16. 必须证明 validation 在 side effect 前
+## 16. 必须证明 validation 在 side effect 前
 
 测试不能只写：
 
@@ -640,7 +646,7 @@ if invalid(command):
 
 ---
 
-# 17. 必须证明 idempotency 的 effect，而不只返回值
+## 17. 必须证明 idempotency 的 effect，而不只返回值
 
 差测试：
 
@@ -667,7 +673,7 @@ side effect cardinality
 
 ---
 
-# 18. Same ID + different intent 必须是独立测试
+## 18. Same ID + different intent 必须是独立测试
 
 这是最容易遗漏的 idempotency bug。
 
@@ -699,7 +705,7 @@ request mapping remains A
 
 ---
 
-# 19. Response semantic equivalence
+## 19. Response semantic equivalence
 
 加一个进阶测试：
 
@@ -736,7 +742,7 @@ status=running
 
 ---
 
-# 20. 不要声称 job execution exactly-once
+## 20. 不要声称 job execution exactly-once
 
 这个实验只做：
 
@@ -763,7 +769,7 @@ but does not yet prove the command can never execute twice.
 
 ---
 
-# 21. 实现约束
+## 21. 实现约束
 
 为了让实验聚焦，不允许：
 
@@ -787,7 +793,7 @@ but does not yet prove the command can never execute twice.
 
 ---
 
-# 22. Representation exposure 不能回归
+## 22. Representation exposure 不能回归
 
 M04 starter 的一个优点是：
 
@@ -814,7 +820,7 @@ return service.get(job_id)
 
 ---
 
-# 23. Internal error 不应直接穿过 public boundary
+## 23. Internal error 不应直接穿过 public boundary
 
 最终至少 grep / inspect：
 
@@ -841,17 +847,17 @@ except Exception:
 
 ---
 
-# 24. Exception vs Result：Design it twice
+## 24. Exception vs Result：Design it twice
 
 实现前画两个版本。
 
-## Version A
+### Version A
 
 ```python
 JobView | raises ApiError
 ```
 
-## Version B
+### Version B
 
 ```python
 Result[JobView, ApiError]
@@ -871,7 +877,7 @@ Result[JobView, ApiError]
 
 ---
 
-# 25. Public error code vs reason
+## 25. Public error code vs reason
 
 推荐两层：
 
@@ -907,7 +913,7 @@ reason=REQUEST_ID_REUSED
 
 ---
 
-# 26. Error message 测试不要过度精确
+## 26. Error message 测试不要过度精确
 
 不推荐：
 
@@ -935,7 +941,7 @@ message 只检查：
 
 ---
 
-# 27. Agent Round A — vague prompt
+## 27. Agent Round A — vague prompt
 
 在独立 branch / copy 上给 Agent：
 
@@ -960,7 +966,7 @@ Improve TaskForge's public API error handling and make submit safe to retry.
 
 ---
 
-# 28. Agent Round B — engineering spec
+## 28. Agent Round B — engineering spec
 
 然后重新从 baseline 做第二轮。
 
@@ -1000,43 +1006,43 @@ Evidence required:
 
 ---
 
-# 29. Agent review checklist
+## 29. Agent review checklist
 
 对 Agent patch 逐项检查：
 
-## Input
+### Input
 
 - blank command 是否 side effect 前拒绝？
 - `request_id=""` 的语义是否明确？
 - validation logic 是否散落？
 
-## Error
+### Error
 
 - `KeyError` 是否仍作为 public domain contract？
 - error reason 是否稳定？
 - caller 是否需要 parse string？
 - catch-all 是否吞 programming bug？
 
-## Idempotency
+### Idempotency
 
 - request identity 是 caller intent 还是 payload guess？
 - same id/same intent 是否真正 no duplicate effect？
 - same id/different intent 是否 conflict？
 - retry response 是否仍引用同一个 job？
 
-## Ownership
+### Ownership
 
 - request registry 是否只维护 request identity？
 - 是否复制 job status？
 - reset/test lifecycle 是否明确？
 
-## Claims
+### Claims
 
 - 是否把“job creation dedup”夸大成“exactly once execution”？
 
 ---
 
-# 30. Evidence bundle
+## 30. Evidence bundle
 
 最终提交：
 
@@ -1064,19 +1070,9 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/m04_boundary_probe
 
 ---
 
-# 31. Instructor reference
+## 31. Instructor reference
 
-完成实验前不要读：
-
-```text
-../case-studies/m04/instructor-analysis.md
-```
-
-它包含：
-
-- current contract reconstruction；
-- error taxonomy；
-- reference request registry；
+课程维护侧保留一份 instructor-only reference，用于验证实验 pressure、evidence 和至少一条可行 change path。Student-facing build 不生成或导航到该 reference；完成自己的 reasoning 后，若课程组织者选择提供，再把它作为对照材料，而不是标准答案。
 - fail-before tests；
 - verified reference implementation；
 - ownership review；
@@ -1085,9 +1081,9 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/m04_boundary_probe
 
 ---
 
-# 32. 评分重点
+## 32. 评分重点
 
-## 20% — Contract reconstruction
+### 20% — Contract reconstruction
 
 是否分清：
 
@@ -1097,23 +1093,23 @@ vs
 intended API
 ```
 
-## 20% — Boundary design
+### 20% — Boundary design
 
 是否真正隐藏 implementation knowledge，而不只是多一层 wrapper。
 
-## 20% — Error semantics
+### 20% — Error semantics
 
 caller action、machine identity、metadata 是否清楚。
 
-## 20% — Idempotency semantics
+### 20% — Idempotency semantics
 
 是否正确定义 logical request identity 和 same-id conflict。
 
-## 10% — Evidence
+### 10% — Evidence
 
 是否有 fail-before、side-effect oracle、full-suite regression。
 
-## 10% — Agent orchestration
+### 10% — Agent orchestration
 
 是否能看出 vague prompt 与 engineering spec 的质量差异。
 
@@ -1129,7 +1125,7 @@ pattern 名称
 
 ---
 
-# 33. 实验结束时你应该真正学会的东西
+## 33. 实验结束时你应该真正学会的东西
 
 不是：
 

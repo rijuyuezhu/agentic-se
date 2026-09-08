@@ -1,3 +1,9 @@
+---
+id: M07
+type: module
+visibility: student
+order: 7
+---
 # M07 — Concurrency、Lifecycle 与 Failure：把时间纳入 Contract
 
 前六章里，我们已经反复问过：谁拥有 state、operation 承诺什么、哪些 behavior 必须保持、什么 evidence 足以支持一次 change。那些问题还缺一个维度：**时间**。
@@ -494,9 +500,9 @@ M01 问 invariant 与 legal transition；M02 问 authority；M03 问 executable 
 
 ## 可选原始资料
 
-- MIT 6.102 — Concurrency: <https://web.mit.edu/6.102/www/sp26/classes/14-concurrency/>
-- MIT 6.102 — Mutual Exclusion: <https://web.mit.edu/6.102/www/sp26/classes/16-mutual-exclusion/>
-- MIT 6.102 — Message Passing & Networking: <https://web.mit.edu/6.102/www/sp26/classes/18-message-passing-networking/>
-- Herlihy & Wing, *Linearizability: A Correctness Condition for Concurrent Objects*: <https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf>
-- Google SRE — Addressing Cascading Failures: <https://sre.google/sre-book/addressing-cascading-failures/>
-- AWS — Exponential Backoff and Jitter: <https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/>
+- [MIT 6.102 — Concurrency](https://web.mit.edu/6.102/www/sp26/classes/14-concurrency/)
+- [MIT 6.102 — Mutual Exclusion](https://web.mit.edu/6.102/www/sp26/classes/16-mutual-exclusion/)
+- [MIT 6.102 — Message Passing & Networking](https://web.mit.edu/6.102/www/sp26/classes/18-message-passing-networking/)
+- [Herlihy & Wing, *Linearizability: A Correctness Condition for Concurrent Objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf)
+- [Google SRE — Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/)
+- [AWS — Exponential Backoff and Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/)

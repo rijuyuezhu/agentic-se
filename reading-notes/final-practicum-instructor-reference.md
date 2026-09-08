@@ -1,3 +1,9 @@
+---
+id: practicum-click-instructor-reference
+type: practicum
+visibility: instructor
+related: [practicum-click]
+---
 # Final Transfer Practicum — Instructor Reference
 
 > **Instructor / post-submission material.** Student first-pass review 完成前不要提供本文件。后续网站必须在 build/export 层排除 instructor visibility；CSS 隐藏不算隔离。
@@ -8,7 +14,7 @@
 
 Practicum 使用 Pallets Click，upstream：
 
-- https://github.com/pallets/click
+- [1. Provenance：真实 repo + 课程改写的 stakeholder issue](https://github.com/pallets/click)
 - BSD-3-Clause
 - frozen commit `333c28d79cd982990ee98eef61ec20ab1a4f38ba`（2026-07-17）
 
@@ -249,8 +255,8 @@ Nits 不应掩盖上述 contract findings。
 
 ## 11. Candidate-selection comparison
 
-完整 5-repo audit 见 [`final-practicum-candidate-audit.md`](final-practicum-candidate-audit.md)。HTTPX 0.27.2 是第二名：TLS migration/compatibility pressure 很强，focused harness `31 passed`/约 5s；但 official dev bootstrap 实测约 167s，必须另做教学 setup。Click 在 setup、system-model breadth、historical pressure 与 unfamiliar-domain transfer 之间更均衡。
+课程维护侧另有完整 5-repo candidate audit 作为 internal provenance record。HTTPX 0.27.2 是第二名：TLS migration/compatibility pressure 很强，focused harness `31 passed`/约 5s；但 official dev bootstrap 实测约 167s，必须另做教学 setup。Click 在 setup、system-model breadth、historical pressure 与 unfamiliar-domain transfer 之间更均衡。
 
 ## 12. Pilot record
 
-完整 coding-agent + independent-review pilot 的实际结果记录在 [`final-practicum-pilot.md`](final-practicum-pilot.md)。本节只保留 acceptance principle：pilot 的 Agent patch 只是对 task/harness 的一次 empirical sample，不能升级成唯一 student answer，也不能从一次模型表现推出通用 productivity 数字。
+课程维护侧另有完整 coding-agent + independent-review pilot record，作为 internal validation provenance。本节只保留 acceptance principle：pilot 的 Agent patch 只是对 task/harness 的一次 empirical sample，不能升级成唯一 student answer，也不能从一次模型表现推出通用 productivity 数字。

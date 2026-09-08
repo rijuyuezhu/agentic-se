@@ -1,3 +1,9 @@
+---
+id: M12
+type: module
+visibility: student
+order: 12
+---
 # M12 — Agentic Software Engineering：让 Agent 执行变化，而不是接管判断
 
 M11 留下了一个很具体的 production 问题：TaskForge 一次接受 12 个 job，最后 12 个都成功，queue 也回到 0，所以 naive dashboard 报 `healthy=true`；但按照 M11 已经声明的 start-latency SLI，只有 2 个 accepted jobs 在 2 秒内第一次被 worker claim。

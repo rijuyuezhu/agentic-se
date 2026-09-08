@@ -1,3 +1,9 @@
+---
+id: M00
+type: module
+visibility: student
+order: 0
+---
 # M00 — 软件工程到底在优化什么？
 
 这门课不会从 UML、Scrum 或某个设计模式名词开始。我们先追一个更基础的问题：一个程序已经“能跑”以后，为什么还会越来越难改？如果 Agent 可以把实现速度再提高一个数量级，这个问题会消失，还是会变得更尖锐？
@@ -282,8 +288,8 @@ TaskForge 的 cancellation 让我们看到，困难很快从“代码怎么写�
 
 ### 可选原始材料
 
-本章的 design vocabulary 与材料取舍可先看 [`../MATERIALS_REVIEW.md`](../MATERIALS_REVIEW.md)，尤其是 Stanford CS190 / *A Philosophy of Software Design* 与 *Software Engineering at Google* 的审查记录。进一步可读：
+本章的 design vocabulary 与材料取舍已经经过课程维护侧的材料审计。进一步可读：
 
-- Stanford CS190 Introduction: https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/lecture.php?topic=intro
-- *A Philosophy of Software Design* 官方页: https://web.stanford.edu/~ouster/cgi-bin/aposd.php
-- *Software Engineering at Google* 前言: https://abseil.io/resources/swe-book/html/pr01.html
+- [Stanford CS190 Introduction](https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/lecture.php?topic=intro)
+- [*A Philosophy of Software Design* 官方页](https://web.stanford.edu/~ouster/cgi-bin/aposd.php)
+- [*Software Engineering at Google* 前言](https://abseil.io/resources/swe-book/html/pr01.html)

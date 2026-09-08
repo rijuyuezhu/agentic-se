@@ -1,3 +1,9 @@
+---
+id: case-M05
+type: case_study
+visibility: instructor
+related: [M05]
+---
 # M05 Instructor Reference — Staged Refactoring of TaskForge Dashboard
 
 > **Spoiler warning**：完成 [`../../labs/05-refactoring-evolutionary-design.md`](../../labs/05-refactoring-evolutionary-design.md) 前不要读。

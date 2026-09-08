@@ -1,3 +1,9 @@
+---
+id: source-M02
+type: source_audit
+visibility: student
+related: [M02]
+---
 # M02 Source Audit — Abstraction / Information Hiding / State Ownership
 
 审计日期：2026-09-05
@@ -17,9 +23,7 @@
 
 ## 1. MIT 6.102 — Abstract Data Types
 
-来源：
-
-https://web.mit.edu/6.102/www/sp25/classes/06-abstract-data-types/
+[1. MIT 6.102 — Abstract Data Types](https://web.mit.edu/6.102/www/sp25/classes/06-abstract-data-types/)
 
 ### 实际检查到的内容
 
@@ -54,9 +58,7 @@ representation 改变时，client 是否必须改变？
 
 ## 2. MIT 6.102 — Abstraction Functions & Rep Invariants
 
-来源：
-
-https://web.mit.edu/6.102/www/sp26/classes/07-abstraction-functions-rep-invariants/
+[2. MIT 6.102 — Abstraction Functions & Rep Invariants](https://web.mit.edu/6.102/www/sp26/classes/07-abstraction-functions-rep-invariants/)
 
 ### 实际检查到的内容
 
@@ -99,13 +101,9 @@ view/projection
 
 ## 3. Stanford CS190 — Modular Design
 
-来源：
+[3. Stanford CS190 — Modular Design](https://web.stanford.edu/~ouster/cgi-bin/cs190-spring16/lecture.php?topic=modularDesign)
 
-https://web.stanford.edu/~ouster/cgi-bin/cs190-spring16/lecture.php?topic=modularDesign
-
-以及：
-
-https://web.stanford.edu/~ouster/cgi-bin/cs190-winter18/lecture.php?topic=modularDesign
+[以及](https://web.stanford.edu/~ouster/cgi-bin/cs190-winter18/lecture.php?topic=modularDesign)
 
 ### 实际检查到的内容
 
@@ -151,9 +149,7 @@ module / component / service / process / state owner
 
 ## 4. Stanford CS190 — Code Review 2
 
-来源：
-
-https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/codeReview2.php
+[4. Stanford CS190 — Code Review 2](https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/codeReview2.php)
 
 ### 实际检查到的内容
 
@@ -176,9 +172,7 @@ reviewer 则在 persistence、RPC 等真实 subsystem 上检查这些设计选�
 
 ## 5. Stanford CS190 — Project 2 Revision
 
-来源：
-
-https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/raft2.php
+[5. Stanford CS190 — Project 2 Revision](https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/raft2.php)
 
 ### 实际检查到的内容
 
@@ -206,9 +200,7 @@ review -> revision
 
 ## 6. Stanford CS190 — Raft Project 2 Review/Discussion
 
-来源：
-
-https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/lecture.php?topic=raftReview2-2021
+[6. Stanford CS190 — Raft Project 2 Review/Discussion](https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/lecture.php?topic=raftReview2-2021)
 
 ### 实际检查到的内容
 
@@ -239,9 +231,7 @@ https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/lecture.php?topic=raftRe
 
 ## 7. Ousterhout / APOSD 的使用方式
 
-作者页：
-
-https://web.stanford.edu/~ouster/cgi-bin/aposd.php
+[作者页](https://web.stanford.edu/~ouster/cgi-bin/aposd.php)
 
 本章采用的核心观点主要通过公开的 CS190 HTML lecture/review notes 交叉检查，而不是因为书名知名就直接照搬。
 
@@ -281,7 +271,7 @@ Stanford modular-design notes 把 David Parnas 的 *On the Criteria To Be Used i
 
 ---
 
-# 结论
+## 结论
 
 M02 的主线并不是把三份材料拼起来，而是从它们得到三个经过实际内容验证的基础：
 

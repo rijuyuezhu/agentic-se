@@ -1,3 +1,9 @@
+---
+id: ext-requirements
+type: extension
+visibility: student
+related: [M01, M10, M12, M13]
+---
 # Requirements Engineering：contract 从哪里来
 
 M01 从一个重要事实开始：没有 specification，就无法判断 implementation 是否正确。但这句话还留下了一个更上游的问题：**谁来决定 specification 应该是什么？**

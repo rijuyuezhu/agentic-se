@@ -1,3 +1,9 @@
+---
+id: ext-risk-economics
+type: extension
+visibility: student
+related: [M05, M08, M09, M10]
+---
 # Engineering Risk、Estimation 与 Economics：怎样比较两个都能做出来的方案
 
 软件设计讨论里经常出现一种伪客观性：方案 A 和方案 B 都能实现，于是大家开始争哪一个“更优雅”。如果争不出结果，就数代码行、比较 benchmark，或者让 senior engineer 凭经验拍板。

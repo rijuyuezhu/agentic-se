@@ -1,3 +1,9 @@
+---
+id: ext-models-notation
+type: extension
+visibility: student
+related: [M02, M07, M09]
+---
 # Models、Notation 与 UML：图是 reasoning tool，不是作业格式
 
 “画一下架构图”经常产生两种结果。

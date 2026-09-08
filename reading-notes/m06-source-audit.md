@@ -1,4 +1,12 @@
+---
+id: source-M06
+type: source_audit
+visibility: student
+related: [M06]
+---
 # M06 Source Audit — Legacy Code、Characterization Test 与 Seam
+
+> 审计/复核日期：**2026-09-06**。
 
 > 本模块的问题不是“怎样把旧代码写漂亮”，而是：**当现有行为不清楚、测试不足、依赖难以控制时，怎样先获得足够 feedback，再安全地改变系统。**
 >
@@ -6,7 +14,7 @@
 
 ---
 
-# 0. 本模块要回答的问题
+## 0. 本模块要回答的问题
 
 M06 需要回答六个工程问题：
 
@@ -29,33 +37,33 @@ M06 需要回答六个工程问题：
 
 ---
 
-# 1. Michael Feathers — Working Effectively with Legacy Code
+## 1. Michael Feathers — Working Effectively with Legacy Code
 
 **状态：M06 主干来源。**
 
 已实际检查：
 
 - InformIT 官方书页和完整目录：
-  - https://www.informit.com/store/working-effectively-with-legacy-code-9780132931779
+  - [1. Michael Feathers — Working Effectively with Legacy Code — source 1](https://www.informit.com/store/working-effectively-with-legacy-code-9780132931779)
 - InformIT 公开样章 `Changing Software and Legacy Code`：
-  - https://www.informit.com/articles/article.aspx?p=359418
+  - [1. Michael Feathers — Working Effectively with Legacy Code — source 2](https://www.informit.com/articles/article.aspx?p=359418)
 - InformIT 公开样章 `Testing Effectively With Legacy Code`：
-  - https://www.informit.com/articles/article.aspx?p=359417
+  - [1. Michael Feathers — Working Effectively with Legacy Code — source 3](https://www.informit.com/articles/article.aspx?p=359417)
 - seam 小节：
-  - https://www.informit.com/articles/article.aspx?p=359417&seqNum=2
-  - https://www.informit.com/articles/article.aspx?p=359417&seqNum=3
+  - [1. Michael Feathers — Working Effectively with Legacy Code — source 4](https://www.informit.com/articles/article.aspx?p=359417&seqNum=2)
+  - [1. Michael Feathers — Working Effectively with Legacy Code — source 5](https://www.informit.com/articles/article.aspx?p=359417&seqNum=3)
 - O'Reilly 公开预览：Chapter 3 `Sensing and Separation`：
-  - https://www.oreilly.com/library/view/working-effectively-with/0131177052/ch03.html
+  - [1. Michael Feathers — Working Effectively with Legacy Code — source 6](https://www.oreilly.com/library/view/working-effectively-with/0131177052/ch03.html)
 - O'Reilly 公开预览：Chapter 4 `The Seam Model`：
-  - https://www.oreilly.com/library/view/working-effectively-with/0131177052/ch04.html
+  - [1. Michael Feathers — Working Effectively with Legacy Code — source 7](https://www.oreilly.com/library/view/working-effectively-with/0131177052/ch04.html)
 - O'Reilly glossary：
-  - https://www.oreilly.com/library/view/working-effectively-with/0131177052/gloss.html
+  - [1. Michael Feathers — Working Effectively with Legacy Code — source 8](https://www.oreilly.com/library/view/working-effectively-with/0131177052/gloss.html)
 - O'Reilly 目录 / Chapter 13 位置：
-  - https://www.oreilly.com/library/view/working-effectively-with/0131177052/toc.html
+  - [1. Michael Feathers — Working Effectively with Legacy Code — source 9](https://www.oreilly.com/library/view/working-effectively-with/0131177052/toc.html)
 - Pearson/InformIT sample PDF 的目录，确认 Chapter 13 内确实包含 `Characterization Tests`、`Targeted Testing` 与 writing characterization tests heuristic：
-  - https://www.informit.com/content/images/9780131177055/samplepages/0131177052.pdf
+  - [1. Michael Feathers — Working Effectively with Legacy Code — source 10](https://www.informit.com/content/images/9780131177055/samplepages/0131177052.pdf)
 
-## 1.1 为什么这本书仍然值得放主干
+### 1.1 为什么这本书仍然值得放主干
 
 不是因为它 2004 年出版后“很经典”，而是因为它处理的问题与 Agent 时代仍然高度同构：
 
@@ -85,7 +93,7 @@ How do I know that I’m not breaking anything?
 
 这与本课程强调的“从工程问题出发，而不是背规则”非常匹配。
 
-## 1.2 “legacy code = code without tests”如何使用
+### 1.2 “legacy code = code without tests”如何使用
 
 Feathers 最著名的 operational definition 是把 legacy code 与缺乏 tests 联系起来。
 
@@ -107,7 +115,7 @@ C. 测试很多，但全是 implementation-coupled mocks，无法支持安全变
 
 年龄、语言和 style 都不是核心变量。
 
-## 1.3 Working with Feedback
+### 1.3 Working with Feedback
 
 书的 Part I 明确把 `Working with Feedback` 放在 seam 之前。
 
@@ -126,7 +134,7 @@ C. 测试很多，但全是 implementation-coupled mocks，无法支持安全变
 
 这会成为 M06 的主线。
 
-## 1.4 Sensing 与 Separation
+### 1.4 Sensing 与 Separation
 
 Chapter 3 公开预览明确讨论：目标对象很难放进 test harness，常常不是因为算法复杂，而是因为构造它会拖进越来越多 collaborators，最后接近整个系统。
 
@@ -162,7 +170,7 @@ Separation
 
 两者需要不同技术，不应统一归类成“加 mock”。
 
-## 1.5 Seam Model
+### 1.5 Seam Model
 
 InformIT / O'Reilly 的公开 Chapter 4 material 明确给出 seam 的核心思想：
 
@@ -186,7 +194,7 @@ production flow
 
 Python module binding、function parameter、filesystem path、process boundary、link-time substitution、environment adapter 都可能成为 seam。
 
-## 1.6 Characterization Test
+### 1.6 Characterization Test
 
 WELC glossary 的公开预览把 characterization test 定义为：
 
@@ -204,7 +212,7 @@ characterization test:
 
 characterization test 首先是**观测和固定事实**，不是价值判断。
 
-### 一个重要边界
+#### 一个重要边界
 
 如果 characterization test 发现：
 
@@ -228,7 +236,7 @@ buggy_behavior = true
 
 这和“测试当前行为所以当前行为都正确”完全不同。
 
-## 1.7 Targeted testing 比“全面补测试”更重要
+### 1.7 Targeted testing 比“全面补测试”更重要
 
 WELC Chapter 11–13 的结构非常明确：
 
@@ -254,13 +262,13 @@ WELC Chapter 11–13 的结构非常明确：
 
 ---
 
-# 2. Martin Fowler — Legacy Seam
+## 2. Martin Fowler — Legacy Seam
 
 **状态：主干采用，用现代语言重新解释 Feathers seam。**
 
 来源：
 
-- https://martinfowler.com/bliki/LegacySeam.html
+- [2. Martin Fowler — Legacy Seam](https://martinfowler.com/bliki/LegacySeam.html)
 
 实际检查内容：
 
@@ -269,7 +277,7 @@ WELC Chapter 11–13 的结构非常明确：
 - 通过 function parameter 打开 seam 的示例；
 - seam 不只用于 unit testing，也可用于 probes、observability、legacy displacement。
 
-## 为什么重要
+### 为什么重要
 
 Fowler 2024 的总结特别适合修正一个常见误区：
 
@@ -295,22 +303,22 @@ incremental modernization
 
 ---
 
-# 3. Software Engineering at Google — Testing Overview / Hermetic Testing
+## 3. Software Engineering at Google — Testing Overview / Hermetic Testing
 
 **状态：补充采用，用来校正“隔离一切”的误区。**
 
 已检查：
 
 - Testing Overview：
-  - https://abseil.io/resources/swe-book/html/ch11.html
+  - [3. Software Engineering at Google — Testing Overview / Hermetic Testing — source 1](https://abseil.io/resources/swe-book/html/ch11.html)
 - Larger Testing：
-  - https://abseil.io/resources/swe-book/html/ch14.html
+  - [3. Software Engineering at Google — Testing Overview / Hermetic Testing — source 2](https://abseil.io/resources/swe-book/html/ch14.html)
 - CI / Hermetic Testing：
-  - https://abseil.io/resources/swe-book/html/ch23.html
+  - [3. Software Engineering at Google — Testing Overview / Hermetic Testing — source 3](https://abseil.io/resources/swe-book/html/ch23.html)
 - Test Doubles：
-  - https://abseil.io/resources/swe-book/html/ch13.html
+  - [3. Software Engineering at Google — Testing Overview / Hermetic Testing — source 4](https://abseil.io/resources/swe-book/html/ch13.html)
 
-## 3.1 为什么 legacy takeover 需要 hermeticity
+### 3.1 为什么 legacy takeover 需要 hermeticity
 
 Google 对 hermetic test 的解释把两个价值说得很清楚：
 
@@ -339,7 +347,7 @@ isolation
 
 > **把“环境的不确定性”与“我们想观察的 legacy behavior”分开。**
 
-## 3.2 但 hermeticity 与 fidelity 有张力
+### 3.2 但 hermeticity 与 fidelity 有张力
 
 Google Larger Testing 明确把 hermeticity 与 fidelity 视为两个不同维度，而且它们经常冲突。
 
@@ -370,7 +378,7 @@ focused seam-based tests
 
 而不是只追一个层级。
 
-## 3.3 Test doubles 的边界
+### 3.3 Test doubles 的边界
 
 Google Test Doubles 章节明确总结了 mock framework 过度使用造成的大量维护成本，并出现“容易写、难维护、很少抓 bug”的经验。
 
@@ -392,7 +400,7 @@ M06 要问的是：
 
 ---
 
-# 4. 本模块怎样使用 WELC，而不是照搬 2004 年的技术目录
+## 4. 本模块怎样使用 WELC，而不是照搬 2004 年的技术目录
 
 WELC 的很多具体 dependency-breaking techniques 带有当时的 Java/C++/C# 背景。
 
@@ -426,7 +434,7 @@ parameterize constructor
 
 ---
 
-# 5. M06 的课程 synthesis
+## 5. M06 的课程 synthesis
 
 本模块把来源综合成以下模型：
 
@@ -466,11 +474,11 @@ parameterize constructor
 
 ---
 
-# 6. Agent 时代的额外推论
+## 6. Agent 时代的额外推论
 
 这是本课程自己的综合，不冒充来源原话。
 
-## 6.1 Agent 的“理解能力”不能替代 feedback
+### 6.1 Agent 的“理解能力”不能替代 feedback
 
 即使 Agent 可以一次读几十万行代码，也不意味着：
 
@@ -499,7 +507,7 @@ read
 → change
 ```
 
-## 6.2 Agent 特别适合做 effect sketch，但必须要求证据
+### 6.2 Agent 特别适合做 effect sketch，但必须要求证据
 
 Agent 可以快速搜索：
 
@@ -516,7 +524,7 @@ historical tests
 
 但结果应成为一个可检查的 effect sketch，而不是“我已经理解了”。
 
-## 6.3 不要让 Agent 一次性“make it testable”
+### 6.3 不要让 Agent 一次性“make it testable”
 
 这是本模块最重要的 Agent anti-pattern 之一。
 
@@ -559,7 +567,7 @@ show fail-before / pass-after or stable characterization fingerprints.
 
 ---
 
-# 7. 本模块不采用为“定律”的说法
+## 7. 本模块不采用为“定律”的说法
 
 | 说法 | 本课程处理 |
 |---|---|
@@ -574,7 +582,7 @@ show fail-before / pass-after or stable characterization fingerprints.
 
 ---
 
-# 8. 对 M06 课程设计的直接影响
+## 8. 对 M06 课程设计的直接影响
 
 M06 TaskForge 实验会故意提供一个 `legacy_audit.py`：
 

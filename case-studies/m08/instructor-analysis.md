@@ -1,3 +1,9 @@
+---
+id: case-M08
+type: case_study
+visibility: instructor
+related: [M08]
+---
 # M08 Instructor Analysis — Snapshot v1 → v2 的 compatibility migration
 
 > **Spoiler warning**：请先完成 `labs/08-compatibility-migration.md`。

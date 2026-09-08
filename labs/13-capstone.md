@@ -1,3 +1,9 @@
+---
+id: lab-M13
+type: lab
+visibility: student
+related: [M13]
+---
 # Lab 13 — Capstone：把 Lease Recovery 做成一份可接受的 Change
 
 这是整门课的综合考核。你会拿到一个已经存在的 TaskForge、一个包含错误 guarantee 的 feature request、一套全部绿色但不完整的 baseline tests、可确定性复现的 failure probe，以及一份只有在 first-pass issue review 完成后才应该读取的 human decision pack。
@@ -381,7 +387,7 @@ EVIDENCE.md
 
 `EVIDENCE.md` 至少记录 baseline pytest、baseline probe、v1-v1 race fail-before/pass-after、mixed v1-v2 single-winner evidence（独立 v2 path 再含 v2-v2）、schema expand + frozen old artifact、v2 stale finish/heartbeat fencing、legacy finish boundary、legacy manual-requeue stale-completion residual history、manual-vs-automatic recovery、external duplicate negative control、activation gate、rollback boundary 与最终 focused/full test commands。不要只写“见 CI”。
 
-Instructor analysis 只有完成自己的 submission 后再读：[`../case-studies/m13/instructor-analysis.md`](../case-studies/m13/instructor-analysis.md)。它是一条 reference reasoning path，不是标准实现。
+课程维护侧保留 instructor-only analysis。Student-facing build 不生成或导航到它；完成自己的 submission 后，如由课程组织者提供，它只是一条 reference reasoning path，不是标准实现。
 
 ## 14. Grading
 

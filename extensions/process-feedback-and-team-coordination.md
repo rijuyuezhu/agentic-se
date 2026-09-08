@@ -1,3 +1,9 @@
+---
+id: ext-process-feedback
+type: extension
+visibility: student
+related: [M00, M10, M12]
+---
 # Process、Feedback 与 Team Coordination：流程的价值在于改变反馈结构
 
 假设一个团队有十个 coding agent。每个 Agent 每天都能产出一个看起来完整的 PR。两周后 dashboard 显示“并行任务数”创了新高，但真正 merge 的 change 反而变少：review queue 越来越长，多个 PR 修改同一层，后来的 change 建立在尚未接受的前一个 patch 上，测试环境排队，产品决策来不及做。

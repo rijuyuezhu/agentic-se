@@ -1,3 +1,9 @@
+---
+id: M05
+type: module
+visibility: student
+order: 5
+---
 # M05 — Refactoring 与 Evolutionary Design：把变化本身设计成可证明的序列
 
 M04 刚把注意力放在 API boundary：一个看起来很小的接口，如果把 error、retry 和内部 representation 泄漏给 caller，很快就会变成复杂度扩散点。现在我们换一个角度。即使当前行为已经足够清楚，测试也能跑，仍然会遇到另一个常见问题：**下一次需求应该直接补上去，还是先改变结构？**
@@ -415,7 +421,7 @@ Formatting 也属于这里。一个真实结构改动只有几十行时，顺手
 
 只有 structural phase 能被单独 review 后，才进入 JSON behavior。Lab 对 JSON 的 schema、raw status、`exit_code`、ordering 以及“whitespace/key order 不进入 contract”都有明确要求；这些 normative details 以 lab 为 authority，正文不在这里重复发明另一套 contract。
 
-Instructor reference 位于 [`../case-studies/m05/instructor-analysis.md`](../case-studies/m05/instructor-analysis.md)。它实际验证了一条 normalized snapshot candidate：structural phase 的三个 text fingerprints 保持不变，core tests 仍为 6 passed；加入 JSON renderer 与两组 focused tests 后，旧 probe 仍不 drift，pytest 变为 8 passed。这个结果证明的是那条 reference sequence 在当前 evidence scope 下成立，不是证明 frozen dataclass 是唯一正确 architecture。
+课程维护侧另有 instructor-only reference，实际验证了一条 normalized snapshot candidate：structural phase 的三个 text fingerprints 保持不变，core tests 仍为 6 passed；加入 JSON renderer 与两组 focused tests 后，旧 probe 仍不 drift，pytest 变为 8 passed。这个结果证明的只是一条 reference sequence 在对应 evidence scope 下成立，不是证明 frozen dataclass 或任何特定结构是唯一正确 architecture；student-facing material 不把这条 reference path 当作导航或 oracle。
 
 ## 17. 来源边界与本章不能推出的结论
 
@@ -450,13 +456,13 @@ real change pressure
 
 本章自包含；希望核对原始观点时可看：
 
-- Martin Fowler, *Refactoring*: https://martinfowler.com/books/refactoring.html
-- Fowler, Definition of Refactoring: https://martinfowler.com/bliki/DefinitionOfRefactoring.html
-- Fowler, Workflows of Refactoring: https://martinfowler.com/articles/workflowsOfRefactoring/fallback.html
-- Fowler, Preparatory Refactoring: https://martinfowler.com/articles/preparatory-refactoring-example.html
-- Kent Beck, *Tidy First?*: https://www.oreilly.com/library/view/tidy-first/9781098151232/
-- Google Engineering Practices, Small CLs: https://google.github.io/eng-practices/review/developer/small-cls.html
-- *Software Engineering at Google*, Large-Scale Changes: https://abseil.io/resources/swe-book/html/ch22.html
-- Stanford CS190/APOSD: https://web.stanford.edu/~ouster/cs190-winter24/lectures/aposd/
+- [Martin Fowler, *Refactoring*](https://martinfowler.com/books/refactoring.html)
+- [Fowler, Definition of Refactoring](https://martinfowler.com/bliki/DefinitionOfRefactoring.html)
+- [Fowler, Workflows of Refactoring](https://martinfowler.com/articles/workflowsOfRefactoring/fallback.html)
+- [Fowler, Preparatory Refactoring](https://martinfowler.com/articles/preparatory-refactoring-example.html)
+- [Kent Beck, *Tidy First?*](https://www.oreilly.com/library/view/tidy-first/9781098151232/)
+- [Google Engineering Practices, Small CLs](https://google.github.io/eng-practices/review/developer/small-cls.html)
+- [*Software Engineering at Google*, Large-Scale Changes](https://abseil.io/resources/swe-book/html/ch22.html)
+- [Stanford CS190/APOSD](https://web.stanford.edu/~ouster/cs190-winter24/lectures/aposd/)
 
 具体来源审计与取舍见 [`../reading-notes/m05-source-audit.md`](../reading-notes/m05-source-audit.md)。

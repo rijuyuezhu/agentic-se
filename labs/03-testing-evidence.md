@@ -1,3 +1,9 @@
+---
+id: lab-M03
+type: lab
+visibility: student
+related: [M03]
+---
 # Lab 03 — Testing as Executable Evidence
 
 > 目标：不是“给 TaskForge 多写几个 pytest”。
@@ -14,7 +20,7 @@ cd labs/taskforge
 
 ---
 
-# 0. 实验规则
+## 0. 实验规则
 
 1. **先不要改 production code。**
 2. 先运行 baseline tests 和 mutation probe。
@@ -26,7 +32,7 @@ cd labs/taskforge
 
 ---
 
-# 1. 先建立 baseline
+## 1. 先建立 baseline
 
 运行：
 
@@ -54,7 +60,7 @@ tests/test_taskforge.py
 
 ---
 
-# 2. Audit 现有 6 个 tests
+## 2. Audit 现有 6 个 tests
 
 为每个 test 填表：
 
@@ -66,7 +72,7 @@ tests/test_taskforge.py
 
 至少回答下面这些问题。
 
-## 2.1 ID format 是 contract 吗？
+### 2.1 ID format 是 contract 吗？
 
 现有 test：
 
@@ -101,7 +107,7 @@ job-1 → UUID
 如果 contract 是 X，则 test 合理/过度指定，因为 Y。
 ```
 
-## 2.2 FIFO 是 contract 吗？
+### 2.2 FIFO 是 contract 吗？
 
 现有：
 
@@ -121,7 +127,7 @@ oldest queued job is claimed first
 
 在本实验后续部分，我们**明确假设 FIFO 是 TaskForge v0 contract**。
 
-## 2.3 为什么 cancel test 命名有点 confusing？
+### 2.3 为什么 cancel test 命名有点 confusing？
 
 认真读：
 
@@ -140,11 +146,11 @@ worker.claim_next()
 
 ---
 
-# 3. M03 使用的 TaskForge v0 Contract
+## 3. M03 使用的 TaskForge v0 Contract
 
 为了避免“测试题本身需求不清”，本 lab 后半段采用以下 contract。
 
-## Submission
+### Submission
 
 `submit(command)`：
 
@@ -155,7 +161,7 @@ worker.claim_next()
 - 新 job 初始为 `QUEUED`；
 - 新 job 的 `exit_code` 为 `None`。
 
-## Listing
+### Listing
 
 `list_jobs()`：
 
@@ -163,7 +169,7 @@ worker.claim_next()
 - 包括 terminal jobs；
 - 返回 submission order。
 
-## Lookup
+### Lookup
 
 `get(job_id)`：
 
@@ -172,7 +178,7 @@ worker.claim_next()
 
 当前 baseline 违反最后一条。这是已知 design bug，不是假装现状已经正确。
 
-## Scheduling
+### Scheduling
 
 `claim_next()`：
 
@@ -180,7 +186,7 @@ worker.claim_next()
 - transition `QUEUED → RUNNING`；
 - 没有 queued job 时返回 `None`。
 
-## Completion
+### Completion
 
 `finish(job_id, exit_code)`：
 
@@ -189,7 +195,7 @@ worker.claim_next()
 - `exit_code != 0` → `FAILED`；
 - 保存原始 exit code。
 
-## Cancellation
+### Cancellation
 
 `cancel(job_id)`：
 
@@ -197,7 +203,7 @@ worker.claim_next()
 - 成功时 transition 到 `CANCELLED` 并返回 `True`；
 - 其他 lifecycle state 返回 `False` 且 state 不变。
 
-## Terminal semantics
+### Terminal semantics
 
 ```text
 SUCCEEDED
@@ -209,7 +215,7 @@ CANCELLED
 
 ---
 
-# 4. 设计 Behavior Partitions
+## 4. 设计 Behavior Partitions
 
 现在不要看现有 tests。
 
@@ -217,7 +223,7 @@ CANCELLED
 
 至少覆盖：
 
-## submit
+### submit
 
 ```text
 first submission
@@ -226,7 +232,7 @@ command preservation
 initial lifecycle fields
 ```
 
-## claim
+### claim
 
 ```text
 no queued jobs
@@ -235,7 +241,7 @@ multiple queued jobs / FIFO
 terminal jobs mixed with queued jobs
 ```
 
-## finish
+### finish
 
 ```text
 RUNNING + 0
@@ -247,7 +253,7 @@ FAILED
 CANCELLED
 ```
 
-## cancel
+### cancel
 
 ```text
 QUEUED
@@ -257,7 +263,7 @@ FAILED
 CANCELLED
 ```
 
-## list
+### list
 
 ```text
 empty
@@ -266,7 +272,7 @@ mixed active + terminal
 submission order
 ```
 
-## read authority
+### read authority
 
 ```text
 caller mutates object returned by get/list
@@ -286,7 +292,7 @@ Leave for later module
 
 ---
 
-# 5. 运行 Mutation Probe
+## 5. 运行 Mutation Probe
 
 课程提供一个小型人工 mutation harness：
 
@@ -318,7 +324,7 @@ list_jobs_hides_terminal
 
 ---
 
-# 6. 不要立刻写 test：先解释每个 survivor
+## 6. 不要立刻写 test：先解释每个 survivor
 
 对每个 survivor 写：
 
@@ -354,11 +360,11 @@ submit_drops_command 没有 command test。
 
 ---
 
-# 7. Kill 三个 Survivor
+## 7. Kill 三个 Survivor
 
 新增 tests，但有约束：
 
-## 7.1 `terminal_forgets_cancelled`
+### 7.1 `terminal_forgets_cancelled`
 
 不要直接：
 
@@ -376,7 +382,7 @@ submit → cancel → terminal_count / observable status
 
 这样 test 保护的是 system semantics，而不是 property implementation。
 
-## 7.2 `submit_drops_command`
+### 7.2 `submit_drops_command`
 
 从公开 lookup/list behavior 检查：
 
@@ -386,7 +392,7 @@ submit command → retrieved job command unchanged
 
 不要直接查看 `state.jobs`。
 
-## 7.3 `list_jobs_hides_terminal`
+### 7.3 `list_jobs_hides_terminal`
 
 构造：
 
@@ -406,7 +412,7 @@ ordering contract
 
 ---
 
-# 8. 重新跑 Mutation Probe
+## 8. 重新跑 Mutation Probe
 
 ```bash
 PYTHONPATH=src uv run --with pytest --no-project python tools/mutation_probe.py
@@ -443,7 +449,7 @@ PYTHONPATH=src uv run --with pytest --no-project python tools/mutation_probe.py
 
 ---
 
-# 9. 一个有意的 Overspecification Exercise
+## 9. 一个有意的 Overspecification Exercise
 
 给现有 ID test 做 design review。
 
@@ -478,7 +484,7 @@ numbering
 
 ---
 
-# 10. Regression Exercise — Representation Exposure
+## 10. Regression Exercise — Representation Exposure
 
 当前 baseline：
 
@@ -491,7 +497,7 @@ job.status = JobStatus.SUCCEEDED
 
 根据本 lab contract，这是 bug。
 
-## Step A — 写 regression test
+### Step A — 写 regression test
 
 要求：
 
@@ -509,15 +515,15 @@ authoritative status 仍是 QUEUED
 
 先运行，保留失败证据。旧 baseline 的 mutation attempt 会成功并穿透到 authoritative object，因此最后的 authoritative-state assertion 应该失败。这一步必须在 production fix 之前完成。
 
-## Step B — 设计至少两个 fix
+### Step B — 设计至少两个 fix
 
 例如可能方向：
 
-### Design A
+#### Design A
 
 read API 返回 defensive copy/snapshot。mutation attempt 可以成功，但只修改 detached observation。
 
-### Design B
+#### Design B
 
 内部 mutable entity 与外部 immutable view 分离。mutation attempt 可以直接被 read-only boundary 拒绝。
 
@@ -532,7 +538,7 @@ read API 返回 defensive copy/snapshot。mutation attempt 可以成功，但只
 - API compatibility；
 - accidental identity semantics。
 
-## Step C — 实现最小修复
+### Step C — 实现最小修复
 
 要求：
 
@@ -541,7 +547,7 @@ read API 返回 defensive copy/snapshot。mutation attempt 可以成功，但只
 - 原 6 tests + 你新增的 M03 tests 全通过；
 - 不允许只是让 test 不能 import `JobStatus`。
 
-## Step D — pass-after
+### Step D — pass-after
 
 保存：
 
@@ -555,7 +561,7 @@ mutation probe
 
 ---
 
-# 11. 一个故意很差的 Test
+## 11. 一个故意很差的 Test
 
 考虑：
 
@@ -582,7 +588,7 @@ def test_cancel_implementation(monkeypatch):
 
 ---
 
-# 12. Optional — Coverage Experiment
+## 12. Optional — Coverage Experiment
 
 这部分不是必做。
 
@@ -609,7 +615,7 @@ PYTHONPATH=src uv run --with coverage --no-project \
 
 ---
 
-# 13. Optional — Property-Based Testing
+## 13. Optional — Property-Based Testing
 
 安装运行时依赖即可，不写入课程项目依赖：
 
@@ -638,7 +644,7 @@ RUNNING job finish 后必须 FAILED，且保存 exact exit code
 
 ---
 
-# 14. Agent Experiment — Vague Prompt
+## 14. Agent Experiment — Vague Prompt
 
 在一个干净分支/副本中，让 Agent 做：
 
@@ -662,7 +668,7 @@ RUNNING job finish 后必须 FAILED，且保存 exact exit code
 
 ---
 
-# 15. Agent Experiment — Engineering Spec
+## 15. Agent Experiment — Engineering Spec
 
 重新从同一 baseline，让 Agent 收到：
 
@@ -697,47 +703,47 @@ Do not modify production code yet.
 
 ---
 
-# 16. Independent Review
+## 16. Independent Review
 
 无论你还是 Agent 写的 patch，都做一次独立 review。
 
 至少检查：
 
-## Contract
+### Contract
 
 - IDs 是否被错误固定格式？
 - FIFO 是否有意保护？
 - command 是否保留？
 - terminal semantics 是否完整？
 
-## Oracle
+### Oracle
 
 - 是否有 expected 从 implementation 复制？
 - assert 是否真的验证 final outcome？
 
-## Boundary
+### Boundary
 
 - tests 是否直接写 `state.jobs`？
 - 是否测试 private decomposition？
 
-## Mutation
+### Mutation
 
 - survivor 为什么存活/被 kill？
 - 为 kill mutant 新增的 test 是否真的有业务意义？
 
-## Regression
+### Regression
 
 - representation exposure 是否有 fail-before？
 - fix 是否仅让该 test 过，还是恢复了 ownership boundary？
 
-## Maintainability
+### Maintainability
 
 - test 名称是否描述 behavior？
 - fixture/helper 是否隐藏重要 scenario？
 
 ---
 
-# 17. 提交内容
+## 17. 提交内容
 
 你最终应交：
 
@@ -757,44 +763,44 @@ Do not modify production code yet.
 
 ---
 
-# 18. 评分标准
+## 18. 评分标准
 
 不是按 test 数量。
 
-## 25% — Contract reasoning
+### 25% — Contract reasoning
 
 - 是否知道自己在保护什么；
 - 是否避免 accidental contract。
 
-## 20% — Partition quality
+### 20% — Partition quality
 
 - 是否有 systematic state/boundary/failure coverage；
 - 是否避免机械笛卡尔积。
 
-## 20% — Test strength
+### 20% — Test strength
 
 - meaningful mutants 是否被发现；
 - regression 是否 fail-before。
 
-## 15% — Maintainability
+### 15% — Maintainability
 
 - behavior-oriented；
 - boundary 正确；
 - 不 brittle。
 
-## 10% — Evidence quality
+### 10% — Evidence quality
 
 - 输出可复现；
 - 没有“tests passed 所以正确”的过度结论。
 
-## 10% — Agent orchestration
+### 10% — Agent orchestration
 
 - prompt 是否提供 engineering constraints；
 - review 是否独立。
 
 ---
 
-# 19. 实验结束后你应该形成的习惯
+## 19. 实验结束后你应该形成的习惯
 
 以后看到：
 

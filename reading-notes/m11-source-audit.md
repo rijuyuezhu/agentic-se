@@ -1,4 +1,12 @@
+---
+id: source-M11
+type: source_audit
+visibility: student
+related: [M11]
+---
 # M11 Source Audit — Production、Observability 与 Reliability
+
+> 审计/复核日期：**2026-09-07**。
 
 > 目标：不是搜集“可观测性最佳实践”口号，而是确认哪些一手材料真正支持本模块要教的工程判断。
 >
@@ -18,7 +26,7 @@
 
 Primary source:
 
-- https://sre.google/sre-book/service-level-objectives/
+- [1. Google SRE — Service Level Objectives](https://sre.google/sre-book/service-level-objectives/)
 
 实际检查的内容：
 
@@ -66,7 +74,7 @@ Primary source:
 
 Primary source:
 
-- https://sre.google/workbook/implementing-slos/
+- [2. Google SRE Workbook — Implementing SLOs](https://sre.google/workbook/implementing-slos/)
 
 这是本模块最关键的来源之一。
 
@@ -127,7 +135,7 @@ Possible implementations:
 
 Primary source:
 
-- https://sre.google/sre-book/monitoring-distributed-systems/
+- [3. Google SRE — Monitoring Distributed Systems](https://sre.google/sre-book/monitoring-distributed-systems/)
 
 实际检查：
 
@@ -180,7 +188,7 @@ Page 应优先由用户影响驱动；cause signal 更适合 diagnosis / routing
 
 Primary source:
 
-- https://sre.google/workbook/alerting-on-slos/
+- [4. Google SRE Workbook — Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/)
 
 实际检查：
 
@@ -221,7 +229,7 @@ alert threshold
 
 Primary source:
 
-- https://sre.google/sre-book/service-best-practices/
+- [5. Google SRE — Production Services Best Practices](https://sre.google/sre-book/service-best-practices/)
 
 实际检查到 monitoring outputs 的一个强 framing：
 
@@ -255,7 +263,7 @@ page
 
 Primary source:
 
-- https://sre.google/sre-book/handling-overload/
+- [6. Google SRE — Handling Overload](https://sre.google/sre-book/handling-overload/)
 
 实际检查：
 
@@ -293,8 +301,8 @@ TaskForge 的 production lab 会用这个差异作为主场景。
 
 Primary sources:
 
-- https://sre.google/sre-book/addressing-cascading-failures/
-- https://sre.google/sre-book/service-best-practices/
+- [7. Google SRE — Addressing Cascading Failures / Retry Amplification — source 1](https://sre.google/sre-book/addressing-cascading-failures/)
+- [7. Google SRE — Addressing Cascading Failures / Retry Amplification — source 2](https://sre.google/sre-book/service-best-practices/)
 
 实际检查：
 
@@ -327,8 +335,8 @@ M11 把 retry 看成 **load-producing reliability mechanism**。如果新请求�
 
 Primary sources:
 
-- https://prometheus.io/docs/practices/instrumentation/
-- https://prometheus.io/docs/practices/naming/
+- [8. Prometheus — Instrumentation Best Practices — source 1](https://prometheus.io/docs/practices/instrumentation/)
+- [8. Prometheus — Instrumentation Best Practices — source 2](https://prometheus.io/docs/practices/naming/)
 
 实际检查：
 
@@ -387,10 +395,10 @@ Prometheus 文档里的具体 cardinality 数字只作为该生态的 guideline�
 
 Primary sources:
 
-- https://opentelemetry.io/docs/concepts/signals/
-- https://opentelemetry.io/docs/specs/otel/logs/data-model/
-- https://opentelemetry.io/docs/concepts/semantic-conventions/
-- https://opentelemetry.io/docs/specs/semconv/
+- [9. OpenTelemetry — Signals / Logs Data Model / Semantic Conventions — source 1](https://opentelemetry.io/docs/concepts/signals/)
+- [9. OpenTelemetry — Signals / Logs Data Model / Semantic Conventions — source 2](https://opentelemetry.io/docs/specs/otel/logs/data-model/)
+- [9. OpenTelemetry — Signals / Logs Data Model / Semantic Conventions — source 3](https://opentelemetry.io/docs/concepts/semantic-conventions/)
+- [9. OpenTelemetry — Signals / Logs Data Model / Semantic Conventions — source 4](https://opentelemetry.io/docs/specs/semconv/)
 
 实际检查：
 
@@ -438,7 +446,7 @@ Primary sources:
 
 Primary source:
 
-- https://prometheus.io/docs/practices/the_zen/
+- [10. Prometheus — The Zen of Prometheus](https://prometheus.io/docs/practices/the_zen/)
 
 实际检查：
 
@@ -467,8 +475,8 @@ but choose signal shape deliberately
 
 Primary sources:
 
-- https://sre.google/sre-book/postmortem-culture/
-- https://sre.google/workbook/postmortem-culture/
+- [11. Google SRE — Postmortem Culture / Incident Learning — source 1](https://sre.google/sre-book/postmortem-culture/)
+- [11. Google SRE — Postmortem Culture / Incident Learning — source 2](https://sre.google/workbook/postmortem-culture/)
 
 实际检查：
 
@@ -501,8 +509,8 @@ M11 要求一份 **blameless but technically precise** postmortem。最低应恢
 
 Primary sources:
 
-- https://sre.google/sre-book/simplicity/
-- https://sre.google/workbook/simplicity/
+- [12. Google SRE — Simplicity / Operational Simplicity — source 1](https://sre.google/sre-book/simplicity/)
+- [12. Google SRE — Simplicity / Operational Simplicity — source 2](https://sre.google/workbook/simplicity/)
 
 实际检查：
 
@@ -524,7 +532,7 @@ M11 的 bounded claim 是：**operational simplicity 是 reliability reasoning �
 
 ---
 
-# 13. 交叉验证后的 M11 核心模型
+## 13. 交叉验证后的 M11 核心模型
 
 这些来源共同支持一个比“装监控工具”更稳定的 model：
 
@@ -580,7 +588,7 @@ postmortem learning + verifiable follow-up
 
 ---
 
-# 14. 本模块刻意不依赖的内容
+## 14. 本模块刻意不依赖的内容
 
 以下材料可能有价值，但本轮不把它们当 authority：
 
@@ -597,7 +605,7 @@ postmortem learning + verifiable follow-up
 
 ---
 
-# 15. 对 TaskForge M11 的直接影响
+## 15. 对 TaskForge M11 的直接影响
 
 M11 starter / teaching probes 应体现：
 
@@ -625,7 +633,7 @@ M11 starter / teaching probes 应体现：
 
 ---
 
-# 16. Module-level claims 与来源边界
+## 16. Module-level claims 与来源边界
 
 本模块会使用下列课程综合术语，它们不是某一个来源的逐字定义：
 

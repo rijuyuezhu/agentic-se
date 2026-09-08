@@ -1,4 +1,12 @@
+---
+id: source-M05
+type: source_audit
+visibility: student
+related: [M05]
+---
 # M05 Source Audit — Refactoring 与 Evolutionary Design
+
+> 审计/复核日期：**2026-09-06**。
 
 > 目标：确认哪些材料真的能支撑“怎样安全改变已有软件的内部结构”，而不是因为某本书或某个流派很有名就照搬。
 >
@@ -6,7 +14,7 @@
 
 ---
 
-# 0. 本模块要回答的问题
+## 0. 本模块要回答的问题
 
 M05 关注：
 
@@ -28,20 +36,20 @@ M05 关注：
 
 ---
 
-# 1. Martin Fowler — Refactoring, 2nd ed. / Refactoring Guide
+## 1. Martin Fowler — Refactoring, 2nd ed. / Refactoring Guide
 
 **状态：主干采用（refactoring 的定义、small-step mechanics、preparatory refactoring）**
 
 实际检查：
 
-- https://martinfowler.com/books/refactoring.html
-- https://martinfowler.com/bliki/DefinitionOfRefactoring.html
-- https://martinfowler.com/bliki/RefactoringBoundary.html
-- https://martinfowler.com/bliki/RefactoringMalapropism.html
-- https://martinfowler.com/articles/workflowsOfRefactoring/fallback.html
-- https://martinfowler.com/articles/preparatory-refactoring-example.html
+- [1. Martin Fowler — Refactoring, 2nd ed. / Refactoring Guide — source 1](https://martinfowler.com/books/refactoring.html)
+- [1. Martin Fowler — Refactoring, 2nd ed. / Refactoring Guide — source 2](https://martinfowler.com/bliki/DefinitionOfRefactoring.html)
+- [1. Martin Fowler — Refactoring, 2nd ed. / Refactoring Guide — source 3](https://martinfowler.com/bliki/RefactoringBoundary.html)
+- [1. Martin Fowler — Refactoring, 2nd ed. / Refactoring Guide — source 4](https://martinfowler.com/bliki/RefactoringMalapropism.html)
+- [1. Martin Fowler — Refactoring, 2nd ed. / Refactoring Guide — source 5](https://martinfowler.com/articles/workflowsOfRefactoring/fallback.html)
+- [1. Martin Fowler — Refactoring, 2nd ed. / Refactoring Guide — source 6](https://martinfowler.com/articles/preparatory-refactoring-example.html)
 
-## 实际内容支持什么
+### 实际内容支持什么
 
 Fowler 对 refactoring 的定义很窄：
 
@@ -69,7 +77,7 @@ Fowler 的材料还明确解释了 small steps 的工程意义：
 - 系统在重构过程中保持 working；
 - 可以在较长时间里渐进完成，而不需要建立一个长期 broken branch。
 
-## Two Hats
+### Two Hats
 
 `Workflows of Refactoring` 明确区分：
 
@@ -94,7 +102,7 @@ step 4: new behavior
 
 如果 step 2 顺手改了 semantics，那么 reviewer 的证明负担会突然变大。
 
-## Preparatory Refactoring
+### Preparatory Refactoring
 
 Fowler 的 preparatory refactoring 例子支持一个很强但有边界的 workflow：
 
@@ -114,7 +122,7 @@ Fowler 的 preparatory refactoring 例子支持一个很强但有边界的 workf
 
 如果答案只是“以后也许有用”，优先级要显著降低。
 
-## 局限
+### 局限
 
 Fowler 的 catalog 很有用，但 M05 不会要求背七十多个 refactoring 名称。
 
@@ -129,22 +137,22 @@ Fowler 的 catalog 很有用，但 M05 不会要求背七十多个 refactoring �
 
 ---
 
-# 2. Kent Beck — Tidy First? (2023)
+## 2. Kent Beck — Tidy First? (2023)
 
 **状态：选择性主干采用（structure/behavior separation、batch size、timing、reversibility）**
 
 实际检查了 O'Reilly 可公开访问的目录和正文预览：
 
-- https://www.oreilly.com/library/view/tidy-first/9781098151232/
-- https://www.oreilly.com/library/view/tidy-first/9781098151232/part01.html
-- https://www.oreilly.com/library/view/tidy-first/9781098151232/ch16.html
-- https://www.oreilly.com/library/view/tidy-first/9781098151232/ch18.html
-- https://www.oreilly.com/library/view/tidy-first/9781098151232/ch19.html
-- https://www.oreilly.com/library/view/tidy-first/9781098151232/ch20.html
-- https://www.oreilly.com/library/view/tidy-first/9781098151232/ch21.html
-- https://www.oreilly.com/library/view/tidy-first/9781098151232/ch23.html
+- [2. Kent Beck — Tidy First? (2023) — source 1](https://www.oreilly.com/library/view/tidy-first/9781098151232/)
+- [2. Kent Beck — Tidy First? (2023) — source 2](https://www.oreilly.com/library/view/tidy-first/9781098151232/part01.html)
+- [2. Kent Beck — Tidy First? (2023) — source 3](https://www.oreilly.com/library/view/tidy-first/9781098151232/ch16.html)
+- [2. Kent Beck — Tidy First? (2023) — source 4](https://www.oreilly.com/library/view/tidy-first/9781098151232/ch18.html)
+- [2. Kent Beck — Tidy First? (2023) — source 5](https://www.oreilly.com/library/view/tidy-first/9781098151232/ch19.html)
+- [2. Kent Beck — Tidy First? (2023) — source 6](https://www.oreilly.com/library/view/tidy-first/9781098151232/ch20.html)
+- [2. Kent Beck — Tidy First? (2023) — source 7](https://www.oreilly.com/library/view/tidy-first/9781098151232/ch21.html)
+- [2. Kent Beck — Tidy First? (2023) — source 8](https://www.oreilly.com/library/view/tidy-first/9781098151232/ch23.html)
 
-## 为什么它值得加入
+### 为什么它值得加入
 
 它比很多“clean code”材料更明确地区分：
 
@@ -172,7 +180,7 @@ First / After / Later / Never
 
 也就是说 Beck 并不主张“永远 tidy first”。它要求把 timing 当 trade-off。
 
-## Getting Untangled
+### Getting Untangled
 
 Chapter 20 对 Agent 时代尤其有价值：
 
@@ -188,7 +196,7 @@ Chapter 20 对 Agent 时代尤其有价值：
 
 > Agent 第一次探索性实现可以只是为了获得理解；如果 diff 已经不可 review，**不要因为代码已经生成就产生 sunk-cost attachment**，可以让 Agent 从 clean base 重新按 staged plan 实现。
 
-## 局限
+### 局限
 
 `Tidy First?` 是一本有明确个人哲学色彩的小书，不是实证定律汇编。
 
@@ -202,17 +210,17 @@ Chapter 20 对 Agent 时代尤其有价值：
 
 ---
 
-# 3. Google Engineering Practices — Small CLs
+## 3. Google Engineering Practices — Small CLs
 
 **状态：主干采用（reviewability / rollback / independently working changes）**
 
 实际检查：
 
-- https://google.github.io/eng-practices/review/developer/small-cls.html
-- https://google.github.io/eng-practices/review/developer/cl-descriptions.html
-- https://google.github.io/eng-practices/review/reviewer/looking-for.html
+- [3. Google Engineering Practices — Small CLs — source 1](https://google.github.io/eng-practices/review/developer/small-cls.html)
+- [3. Google Engineering Practices — Small CLs — source 2](https://google.github.io/eng-practices/review/developer/cl-descriptions.html)
+- [3. Google Engineering Practices — Small CLs — source 3](https://google.github.io/eng-practices/review/reviewer/looking-for.html)
 
-## 实际内容支持什么
+### 实际内容支持什么
 
 Small CLs 页面给出的理由不是“GitHub 看起来整洁”，而是具体工程成本：
 
@@ -240,7 +248,7 @@ Small CLs 页面给出的理由不是“GitHub 看起来整洁”，而是具体
 semantic size != diff line count
 ```
 
-## 对 refactoring 的直接建议
+### 对 refactoring 的直接建议
 
 页面明确提出：
 
@@ -253,16 +261,16 @@ semantic size != diff line count
 
 ---
 
-# 4. Software Engineering at Google — Large-Scale Changes
+## 4. Software Engineering at Google — Large-Scale Changes
 
 **状态：主干采用（当“small local refactoring”扩展到全仓/跨团队时）**
 
 实际检查：
 
-- https://abseil.io/resources/swe-book/html/ch22.html
-- https://abseil.io/resources/swe-book/html/ch09.html
+- [4. Software Engineering at Google — Large-Scale Changes — source 1](https://abseil.io/resources/swe-book/html/ch22.html)
+- [4. Software Engineering at Google — Large-Scale Changes — source 2](https://abseil.io/resources/swe-book/html/ch09.html)
 
-## 为什么 M05 要提前讲一点 LSC
+### 为什么 M05 要提前讲一点 LSC
 
 Agent 时代一个典型诱惑是：
 
@@ -293,7 +301,7 @@ Agent 可以生成 master transformation
 
 不是因为 Agent 打字慢，而是因为验证、review、integration 和 rollback 才是瓶颈。
 
-## 重要边界
+### 重要边界
 
 Google 自己也明确说明：LSC 不只包含 behavior-preserving refactoring，也可能包含功能影响。
 
@@ -307,14 +315,14 @@ LSC != refactoring
 
 ---
 
-# 5. Stanford CS190 / APOSD — Design it Twice 与 revision
+## 5. Stanford CS190 / APOSD — Design it Twice 与 revision
 
 **状态：辅助采用（设计探索与 revision mindset）**
 
 实际检查：
 
-- https://web.stanford.edu/~ouster/cs190-winter24/
-- https://web.stanford.edu/~ouster/cs190-winter24/lectures/aposd/
+- [5. Stanford CS190 / APOSD — Design it Twice 与 revision — source 1](https://web.stanford.edu/~ouster/cs190-winter24/)
+- [5. Stanford CS190 / APOSD — Design it Twice 与 revision — source 2](https://web.stanford.edu/~ouster/cs190-winter24/lectures/aposd/)
 
 课程描述明确使用：
 
@@ -334,9 +342,9 @@ M05 吸收的不是“每次实现都真的写两套生产代码”，而是：
 
 ---
 
-# 6. 本轮不进入主干的材料
+## 6. 本轮不进入主干的材料
 
-## Working Effectively with Legacy Code
+### Working Effectively with Legacy Code
 
 不是因为不好，而是主要价值在：
 
@@ -347,13 +355,13 @@ M05 吸收的不是“每次实现都真的写两套生产代码”，而是：
 
 这些更适合 M06，避免 M05/M06 重复。
 
-## Clean Code
+### Clean Code
 
 M05 不用它定义 refactoring。
 
 原因不是“完全没价值”，而是其小函数/cleanliness framing 容易把 structural change 的目标误写成 aesthetic cleanliness；本模块更需要行为保持、change sequence 和 reviewability 的精确定义。
 
-## 大型架构重写案例
+### 大型架构重写案例
 
 暂时不进入 M05。
 
@@ -361,7 +369,7 @@ M05 不用它定义 refactoring。
 
 ---
 
-# 7. M05 最终采用的 synthesis
+## 7. M05 最终采用的 synthesis
 
 ```text
 Fowler

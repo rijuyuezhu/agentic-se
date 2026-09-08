@@ -1,3 +1,9 @@
+---
+id: M04
+type: module
+visibility: student
+order: 4
+---
 # M04 — API、Error 与 Boundary Design：让边界吸收复杂度
 
 M03 里我们把测试看成关于 contract 的可执行证据。到了这一章，问题向外移动了一层：一个系统即使内部状态和测试都还算清楚，只要 boundary 把内部细节、失败机制和不确定性原样交给 caller，复杂度仍然会迅速扩散。
@@ -631,13 +637,13 @@ M01 问的是 contract 是什么；M02 问谁拥有 state 和 invariant；M03 �
 
 本章完全自包含。下面材料用于交叉检查和进一步阅读；详细的 claim/source mapping 与 limitation 见 [`../reading-notes/m04-source-audit.md`](../reading-notes/m04-source-audit.md)。
 
-- Stanford CS190 Error Handling: https://web.stanford.edu/~ouster/cgi-bin/cs190-spring15/lecture.php?topic=errorHandling
-- Stanford APOSD discussion: https://web.stanford.edu/~ouster/cs190-winter23/lectures/aposd/
-- Google AIP-193 Errors: https://google.aip.dev/193
-- Google AIP-194 Automatic retry configuration: https://google.aip.dev/194
-- Google AIP-155 Request identification: https://google.aip.dev/155
-- AWS Builders' Library — Making retries safe with idempotent APIs: https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/
-- RFC 9110 §9.2.2 Idempotent Methods: https://www.rfc-editor.org/rfc/rfc9110.html#name-idempotent-methods
-- Alexis King — Parse, don't validate: https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/
-- gRPC Error Handling: https://grpc.io/docs/guides/error/
-- gRPC Status Codes: https://grpc.io/docs/guides/status-codes/
+- [Stanford CS190 Error Handling](https://web.stanford.edu/~ouster/cgi-bin/cs190-spring15/lecture.php?topic=errorHandling)
+- [Stanford APOSD discussion](https://web.stanford.edu/~ouster/cs190-winter23/lectures/aposd/)
+- [Google AIP-193 Errors](https://google.aip.dev/193)
+- [Google AIP-194 Automatic retry configuration](https://google.aip.dev/194)
+- [Google AIP-155 Request identification](https://google.aip.dev/155)
+- [AWS Builders' Library — Making retries safe with idempotent APIs](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/)
+- [RFC 9110 §9.2.2 Idempotent Methods](https://www.rfc-editor.org/rfc/rfc9110.html#name-idempotent-methods)
+- [Alexis King — Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
+- [gRPC Error Handling](https://grpc.io/docs/guides/error/)
+- [gRPC Status Codes](https://grpc.io/docs/guides/status-codes/)

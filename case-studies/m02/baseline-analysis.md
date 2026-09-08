@@ -1,3 +1,9 @@
+---
+id: case-M02
+type: case_study
+visibility: instructor
+related: [M02]
+---
 # M02 Reference Analysis — TaskForge v0
 
 > **Spoiler warning**：先完成 `labs/02-state-ownership.md` 的 Part 1，再看本文件。

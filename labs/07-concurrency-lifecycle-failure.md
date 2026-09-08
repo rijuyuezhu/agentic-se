@@ -1,3 +1,9 @@
+---
+id: lab-M07
+type: lab
+visibility: student
+related: [M07]
+---
 # Lab 07 — Deterministic Race、Commit Point 与 Crash Window
 
 > 本实验有两个目标：
@@ -7,7 +13,7 @@
 
 ---
 
-# 0. Starter
+## 0. Starter
 
 本实验新增：
 
@@ -39,11 +45,11 @@ probe 显式控制 interleaving/failure point。
 
 ---
 
-# 1. 第一阶段：Read-Only System Model
+## 1. 第一阶段：Read-Only System Model
 
 在改代码前回答。
 
-## 1.1 Writer map
+### 1.1 Writer map
 
 找出所有会修改：
 
@@ -65,7 +71,7 @@ state.py
 
 不要假设 M07 starter 是唯一 writer。
 
-## 1.2 写出 invariant
+### 1.2 写出 invariant
 
 至少包含：
 
@@ -87,7 +93,7 @@ RUNNING job has one owner
 
 ---
 
-# 2. 写出具体 Interleaving Table
+## 2. 写出具体 Interleaving Table
 
 不要只说“有 race”。
 
@@ -115,11 +121,11 @@ RUNNING job has one owner
 
 ---
 
-# 3. Design It Twice
+## 3. Design It Twice
 
 至少比较两个实现方向。
 
-## Design A — lock-protected check + transition
+### Design A — lock-protected check + transition
 
 大致：
 
@@ -142,7 +148,7 @@ unlock
 - 如果 re-check 失败，是返回 none 还是继续扫描后续 queued job？
 - lock 内是否包含 command execution？
 
-## Design B — single authority operation
+### Design B — single authority operation
 
 概念上把：
 
@@ -173,7 +179,7 @@ message-passing authority
 
 ---
 
-# 4. 实现 Part A：只修 Double Claim
+## 4. 实现 Part A：只修 Double Claim
 
 要求：
 
@@ -185,7 +191,7 @@ message-passing authority
 
 但不要顺手重构整个 TaskForge。
 
-## 4.1 Scope constraint
+### 4.1 Scope constraint
 
 推荐只改：
 
@@ -196,9 +202,9 @@ concurrent_claim.py
 
 除非你的 writer analysis 能证明必须修改其它生产文件。
 
-## 4.2 不允许的伪修复
+### 4.2 不允许的伪修复
 
-### sleep
+#### sleep
 
 ```python
 time.sleep(...)
@@ -206,15 +212,15 @@ time.sleep(...)
 
 不建立 correctness。
 
-### 全局串行整个 worker execution
+#### 全局串行整个 worker execution
 
 不要把 command execution 放进 claim lock。
 
-### 删除 after_observe seam
+#### 删除 after_observe seam
 
 这样只是让 race 更难测，不是修 race。
 
-### stress-only evidence
+#### stress-only evidence
 
 ```text
 10000 iterations passed
@@ -224,9 +230,9 @@ time.sleep(...)
 
 ---
 
-# 5. 必须写的 Safety Tests
+## 5. 必须写的 Safety Tests
 
-## 5.1 One job / two workers
+### 5.1 One job / two workers
 
 用 `threading.Barrier` 保证两个 worker 都观察到同一个 queued job。
 
@@ -243,7 +249,7 @@ owner == successful worker
 job.status == RUNNING
 ```
 
-## 5.2 Two jobs / two workers
+### 5.2 Two jobs / two workers
 
 这是 liveness/progress sanity check。
 
@@ -278,7 +284,7 @@ contention once
 
 ---
 
-# 6. 写 Linearization-Point Note
+## 6. 写 Linearization-Point Note
 
 实现完成后，不要只写“用了 mutex”。这里要求指出的是**你这个 concrete implementation 的 candidate linearization point / region**；这不表示 abstract history 的合法 linearization 必须唯一。
 
@@ -305,7 +311,7 @@ must observe/re-check non-QUEUED and cannot return success for the same job.
 
 ---
 
-# 7. Part B：Crash Window 不是 Lock 能解决的
+## 7. Part B：Crash Window 不是 Lock 能解决的
 
 阅读：
 
@@ -337,7 +343,7 @@ effect again
 
 ---
 
-# 8. Failure Table A — Effect First
+## 8. Failure Table A — Effect First
 
 | Point | local completed | external effect count | next retry outcome in this starter process |
 |---|---:|---:|---|
@@ -351,7 +357,7 @@ effect again
 
 ---
 
-# 9. Failure Table B — Record First（durable-record thought experiment）
+## 9. Failure Table B — Record First（durable-record thought experiment）
 
 不要直接把 starter 的 in-memory `completed_jobs` 移到前面，然后宣称它能跨真实 crash 保留：process 真正退出时，这只 set 也会消失。为了单独分析 ordering，这一节增加一个 explicit assumption：**completion record 能跨我们研究的 interruption / recovery horizon 留存。** 在这个 assumption 下，假设顺序改成：
 
@@ -388,13 +394,13 @@ loss risk
 
 ---
 
-# 10. 选择一个明确 Guarantee
+## 10. 选择一个明确 Guarantee
 
 你必须写 design decision。
 
 可以选择：
 
-## Option A — At-least-once attempt/retry policy + idempotent sink
+### Option A — At-least-once attempt/retry policy + idempotent sink
 
 这个 option 有两个独立前提，不要把它们缩成一个 guarantee：
 
@@ -411,13 +417,13 @@ logical_effect_id = job_id / request_id
 
 在当前同进程 failpoint 实验里，TaskForge 可以直接 retry；若你把 **attempt/retry policy** 扩展到真实 process restart，则还必须设计 durable work identity / recovery trigger，不能由这只 in-memory `set` 推出来。
 
-## Option B — At-most-once attempt with durable attempt record
+### Option B — At-most-once attempt with durable attempt record
 
 先用一个能跨目标 failure horizon 留存、且竞争 caller 不能重复创建的 attempt record 获得执行权，然后执行；后续 crash window 接受 loss。
 
 这只能直接给出 **at-most-one admitted attempt** 这一层的约束。若目标是某个“绝不能重复”的 external effect，还必须额外证明一个 admitted attempt 在该 effect boundary 上最多产生一次 logical effect，并处理 partial failure / reconciliation；不能从 at-most-once attempt 自动推出 arbitrary effect at-most-once。**当前 starter 的进程内 `set` 也不满足这里的 durability requirement。**
 
-## Option C — Transactional coordination
+### Option C — Transactional coordination
 
 如果 effect 和 completion record 可以进入同一事务，再设计更强 guarantee。
 
@@ -431,7 +437,7 @@ Option D — exactly-once because Python function has a set
 
 ---
 
-# 11. 推荐 Reference Direction：Idempotent Sink
+## 11. 推荐 Reference Direction：Idempotent Sink
 
 这一章不要求你把 production `deliver_once()` 改成复杂框架。
 
@@ -478,7 +484,7 @@ logical effect count = 1
 
 ---
 
-# 12. Timeout Thought Experiment
+## 12. Timeout Thought Experiment
 
 假设未来 `deliver_once()` 是 RPC。
 
@@ -503,7 +509,7 @@ what caller does not know
 
 ---
 
-# 13. Retry Amplification Exercise
+## 13. Retry Amplification Exercise
 
 假设：
 
@@ -532,7 +538,7 @@ effect client: max 3 attempts
 
 ---
 
-# 14. Cancellation Protocol Exercise
+## 14. Cancellation Protocol Exercise
 
 当前 TaskForge：
 
@@ -568,9 +574,9 @@ CANCELLED
 
 ---
 
-# 15. Agent A/B Exercise
+## 15. Agent A/B Exercise
 
-## Prompt A
+### Prompt A
 
 ```text
 修复 concurrent_claim.py 的 race，确保线程安全，加测试。
@@ -585,7 +591,7 @@ review：
 - 是否有 deterministic interleaving test？
 - 是否讨论 liveness？
 
-## Prompt B
+### Prompt B
 
 给 Agent：
 
@@ -625,11 +631,11 @@ expected proof shape
 
 ---
 
-# 16. Independent Review Checklist
+## 16. Independent Review Checklist
 
 完成后独立 review。
 
-## Safety
+### Safety
 
 ```text
 [ ] 一个 job 最多一个 successful claim
@@ -637,7 +643,7 @@ expected proof shape
 [ ] static final state + history 都检查
 ```
 
-## Synchronization
+### Synchronization
 
 ```text
 [ ] lock/authority scope 对齐 invariant
@@ -645,7 +651,7 @@ expected proof shape
 [ ] 所有相关 writers 已检查
 ```
 
-## Liveness
+### Liveness
 
 ```text
 [ ] loser 仍可尝试后续 queued job
@@ -653,7 +659,7 @@ expected proof shape
 [ ] exception/failure 不会永久持锁
 ```
 
-## Failure
+### Failure
 
 ```text
 [ ] effect-before-record 的 starter evidence 明确标成同进程 failpoint / retry
@@ -662,7 +668,7 @@ expected proof shape
 [ ] 没有虚假宣称 exactly-once
 ```
 
-## Evidence
+### Evidence
 
 ```text
 [ ] deterministic barrier
@@ -673,7 +679,7 @@ expected proof shape
 
 ---
 
-# 17. 实验交付物
+## 17. 实验交付物
 
 提交：
 
@@ -690,7 +696,7 @@ expected proof shape
 
 ---
 
-# 18. 评分重点
+## 18. 评分重点
 
 不是：
 

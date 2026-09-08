@@ -1,3 +1,9 @@
+---
+id: case-M12
+type: case_study
+visibility: instructor
+related: [M12]
+---
 # M12 Instructor Analysis — 当正确实现仍不足以证明正确委派
 
 这份 instructor analysis 不是标准答案模板。M12 真正要评的是：学生能否区分事实、specification 与未决 judgement；能否让 Agent 在明确 authority 内高效工作；能否把正确 stop 当成成功；能否用不完全同源的 evidence/review 去挑战 candidate；以及 human/policy owner 是否在最后仍拥有真正的 product decision。

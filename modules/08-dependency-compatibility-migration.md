@@ -1,3 +1,9 @@
+---
+id: M08
+type: module
+visibility: student
+order: 8
+---
 # M08 — Dependency、Compatibility 与 Migration：正确的新版本也可能让系统坏掉
 
 M07 把时间带进了单次运行：两个操作会交错，失败可以落在两个 side effect 之间，timeout 之后 caller 可能不知道工作到底发生了没有。M08 再把时间轴拉长一层：**同一个系统的不同版本会在一段时间里同时存在，而且它们会读写同一批长期存在的数据。**
@@ -427,10 +433,10 @@ Protocol Buffers 文档用于说明 encoding-specific compatibility rule；TaskF
 
 ### 可选主材料
 
-- Google AIP-180 — Backwards compatibility: <https://google.aip.dev/180>
-- Semantic Versioning 2.0.0: <https://semver.org/spec/v2.0.0.html>
-- Software Engineering at Google — Dependency Management: <https://abseil.io/resources/swe-book/html/ch21.html>
-- Software Engineering at Google — Deprecation: <https://abseil.io/resources/swe-book/html/ch15.html>
-- Danilo Sato / Martin Fowler — Parallel Change: <https://martinfowler.com/bliki/ParallelChange.html>
-- Protocol Buffers — Updating a Message Type: <https://protobuf.dev/programming-guides/editions/#updating>
-- Kubernetes — API deprecation policy: <https://kubernetes.io/docs/reference/using-api/deprecation-policy/>
+- [Google AIP-180 — Backwards compatibility](https://google.aip.dev/180)
+- [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
+- [Software Engineering at Google — Dependency Management](https://abseil.io/resources/swe-book/html/ch21.html)
+- [Software Engineering at Google — Deprecation](https://abseil.io/resources/swe-book/html/ch15.html)
+- [Danilo Sato / Martin Fowler — Parallel Change](https://martinfowler.com/bliki/ParallelChange.html)
+- [Protocol Buffers — Updating a Message Type](https://protobuf.dev/programming-guides/editions/#updating)
+- [Kubernetes — API deprecation policy](https://kubernetes.io/docs/reference/using-api/deprecation-policy/)

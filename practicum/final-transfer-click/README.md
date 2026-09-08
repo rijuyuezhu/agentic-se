@@ -1,3 +1,9 @@
+---
+id: practicum-click
+type: practicum
+visibility: student
+related: [final-practicum]
+---
 # Final Transfer Practicum — Click
 
 这是一份最终迁移考核，不是新的教材模块。你面对的是 Pallets Click 的真实历史代码，而不是 TaskForge；题目不会给 writer map、authority map、must-preserve list、target architecture、建议修改文件或“应该找到哪类 bug”。

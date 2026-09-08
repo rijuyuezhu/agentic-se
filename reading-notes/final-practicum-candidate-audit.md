@@ -1,3 +1,9 @@
+---
+id: practicum-candidate-audit
+type: reference
+visibility: internal
+related: [final-practicum]
+---
 # Final Transfer Practicum — Candidate Audit
 
 > 本记录对应 issue #3。目标不是给 Final Practicum 找一个“著名项目”，而是实际比较几个真实 OSS 在陌生仓库建模、change judgment、Agent orchestration 与 evidence review 上的教学 fit。
