@@ -152,12 +152,13 @@ Final Practicum checkpoint 是 `visibility: student`：它不是 instructor secr
 
 Canonical authoring 使用一个刻意小、仍可在 GitHub/普通编辑器高质量阅读的 Markdown subset。Validator **不是 CommonMark parser**，所以对会改变 heading/link semantics、但当前 scanner 不理解的写法采用 fail-closed：
 
-- heading 只使用 top-level ATX `#` / `##` / `###`（允许 CommonMark 的 0–3 个前导空格）；禁止 Setext `Title\n=====`，也不在 blockquote/list container 内嵌 heading；
+- heading 只使用 **column-0 ATX** `#` / `##` / `###`；禁止任何前导空白缩进、blockquote/list container heading、Setext `Title\n=====`，也禁止 closing ATX hashes（例如 `## Title ##`）；
 - cross-reference 使用 inline `[text](target)`；禁止 reference-style `[text][id]` + `[id]: target`；
 - inline link/image target 不使用 raw nested parentheses；需要时 percent-encode，避免 parser ambiguity；
 - 禁止 angle-bracket autolink `<https://...>`，改用有语义的 inline link text；
 - canonical page 禁止 raw HTML；未来真需要组件能力时，应先定义统一 renderer contract，而不是用 HTML 绕开 content validation；
-- code example 使用 fenced code；inline code 里的 URL / Markdown-like literal 不进入 link contract。
+- inline code 只允许**同一行、成对且未 escape 的单 backtick**；backslash-escaped backtick、double-backtick、unmatched/mixed backtick runs 直接 fail closed，不猜测 code span 边界；
+- fenced code 只允许 0–3 个前导空格 + **exactly three** matching backticks/tildes；4+ marker runs、4+ 空格的 fence-like 行、marker 出现在 info string 中、未闭合 fence 都拒绝；支持的 fenced/inline code 里的 URL / Markdown-like literal 不进入 link contract；
 
 这不是要自研 Markdown renderer，而是明确 validator 能证明的 authoring grammar。若未来确实需要 reference-style link、raw HTML 或更完整 CommonMark grammar，应当同时升级 parser/validator 与本契约，不能只让某个 renderer 私下接受。
 

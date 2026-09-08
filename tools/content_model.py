@@ -31,17 +31,23 @@ VISIBILITY_TARGETS = {
     "internal": {"student", "instructor", "internal"},
 }
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+?)\s*$")
+HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*$")
+INDENTED_HEADING_RE = re.compile(r"^[ \t]+#{1,6}[ \t]+")
 CONTAINER_HEADING_RE = re.compile(
-    r"^\s*(?:(?:>\s*)|(?:(?:[-+*]|\d+[.)])\s+))+#{1,6}\s+"
+    r"^\s*(?:(?:>\s*)|(?:(?:[-+*]|\d+[.)])\s+))+#{1,6}[ \t]+"
 )
+CLOSING_ATX_HASH_RE = re.compile(r"[ \t]+#+[ \t]*$")
+FENCE_CANDIDATE_RE = re.compile(r"^( *)(`+|~+)(.*)$")
 LINK_RE = re.compile(r"(?<!!)\[[^\[\]\n]+\]\(([^()\n]+)\)")
 IMAGE_RE = re.compile(r"!\[[^\[\]\n]*\]\(([^()\n]+)\)")
 EXTERNAL_URL_RE = re.compile(r"https?://[^\s)>]+")
 REFERENCE_LINK_DEF_RE = re.compile(r"\[[^\]\n]+\]:")
 SETEXT_UNDERLINE_RE = re.compile(r"^\s*(?:>\s*)*(?:=+|-+)\s*$")
-AUTOLINK_RE = re.compile(r"<(?:https?://|mailto:)[^>]+>", re.IGNORECASE)
-RAW_HTML_RE = re.compile(r"<(?:!--|![A-Z]|/?[A-Za-z])")
+AUTOLINK_RE = re.compile(
+    r"<(?:(?:https?://|mailto:)[^>]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>",
+    re.IGNORECASE,
+)
+RAW_HTML_RE = re.compile(r"<(?:!--|\?|!\[CDATA\[|![A-Za-z]|/?[A-Za-z])")
 SOURCE_AUDIT_DATE_RE = re.compile(
     r"(?:审计日期|审计/复核日期|Freshness note)[^\n]*20\d{2}-\d{2}-\d{2}",
     re.IGNORECASE,
@@ -125,6 +131,24 @@ def parse_frontmatter(path: Path) -> tuple[dict[str, object] | None, list[str]]:
     return data, lines[end + 1 :]
 
 
+def _mask_inline_code(line: str) -> tuple[str, str | None]:
+    """Mask the canonical inline-code subset while preserving character offsets."""
+    if r"\`" in line:
+        return line, "backslash-escaped backticks are not allowed in canonical Markdown"
+    runs = list(re.finditer(r"`+", line))
+    if not runs:
+        return line, None
+    if any(len(match.group(0)) != 1 for match in runs):
+        return line, "inline code supports only paired single backticks on one line"
+    if len(runs) % 2:
+        return line, "unmatched inline-code backtick; use paired single backticks on one line"
+
+    masked = list(line)
+    for opener, closer in zip(runs[0::2], runs[1::2], strict=True):
+        masked[opener.start() : closer.end()] = " " * (closer.end() - opener.start())
+    return "".join(masked), None
+
+
 def markdown_structure(
     lines: list[str],
 ) -> tuple[
@@ -141,26 +165,59 @@ def markdown_structure(
     previous_line = ""
 
     for lineno, line in enumerate(lines, start=1):
-        stripped = line.lstrip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
-            marker = stripped[:3]
-            if fence is None:
-                fence = marker
-            elif fence == marker:
-                fence = None
-            previous_line = ""
-            continue
+        fence_candidate = FENCE_CANDIDATE_RE.match(line)
         if fence is not None:
+            if fence_candidate is not None:
+                indent, run, rest = fence_candidate.groups()
+                if len(indent) <= 3 and run[0] == fence and len(run) >= 3 and not rest.strip():
+                    if len(run) != 3:
+                        syntax_errors.append(
+                            (lineno, "fenced code blocks support exactly three matching backticks/tildes")
+                        )
+                    # A longer run closes the CommonMark fence. End our state too
+                    # after reporting the unsupported syntax so following prose is
+                    # never silently hidden from link/visibility validation.
+                    fence = None
+                    previous_line = ""
+                    continue
+            continue
+
+        if fence_candidate is not None and len(fence_candidate.group(2)) >= 3:
+            indent, run, info = fence_candidate.groups()
+            if len(indent) > 3:
+                syntax_errors.append(
+                    (lineno, "fence-like syntax indented four or more spaces is not allowed")
+                )
+                previous_line = line
+                continue
+            if len(run) != 3:
+                syntax_errors.append(
+                    (lineno, "fenced code blocks support exactly three backticks or tildes")
+                )
+                previous_line = line
+                continue
+            if run[0] in info:
+                syntax_errors.append(
+                    (lineno, "fence info string may not contain the fence marker character")
+                )
+                previous_line = line
+                continue
+            fence = run[0]
+            previous_line = ""
             continue
 
         # Canonical pages intentionally use a small, fail-closed Markdown
         # authoring subset. The validator is not a CommonMark parser, so
         # constructs that can change heading/link semantics without being
         # understood here are rejected rather than silently ignored.
-        # Mask simple inline-code spans without changing character positions.
-        # This keeps Markdown punctuation outside code aligned for link-target
-        # extraction while ensuring literal Markdown shown as code is ignored.
-        prose = re.sub(r"`[^`]*`", lambda match: " " * len(match.group(0)), line)
+        prose, inline_code_error = _mask_inline_code(line)
+        if inline_code_error is not None:
+            syntax_errors.append((lineno, inline_code_error))
+            # Do not guess which bytes are code when delimiters are unsupported.
+            # Scan the original line as prose as well; the syntax error already
+            # makes the page fail closed.
+            prose = line
+
         if REFERENCE_LINK_DEF_RE.search(prose):
             syntax_errors.append(
                 (lineno, "reference-style links are not allowed; use inline [text](target) links")
@@ -168,6 +225,10 @@ def markdown_structure(
         if previous_line.strip() and SETEXT_UNDERLINE_RE.match(line):
             syntax_errors.append(
                 (lineno, "Setext headings are not allowed; use ATX # headings")
+            )
+        if INDENTED_HEADING_RE.match(prose):
+            syntax_errors.append(
+                (lineno, "indented ATX headings are not allowed; headings must start at column 0")
             )
         if CONTAINER_HEADING_RE.match(prose):
             syntax_errors.append(
@@ -187,7 +248,12 @@ def markdown_structure(
 
         match = HEADING_RE.match(line)
         if match:
-            headings.append((lineno, len(match.group(1)), match.group(2)))
+            title = match.group(2)
+            if CLOSING_ATX_HASH_RE.search(title):
+                syntax_errors.append(
+                    (lineno, "closing ATX heading hashes are not allowed in canonical Markdown")
+                )
+            headings.append((lineno, len(match.group(1)), title))
 
         simple_destinations = list(LINK_RE.finditer(prose)) + list(IMAGE_RE.finditer(prose))
         if prose.count("](") != len(simple_destinations):
@@ -218,6 +284,11 @@ def markdown_structure(
             bare_urls.append((lineno, url_match.group(0)))
 
         previous_line = line
+
+    if fence is not None:
+        syntax_errors.append(
+            (len(lines) if lines else 1, "unclosed fenced code block in canonical Markdown")
+        )
 
     return headings, links, bare_urls, syntax_errors
 

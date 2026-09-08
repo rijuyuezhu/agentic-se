@@ -104,7 +104,7 @@ M04 pilot 的经验是：reviewer 对 narrative rewind 的 diagnosis 成立，�
 - 页面标题的 authority 仍是正文唯一 H1，不要在 frontmatter 再复制一份 `title`；
 - relation 使用 stable content ID，由 validator / renderer 建反向索引，不要维护第二份 module→lab/case/source map；
 - `visibility: instructor` / `internal` 是 build exclusion contract。Student page 不得 link / relate 到 instructor/internal；instructor page 也不得依赖 internal；不要靠“提醒读者别点”替代隔离；
-- canonical Markdown 使用 `CONTENT_MODEL.md` 定义的 fail-closed subset：ATX heading + simple inline links；不要用 Setext heading、reference-style links、angle autolink 或 raw HTML 绕开 validator；
+- canonical Markdown 使用 `CONTENT_MODEL.md` 定义的 fail-closed subset：column-0 ATX heading、simple inline links、paired single-backtick inline code、exactly-triple fenced code；其它 heading/backtick/fence grammar、reference-style links、angle autolink 或 raw HTML 都不要使用；
 - pure canonical zone 中缺 frontmatter 是错误；`practicum/` 是 mixed zone，只有 root entry 强制 canonical，nested page 用 frontmatter opt in。目录只做 inclusion check，不推导页面 semantics；
 - repo-only editorial/source-work records 不需要为了形式统一强行加入 canonical graph；
 - 不要因为某个网站框架偏好 MDX、slug 或 presentation field 就扩 schema。先证明新的 content semantic 真有消费者。

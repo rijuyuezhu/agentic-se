@@ -109,17 +109,153 @@ class ContentModelValidationTests(unittest.TestCase):
             handle.write("\nSecond title\n============\n")
         self.assertTrue(any("Setext headings are not allowed" in error for error in self.errors()))
 
-    def test_indented_atx_heading_counts_toward_h1_limit(self) -> None:
+    def test_indented_atx_heading_is_rejected_as_unsupported_markdown(self) -> None:
         path = self.root / "modules/07-module.md"
         with path.open("a", encoding="utf-8") as handle:
             handle.write("\n  # Accidental second H1\n")
-        self.assertTrue(any("exactly one semantic H1" in error for error in self.errors()))
+        self.assertTrue(any("indented ATX headings are not allowed" in error for error in self.errors()))
+
+    def test_tab_indented_atx_heading_is_rejected(self) -> None:
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n\t## Hidden heading\n")
+        self.assertTrue(any("indented ATX headings are not allowed" in error for error in self.errors()))
 
     def test_container_heading_is_rejected_as_unsupported_markdown(self) -> None:
         path = self.root / "modules/07-module.md"
         with path.open("a", encoding="utf-8") as handle:
             handle.write("\n> # Hidden H1\n")
         self.assertTrue(any("headings inside blockquote/list containers are not allowed" in error for error in self.errors()))
+
+    def test_list_continuation_heading_is_rejected(self) -> None:
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n- item  \n  ## Hidden heading\n")
+        self.assertTrue(any("indented ATX headings are not allowed" in error for error in self.errors()))
+
+    def test_closing_atx_hash_is_rejected(self) -> None:
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n## Heading with closer #\n")
+        self.assertTrue(any("closing ATX heading hashes are not allowed" in error for error in self.errors()))
+
+    def test_mismatched_inline_backticks_cannot_hide_visibility_link(self) -> None:
+        self.write_page(
+            "case-studies/m07/instructor.md",
+            page_id="case-M07",
+            page_type="case_study",
+            visibility="instructor",
+            title="Instructor Case",
+            related=("M07",),
+        )
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n`[spoiler](../case-studies/m07/./instructor.md)``\n")
+        errors = self.errors()
+        self.assertTrue(any("inline code supports only paired single backticks" in error for error in errors))
+        self.assertTrue(any("outside its build visibility" in error for error in errors))
+
+    def test_escaped_backticks_cannot_hide_visibility_link(self) -> None:
+        self.write_page(
+            "case-studies/m07/instructor.md",
+            page_id="case-M07",
+            page_type="case_study",
+            visibility="instructor",
+            title="Instructor Case",
+            related=("M07",),
+        )
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(r"\`[spoiler](../case-studies/m07/./instructor.md)\`" + "\n")
+        errors = self.errors()
+        self.assertTrue(any("backslash-escaped backticks are not allowed" in error for error in errors))
+        self.assertTrue(any("outside its build visibility" in error for error in errors))
+
+    def test_four_space_fake_fence_cannot_hide_visibility_link(self) -> None:
+        self.write_page(
+            "case-studies/m07/instructor.md",
+            page_id="case-M07",
+            page_type="case_study",
+            visibility="instructor",
+            title="Instructor Case",
+            related=("M07",),
+        )
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\n    ```\n"
+                "[spoiler](../case-studies/m07/./instructor.md)\n"
+                "```\n"
+            )
+        errors = self.errors()
+        self.assertTrue(any("indented four or more spaces" in error for error in errors))
+        self.assertTrue(any("outside its build visibility" in error for error in errors))
+
+    def test_invalid_backtick_fence_info_cannot_hide_visibility_link(self) -> None:
+        self.write_page(
+            "case-studies/m07/instructor.md",
+            page_id="case-M07",
+            page_type="case_study",
+            visibility="instructor",
+            title="Instructor Case",
+            related=("M07",),
+        )
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\n```foo`bar\n"
+                "[spoiler](../case-studies/m07/./instructor.md)\n"
+                "```\n"
+            )
+        errors = self.errors()
+        self.assertTrue(any("fence info string may not contain" in error for error in errors))
+        self.assertTrue(any("outside its build visibility" in error for error in errors))
+
+    def test_double_backtick_inline_code_is_rejected(self) -> None:
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n``literal``\n")
+        self.assertTrue(any("inline code supports only paired single backticks" in error for error in self.errors()))
+
+    def test_four_backtick_fence_is_rejected(self) -> None:
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n````text\nliteral\n````\n")
+        self.assertTrue(any("exactly three backticks or tildes" in error for error in self.errors()))
+
+    def test_unclosed_supported_fence_is_rejected(self) -> None:
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n```text\nliteral\n")
+        self.assertTrue(any("unclosed fenced code block" in error for error in self.errors()))
+
+    def test_three_space_triple_fence_is_supported(self) -> None:
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\n   ```text\n"
+                "[literal](../labs/does-not-exist.md)\n"
+                "   ```\n"
+            )
+        self.assertEqual(self.errors(), [])
+
+    def test_processing_instruction_and_cdata_are_rejected_as_raw_html(self) -> None:
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n<?pi data?>\n<![CDATA[data]]>\n")
+        errors = self.errors()
+        self.assertGreaterEqual(sum("raw HTML is not allowed" in error for error in errors), 2)
+
+    def test_supported_inline_code_and_triple_fence_hide_literal_links(self) -> None:
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\n`[literal](../labs/does-not-exist.md)`\n"
+                "```text\n"
+                "[literal](../labs/does-not-exist.md)\n"
+                "```\n"
+            )
+        self.assertEqual(self.errors(), [])
 
     def test_source_audit_requires_review_date(self) -> None:
         self.write_page(
