@@ -152,8 +152,8 @@ Final Practicum checkpoint 是 `visibility: student`：它不是 instructor secr
 
 Canonical authoring 使用一个刻意小、仍可在 GitHub/普通编辑器高质量阅读的 Markdown subset。Validator **不是 CommonMark parser**，所以对会改变 heading/link semantics、但当前 scanner 不理解的写法采用 fail-closed：
 
-- heading 只使用 **column-0 ATX** `#` / `##` / `###`；禁止任何前导空白缩进、blockquote/list container heading、Setext `Title\n=====`，也禁止 closing ATX hashes（例如 `## Title ##`）；
-- cross-reference 使用 inline `[text](target)`；禁止 reference-style `[text][id]` + `[id]: target`；
+- heading 只使用 **column-0 ATX H1–H6**（`#` 到 `######`）；禁止任何前导空白缩进、blockquote/list container heading、Setext `Title\n=====`，也禁止 closing ATX hashes（例如 `## Title ##`）；
+- cross-reference 使用 simple inline `[text](target)` / `![alt](target)`；GFM task-list marker `[ ]` / `[x]` 也允许；除此之外 prose 中的 square-bracket syntax 一律 fail closed，因此 full/collapsed/shortcut reference、escaped-label definition 与普通 literal brackets 都必须改成 inline code 或允许的 inline link/image；
 - inline link/image target 不使用 raw nested parentheses；需要时 percent-encode，避免 parser ambiguity；
 - 禁止 angle-bracket autolink `<https://...>`，改用有语义的 inline link text；
 - canonical page 禁止 raw HTML；未来真需要组件能力时，应先定义统一 renderer contract，而不是用 HTML 绕开 content validation；

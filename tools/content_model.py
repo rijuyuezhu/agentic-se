@@ -41,7 +41,9 @@ FENCE_CANDIDATE_RE = re.compile(r"^( *)(`+|~+)(.*)$")
 LINK_RE = re.compile(r"(?<!!)\[[^\[\]\n]+\]\(([^()\n]+)\)")
 IMAGE_RE = re.compile(r"!\[[^\[\]\n]*\]\(([^()\n]+)\)")
 EXTERNAL_URL_RE = re.compile(r"https?://[^\s)>]+")
-REFERENCE_LINK_DEF_RE = re.compile(r"\[[^\]\n]+\]:")
+TASK_LIST_RE = re.compile(
+    r"^[ \t]*(?:(?:[-+*])|(?:\d+[.)]))[ \t]+\[[ xX]\](?=[ \t]+|$)"
+)
 SETEXT_UNDERLINE_RE = re.compile(r"^\s*(?:>\s*)*(?:=+|-+)\s*$")
 AUTOLINK_RE = re.compile(
     r"<(?:(?:https?://|mailto:)[^>]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>",
@@ -218,9 +220,23 @@ def markdown_structure(
             # makes the page fail closed.
             prose = line
 
-        if REFERENCE_LINK_DEF_RE.search(prose):
+        simple_destinations = list(LINK_RE.finditer(prose)) + list(IMAGE_RE.finditer(prose))
+        bracket_scan = list(prose)
+        for destination in simple_destinations:
+            start, end = destination.span()
+            bracket_scan[start:end] = " " * (end - start)
+        task_marker = TASK_LIST_RE.match(prose)
+        if task_marker is not None:
+            start, end = task_marker.span()
+            bracket_scan[start:end] = " " * (end - start)
+        remaining_brackets = "".join(bracket_scan)
+        if "[" in remaining_brackets or "]" in remaining_brackets:
             syntax_errors.append(
-                (lineno, "reference-style links are not allowed; use inline [text](target) links")
+                (
+                    lineno,
+                    "unsupported square-bracket Markdown syntax; reference-style links are not allowed; "
+                    "use simple inline links/images or task-list markers",
+                )
             )
         if previous_line.strip() and SETEXT_UNDERLINE_RE.match(line):
             syntax_errors.append(
@@ -255,7 +271,6 @@ def markdown_structure(
                 )
             headings.append((lineno, len(match.group(1)), title))
 
-        simple_destinations = list(LINK_RE.finditer(prose)) + list(IMAGE_RE.finditer(prose))
         if prose.count("](") != len(simple_destinations):
             syntax_errors.append(
                 (

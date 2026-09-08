@@ -303,6 +303,43 @@ class ContentModelValidationTests(unittest.TestCase):
             )
         self.assertTrue(any("reference-style links are not allowed" in error for error in self.errors()))
 
+    def test_escaped_reference_label_visibility_bypass_is_rejected(self) -> None:
+        self.write_page(
+            "case-studies/m07/instructor.md",
+            page_id="case-M07",
+            page_type="case_study",
+            visibility="instructor",
+            title="Instructor Case",
+            related=("M07",),
+        )
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\n[spoiler][foo\\]]\n\n"
+                "[foo\\]]: ../case-studies/m07/./instructor.md\n"
+            )
+        self.assertTrue(any("reference-style links are not allowed" in error for error in self.errors()))
+
+    def test_unsupported_square_bracket_forms_fail_closed(self) -> None:
+        path = self.root / "modules/05-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\n[full][label]\n"
+                "[collapsed][]\n"
+                "literal [brackets] must be code\n"
+            )
+        errors = self.errors()
+        self.assertGreaterEqual(
+            sum("unsupported square-bracket Markdown syntax" in error for error in errors),
+            3,
+        )
+
+    def test_task_list_markers_remain_supported(self) -> None:
+        path = self.root / "modules/05-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n- [ ] todo\n1. [x] done\n")
+        self.assertEqual(self.errors(), [])
+
     def test_raw_html_is_rejected_as_unsupported_markdown(self) -> None:
         path = self.root / "modules/05-module.md"
         with path.open("a", encoding="utf-8") as handle:
