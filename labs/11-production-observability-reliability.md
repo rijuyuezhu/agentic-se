@@ -1,3 +1,9 @@
+---
+id: lab-M11
+type: lab
+visibility: student
+related: [M11]
+---
 # Lab 11 — 从“全绿 dashboard”到可行动的 Reliability Evidence
 
 > 目标：让一个“core tests 全绿、所有 job 最终成功、queue 最后为空”的 TaskForge workload 暴露 production blind spot；再注入一个 deterministic retry-amplification failure，完成从 user contract → measurement → SLO → overload response → incident → postmortem 的闭环。

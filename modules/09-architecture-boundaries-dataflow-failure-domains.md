@@ -1,3 +1,9 @@
+---
+id: M09
+type: module
+visibility: student
+order: 9
+---
 # M09 — Architecture：哪些边界值得上升到系统级
 
 前八章一直在处理局部 engineering contract：状态归谁写、边界怎样翻译错误、并发 history 怎样才合法、旧数据和新 reader 怎样共存。M09 不突然切换成“背架构模式”。我们给 TaskForge 加一个需求，然后看哪些局部选择被迫变成系统级决定。

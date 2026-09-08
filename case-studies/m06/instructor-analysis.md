@@ -1,3 +1,9 @@
+---
+id: case-M06
+type: case_study
+visibility: instructor
+related: [M06]
+---
 # M06 Instructor Reference — Legacy Audit Takeover
 
 > **Spoiler warning**：完成 [`../../labs/06-legacy-code-takeover.md`](../../labs/06-legacy-code-takeover.md) 前不要读。

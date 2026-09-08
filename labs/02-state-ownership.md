@@ -1,3 +1,9 @@
+---
+id: lab-M02
+type: lab
+visibility: student
+related: [M02]
+---
 # Lab 02 — 收敛 TaskForge 的 State Ownership
 
 本实验对应 M02。
@@ -44,13 +50,13 @@ uv run --with pytest --no-project python -m pytest
 
 ---
 
-# Part 1 — Read-only Reconnaissance
+## Part 1 — Read-only Reconnaissance
 
 提交一份不超过两页的 `ownership-map.md`。
 
 必须回答：
 
-## 1. 当前有哪些 authoritative facts？
+### 1. 当前有哪些 authoritative facts？
 
 至少考虑：
 
@@ -74,7 +80,7 @@ Recovery rule:
 
 如果某项当前不存在，明确写 `none`，不要猜未来实现。
 
-## 2. Job lifecycle 是什么？
+### 2. Job lifecycle 是什么？
 
 从代码和 tests 反推状态机。
 
@@ -90,13 +96,13 @@ Recovery rule:
 - 哪些 transition 当前被拒绝；
 - 哪些非法 transition 只是“碰巧没有入口”，而不是由 owner 明确禁止。
 
-## 3. 谁在维护 lifecycle invariant？
+### 3. 谁在维护 lifecycle invariant？
 
 列出具体函数。
 
 如果答案不是一个地方，解释这意味着什么。
 
-## 4. 哪些 API 泄漏 representation？
+### 4. 哪些 API 泄漏 representation？
 
 特别检查：
 
@@ -112,7 +118,7 @@ worker.claim_next()
 - caller 能否绕过 lifecycle rule？
 - 如果底层从 dict 改 SQLite，现有 caller 哪些假设会失效？
 
-## 5. 哪些当前行为是 contract，哪些只是 implementation accident？
+### 5. 哪些当前行为是 contract，哪些只是 implementation accident？
 
 例如：
 
@@ -130,11 +136,11 @@ module global
 
 ---
 
-# Part 2 — Design It Twice
+## Part 2 — Design It Twice
 
 在改代码前，必须给出至少两个 design。
 
-## Design A
+### Design A
 
 可以考虑：
 
@@ -142,7 +148,7 @@ module global
 Job object owns its own lifecycle
 ```
 
-## Design B
+### Design B
 
 可以考虑：
 
@@ -179,13 +185,13 @@ JobRegistry owns job collection + transitions
 
 ---
 
-# Part 3 — Change Contract
+## Part 3 — Change Contract
 
 实现前写一个短 spec。
 
 至少包括：
 
-## Must preserve
+### Must preserve
 
 - `submit()` 的外部功能；
 - `job-N` ID 格式；
@@ -196,7 +202,7 @@ JobRegistry owns job collection + transitions
 - finish 只有 running job 可以执行；
 - exit code 决定 succeeded/failed。
 
-## Required design properties
+### Required design properties
 
 - mutable job collection 只有一个 authoritative owner；
 - ID allocator 与 job collection 的一致性由同一明确 owner 管理，或给出更强的替代设计理由；
@@ -205,7 +211,7 @@ JobRegistry owns job collection + transitions
 - metrics 只能 read，不获得 mutation authority；
 - worker 通过 semantic operation claim/finish，而不是直接操作 collection。
 
-## Non-goals
+### Non-goals
 
 本实验禁止顺便加入：
 
@@ -223,7 +229,7 @@ JobRegistry owns job collection + transitions
 
 ---
 
-# Part 4 — Implement
+## Part 4 — Implement
 
 实现你的设计。
 
@@ -241,11 +247,11 @@ JobRegistry owns job collection + transitions
 
 ---
 
-# Part 5 — Required New Evidence
+## Part 5 — Required New Evidence
 
 除了 baseline tests，至少增加以下证据。
 
-## 1. Query isolation test
+### 1. Query isolation test
 
 证明：
 
@@ -257,11 +263,11 @@ caller 修改 query result
 
 你可以使用 frozen view、copy 或其他设计；但解释 trade-off。
 
-## 2. Transition ownership test
+### 2. Transition ownership test
 
 至少验证一个非法 transition 确实由 owner 拒绝，而不是因为“当前没有一个 caller 恰好去做”。
 
-## 3. Repository search evidence
+### 3. Repository search evidence
 
 用搜索证明 production code 中：
 
@@ -275,7 +281,7 @@ caller 修改 query result
 
 因此必须同时提供 design argument。
 
-## 4. Representation-change thought experiment
+### 4. Representation-change thought experiment
 
 写 5–10 行：
 
@@ -287,11 +293,11 @@ caller 修改 query result
 
 ---
 
-# Part 6 — Agent Version
+## Part 6 — Agent Version
 
 这个实验要做两遍中的一部分。
 
-## Round A — Vague prompt
+### Round A — Vague prompt
 
 在一个干净副本上，让 coding Agent：
 
@@ -310,7 +316,7 @@ caller 修改 query result
 
 不要为了让 Round A 好看而给额外提示。
 
-## Round B — Engineering spec
+### Round B — Engineering spec
 
 重新从 baseline 开始，把 Part 1–3 的成果提供给 Agent。
 
@@ -336,7 +342,7 @@ review time
 
 ---
 
-# Part 7 — Independent Review
+## Part 7 — Independent Review
 
 实现完成后，假设这是别人写的 PR。
 
@@ -364,31 +370,31 @@ add remote worker
 
 ---
 
-# 评分标准
+## 评分标准
 
-## 25% — System model
+### 25% — System model
 
 不是看图漂亮，而是 writer/read/invariant 是否准确。
 
-## 20% — Design argument
+### 20% — Design argument
 
 必须比较至少两个真实可行设计。
 
-## 25% — Implementation
+### 25% — Implementation
 
 重点是 authority 是否真正收敛，不是 class 数量。
 
-## 20% — Evidence
+### 20% — Evidence
 
 测试、搜索、thought experiment 是否与 claim 对得上。
 
-## 10% — Agent comparison
+### 10% — Agent comparison
 
 能否具体说清楚 vague prompt 与 engineering spec 导致的差异。
 
 ---
 
-# 完成标准
+## 完成标准
 
 如果你最后只能说：
 

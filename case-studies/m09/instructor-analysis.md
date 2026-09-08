@@ -1,3 +1,9 @@
+---
+id: case-M09
+type: case_study
+visibility: instructor
+related: [M09]
+---
 # M09 Instructor Analysis — 从 remote-worker pressure 推到 architecture boundary
 
 > 这是 instructor reference，不是唯一正确 architecture。它展示的是：怎样从真实 starter、明确 requirement、可比较 alternatives 和 executable evidence 推出一个**有条件的** architecture direction；学生可以选择不同 topology，只要 authority、failure、compatibility 与 migration reasoning 能闭合。

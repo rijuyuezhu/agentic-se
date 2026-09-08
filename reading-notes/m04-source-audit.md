@@ -1,4 +1,12 @@
+---
+id: source-M04
+type: source_audit
+visibility: student
+related: [M04]
+---
 # M04 Source Audit — API、Error 与 Boundary Design
+
+> 审计/复核日期：**2026-09-06**。
 
 > 目标：不是搜集“API 最佳实践”，而是确认哪些原始材料真的能支撑 M04 的核心判断。
 >
@@ -6,7 +14,7 @@
 
 ---
 
-# 0. 本模块要回答的问题
+## 0. 本模块要回答的问题
 
 M04 关注五个问题：
 
@@ -26,15 +34,15 @@ M04 关注五个问题：
 
 ---
 
-# 1. Stanford CS190 — Error Handling
+## 1. Stanford CS190 — Error Handling
 
 **状态：主干采用（error complexity / caller ownership）**
 
 原始讲义：
 
-- https://web.stanford.edu/~ouster/cgi-bin/cs190-spring15/lecture.php?topic=errorHandling
+- [1. Stanford CS190 — Error Handling](https://web.stanford.edu/~ouster/cgi-bin/cs190-spring15/lecture.php?topic=errorHandling)
 
-## 实际检查了什么
+### 实际检查了什么
 
 逐项检查了讲义中：
 
@@ -47,7 +55,7 @@ M04 关注五个问题：
 - defer reporting；
 - “before throwing, think how caller will handle it”。
 
-## 实际内容支持什么
+### 实际内容支持什么
 
 讲义不是在教“异常语法”，而是在问：
 
@@ -72,9 +80,9 @@ untested failure paths ↑
 
 这和本课程的 complexity framing 一致。
 
-## 最值得吸收的三点
+### 最值得吸收的三点
 
-### 1. Define errors out of existence
+#### 1. Define errors out of existence
 
 不是所有“不符合实现偏好”的情况都必须成为 caller-visible error。
 
@@ -82,7 +90,7 @@ untested failure paths ↑
 
 这不是“吞异常”，而是改变 abstraction contract。
 
-### 2. Collapse errors
+#### 2. Collapse errors
 
 如果多个低层错误对 caller 的可行动策略相同，那么外部 boundary 未必应该暴露所有低层 distinction。
 
@@ -98,7 +106,7 @@ caller: retry later
 
 这里更稳定的 semantic distinction 是“caller 应该做什么”，不是“底层碰巧哪个 syscall 失败”。
 
-### 3. Error ownership 要从 caller action 反推
+#### 3. Error ownership 要从 caller action 反推
 
 讲义有一个特别强的 review question：
 
@@ -118,7 +126,7 @@ caller: retry later
 这个 contract 是否过度 collapse？
 ```
 
-## 局限
+### 局限
 
 这份讲义来自 2015 年，例子带有 Java/Tcl/RAMCloud 时代背景。
 
@@ -134,15 +142,15 @@ caller: retry later
 
 ---
 
-# 2. Stanford APOSD discussion — Define errors out of existence
+## 2. Stanford APOSD discussion — Define errors out of existence
 
 **状态：主干采用，但作为 design heuristic，不作为定律**
 
 原始课程讨论页：
 
-- https://web.stanford.edu/~ouster/cs190-winter23/lectures/aposd/
+- [2. Stanford APOSD discussion — Define errors out of existence](https://web.stanford.edu/~ouster/cs190-winter23/lectures/aposd/)
 
-## 实际检查了什么
+### 实际检查了什么
 
 页面要求学生阅读 APOSD 主要章节并讨论：
 
@@ -162,7 +170,7 @@ use this idea judiciously
 
 也就是作者自己的课程材料并不把它当无条件规则。
 
-## 本课程怎么用
+### 本课程怎么用
 
 我们把它和 M02 的 deep module / information hiding 连起来：
 
@@ -192,15 +200,15 @@ better boundary:
 
 ---
 
-# 3. Google AIP-193 — Errors
+## 3. Google AIP-193 — Errors
 
 **状态：主干采用（external error contract）**
 
 原始规范：
 
-- https://google.aip.dev/193
+- [3. Google AIP-193 — Errors](https://google.aip.dev/193)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了：
 
@@ -214,9 +222,9 @@ better boundary:
 - partial errors guidance；
 - why standardized errors simplify client handling。
 
-## 最重要的内容
+### 最重要的内容
 
-### 1. Error identity 不能依赖 message parsing
+#### 1. Error identity 不能依赖 message parsing
 
 AIP-193 要求提供 machine-readable error identity，并明确把动态信息放到 metadata，而不是逼 client parse message。
 
@@ -245,7 +253,7 @@ metadata.status = running
 
 人类文本可以改善，而 machine contract 仍稳定。
 
-### 2. “same error” 应从 client action 考虑
+#### 2. “same error” 应从 client action 考虑
 
 AIP-193 对 `(reason, domain)` 的说明里有一个非常适合本课程的判断：
 
@@ -255,7 +263,7 @@ AIP-193 对 `(reason, domain)` 的说明里有一个非常适合本课程的判�
 
 > **error taxonomy 应围绕 caller semantics，而不是 implementation taxonomy。**
 
-### 3. Error metadata 自己也会成为 compatibility surface
+#### 3. Error metadata 自己也会成为 compatibility surface
 
 一旦 client 观察到某些 machine-readable metadata key，它们就可能形成依赖。
 
@@ -266,7 +274,7 @@ AIP-193 对 `(reason, domain)` 的说明里有一个非常适合本课程的判�
 错误 schema 本身也是 API。
 ```
 
-## 不照搬什么
+### 不照搬什么
 
 本课程不会要求 TaskForge 实现完整 `google.rpc.Status`。
 
@@ -286,15 +294,15 @@ human message
 
 ---
 
-# 4. Google AIP-194 — Automatic retry configuration
+## 4. Google AIP-194 — Automatic retry configuration
 
 **状态：主干采用（retryability semantics）**
 
 原始规范：
 
-- https://google.aip.dev/194
+- [4. Google AIP-194 — Automatic retry configuration](https://google.aip.dev/194)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了：
 
@@ -304,7 +312,7 @@ human message
 - transactional request 为什么不能只 retry 单个 RPC；
 - `UNAVAILABLE` / `INVALID_ARGUMENT` / `ABORTED` 等的差别。
 
-## 为什么重要
+### 为什么重要
 
 很多代码把 retry 写成：
 
@@ -336,7 +344,7 @@ operation semantics
 failure category
 ```
 
-## 本课程的推广
+### 本课程的推广
 
 我们不教“记住哪些 gRPC code 可 retry”。
 
@@ -350,15 +358,15 @@ failure category
 
 ---
 
-# 5. Google AIP-155 — Request identification
+## 5. Google AIP-155 — Request identification
 
 **状态：主干采用（request identity / dedup contract）**
 
 原始规范：
 
-- https://google.aip.dev/155
+- [5. Google AIP-155 — Request identification](https://google.aip.dev/155)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了：
 
@@ -370,7 +378,7 @@ failure category
 - request ID lifetime；
 - stale success response。
 
-## 关键结论
+### 关键结论
 
 AIP-155 明确把 request ID 视为 idempotency guarantee 的一种基础：
 
@@ -395,7 +403,7 @@ same request identity
 caller 显式声明：这两次发送属于同一个 logical request
 ```
 
-## 与 M02 state ownership 的连接
+### 与 M02 state ownership 的连接
 
 引入 request dedup table 后会出现一个很好的 ownership 问题：
 
@@ -425,15 +433,15 @@ job 当前 lifecycle state
 
 ---
 
-# 6. AWS Builders' Library — Making retries safe with idempotent APIs
+## 6. AWS Builders' Library — Making retries safe with idempotent APIs
 
 **状态：主干采用（真实 distributed retry case study）**
 
 原始文章：
 
-- https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/
+- [6. AWS Builders' Library — Making retries safe with idempotent APIs](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了：
 
@@ -446,9 +454,9 @@ job 当前 lifecycle state
 - late arriving requests；
 - same client request ID, different intent。
 
-## 这是本模块最重要的 idempotency case study
+### 这是本模块最重要的 idempotency case study
 
-### 1. 真正难点是 unknown outcome
+#### 1. 真正难点是 unknown outcome
 
 典型 distributed failure：
 
@@ -470,7 +478,7 @@ retry?
 
 不是“网络编程细节”，而是 API semantics 问题。
 
-### 2. 同样参数不等于同一个 intent
+#### 2. 同样参数不等于同一个 intent
 
 AWS 文章明确比较了 parameter-derived synthetic token 和 caller-provided token。
 
@@ -502,7 +510,7 @@ hash(request)
 
 > hash equality 到底代表 same intent，还是只是 same bytes？
 
-### 3. Idempotency 不要求 response bytes 完全相同
+#### 3. Idempotency 不要求 response bytes 完全相同
 
 AWS 文章区分了 byte identity 和 semantic equivalence。
 
@@ -512,7 +520,7 @@ retry 时资源状态可能已经从 `pending` 变 `running`，response 可以�
 
 > **幂等首先约束 intended effect / logical operation identity，不要求所有内部事件和 response bytes 相同。**
 
-### 4. 幂等会把复杂度从 caller 拉进 service boundary
+#### 4. 幂等会把复杂度从 caller 拉进 service boundary
 
 这是与 APOSD “pull complexity downward” 的具体连接。
 
@@ -534,7 +542,7 @@ callers 可以安全使用统一 retry policy
 
 > **把 complexity 放到更有 information、能统一处理它的 owner。**
 
-## 局限
+### 局限
 
 这是 Amazon 大规模分布式系统经验，不代表每个本地函数都需要 idempotency key。
 
@@ -551,15 +559,15 @@ callers 可以安全使用统一 retry policy
 
 ---
 
-# 7. RFC 9110 — HTTP idempotent semantics
+## 7. RFC 9110 — HTTP idempotent semantics
 
 **状态：辅助采用（术语校准）**
 
 原始规范：
 
-- https://www.rfc-editor.org/rfc/rfc9110.html#name-idempotent-methods
+- [7. RFC 9110 — HTTP idempotent semantics](https://www.rfc-editor.org/rfc/rfc9110.html#name-idempotent-methods)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了 RFC 9110 §9.2.2 的定义和 retry rationale。
 
@@ -578,7 +586,7 @@ as one such request
 - idempotency 的价值之一是 connection failure 后能安全重发；
 - 非幂等 method 不应自动 retry，除非客户端知道该具体 operation 的 semantics 实际安全，或知道原请求未被执行。
 
-## 为什么只作为辅助材料
+### 为什么只作为辅助材料
 
 本课程不是 HTTP API 课。
 
@@ -600,15 +608,15 @@ HTTP method 是 protocol contract 的一层；业务 operation 仍然需要自�
 
 ---
 
-# 8. Alexis King — Parse, don't validate
+## 8. Alexis King — Parse, don't validate
 
 **状态：选择性主干采用（boundary parsing / illegal states）**
 
 原文：
 
-- https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/
+- [8. Alexis King — Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了：
 
@@ -622,7 +630,7 @@ HTTP method 是 protocol contract 的一层；业务 operation 仍然需要自�
 - “push burden of proof upward as far as possible, but no further”；
 - 作者自己对过度 type-level modeling 的限制说明。
 
-## 为什么值得放入 M04
+### 为什么值得放入 M04
 
 这篇文章不是因为 slogan 有名，而是它给出了非常清楚的 executable reasoning：
 
@@ -652,7 +660,7 @@ boundary 检查 invariant
 core 不再重复承担同一个 proof obligation
 ```
 
-## 本课程不会机械化它
+### 本课程不会机械化它
 
 TaskForge 使用 Python，静态类型能力比 Haskell 弱。
 
@@ -675,16 +683,16 @@ TaskForge 使用 Python，静态类型能力比 Haskell 弱。
 
 ---
 
-# 9. gRPC Error Handling / Status Codes
+## 9. gRPC Error Handling / Status Codes
 
 **状态：辅助采用（cross-boundary error vocabulary）**
 
 原始资料：
 
-- https://grpc.io/docs/guides/error/
-- https://grpc.io/docs/guides/status-codes/
+- [9. gRPC Error Handling / Status Codes — source 1](https://grpc.io/docs/guides/error/)
+- [9. gRPC Error Handling / Status Codes — source 2](https://grpc.io/docs/guides/status-codes/)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了：
 
@@ -694,7 +702,7 @@ TaskForge 使用 Python，静态类型能力比 Haskell 弱。
 - application-generated failure；
 - richer details model。
 
-## 本课程吸收什么
+### 本课程吸收什么
 
 不是要求学生学 gRPC。
 
@@ -731,7 +739,7 @@ caller 下一步能做什么？
 
 ---
 
-# 10. 材料之间如何拼起来
+## 10. 材料之间如何拼起来
 
 这些来源不是重复讲同一个东西，而是填不同层：
 
@@ -780,9 +788,9 @@ when needed, use request identity to make effects idempotent
 
 ---
 
-# 11. 明确不作为本模块规则的内容
+## 11. 明确不作为本模块规则的内容
 
-## “所有 error 都应该 exception”
+### “所有 error 都应该 exception”
 
 不采用。
 
@@ -794,25 +802,25 @@ error 表达方式取决于：
 - recoverability；
 - control flow frequency。
 
-## “fail fast”
+### “fail fast”
 
 只作为局部 heuristic。
 
 如果更好的 abstraction 可以让 error 不存在，或者 boundary 能安全恢复，机械地更早抛异常反而增加 caller complexity。
 
-## “HTTP method 决定 idempotency”
+### “HTTP method 决定 idempotency”
 
 不采用。
 
 HTTP semantics 是一层 contract；具体 operation 仍需分析 intended effect 与 retry uncertainty。
 
-## “same payload hash = same request”
+### “same payload hash = same request”
 
 明确反对作为一般规则。
 
 AWS case study 直接给出了其 semantic ambiguity。
 
-## “所有 invariant 都编码到 type system”
+### “所有 invariant 都编码到 type system”
 
 不采用。
 
@@ -820,7 +828,7 @@ AWS case study 直接给出了其 semantic ambiguity。
 
 ---
 
-# 12. 对 Agent 的直接转化
+## 12. 对 Agent 的直接转化
 
 M04 之后，一个高质量 Agent task 不应该只说：
 

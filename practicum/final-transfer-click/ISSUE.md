@@ -1,3 +1,9 @@
+---
+id: practicum-click-issue
+type: practicum
+visibility: student
+related: [practicum-click]
+---
 # Feature Request — concurrent `CliRunner` filesystem isolation
 
 我们有一套 IDE/plugin-host 测试环境，会在**同一个 Python process** 里并发运行多个第三方 Click CLI 测试。现在每个测试都要自己做额外串行化，吞掉了并发带来的收益。

@@ -1,3 +1,9 @@
+---
+id: M07
+type: module
+visibility: student
+order: 7
+---
 # M07 — Concurrency、Lifecycle 与 Failure：把时间纳入 Contract
 
 前六章里，我们已经反复问过：谁拥有 state、operation 承诺什么、哪些 behavior 必须保持、什么 evidence 足以支持一次 change。那些问题还缺一个维度：**时间**。

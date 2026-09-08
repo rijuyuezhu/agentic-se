@@ -1,3 +1,9 @@
+---
+id: traditional-se-gap-map
+type: reference
+visibility: student
+related: [extensions]
+---
 # Traditional Software Engineering Gap Map
 
 > 目的：回答一个比“传统 SE 还要不要学”更具体的问题——**SWEBOK 等传统知识地图中的哪些问题已经被 M00–M13 实质吸收，哪些只覆盖了一部分，哪些是真缺口，哪些对本课程目标优先级很低？**

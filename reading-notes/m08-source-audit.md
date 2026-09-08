@@ -1,4 +1,12 @@
+---
+id: source-M08
+type: source_audit
+visibility: student
+related: [M08]
+---
 # M08 Source Audit — Dependency、Compatibility 与 Migration
+
+> 审计/复核日期：**2026-09-07**。
 
 > 目标：确认哪些材料真的支持“软件变化必须跨越新旧版本共存窗口”这一章的核心判断。
 >
@@ -6,7 +14,7 @@
 
 ---
 
-# 0. 本模块要回答的问题
+## 0. 本模块要回答的问题
 
 M08 关注六个问题：
 
@@ -28,15 +36,15 @@ M08 关注六个问题：
 
 ---
 
-# 1. Google AIP-180 — Backwards compatibility
+## 1. Google AIP-180 — Backwards compatibility
 
 **状态：主干采用（compatibility dimensions）**
 
 原文：
 
-- https://google.aip.dev/180
+- [1. Google AIP-180 — Backwards compatibility](https://google.aip.dev/180)
 
-## 实际检查内容
+### 实际检查内容
 
 AIP-180 明确区分：
 
@@ -46,7 +54,7 @@ AIP-180 明确区分：
 
 它同时明确说明：旧 client 应能在同一 major version 下继续与新 server 工作，但 compatibility 判断并不总是机械的，尤其 semantic compatibility 需要工程判断。
 
-## 本课程采用什么
+### 本课程采用什么
 
 这是 M08 最重要的 vocabulary source 之一。
 
@@ -68,7 +76,7 @@ semantic compatible maybe no
 
 > **“能编译/能 parse”只是 compatibility 的一层。**
 
-## 限制
+### 限制
 
 AIP-180 主要面向网络 API，并假设 protobuf/JSON 等典型 transport。
 
@@ -84,15 +92,15 @@ AIP-180 主要面向网络 API，并假设 protobuf/JSON 等典型 transport。
 
 ---
 
-# 2. Semantic Versioning 2.0.0
+## 2. Semantic Versioning 2.0.0
 
 **状态：采用，但明确降级为 communication protocol，而非 correctness mechanism**
 
 规范：
 
-- https://semver.org/spec/v2.0.0.html
+- [2. Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
-## 实际检查内容
+### 实际检查内容
 
 规范首先要求：使用 SemVer 的软件必须声明 public API。
 
@@ -108,7 +116,7 @@ MAJOR.MINOR.PATCH
 
 > 如果你根本说不清 public API 是什么，版本号无法替你判断 breaking change。
 
-## 本课程采用什么
+### 本课程采用什么
 
 SemVer 用于：
 
@@ -130,7 +138,7 @@ provider 对 consumer 传递兼容风险意图
 
 并不会神奇地让 change 变 compatible。
 
-## 与 Software Engineering at Google 的校正
+### 与 Software Engineering at Google 的校正
 
 SE at Google Dependency Management 章节把 SemVer 描述得非常谨慎：dependency management 本质上涉及跨组织、低可见性的长期 contract；它甚至把 SemVer概括成一种对 change risk 的 lossy shorthand，而不是完整解决方案。
 
@@ -143,15 +151,15 @@ SemVer rules memorized
 
 ---
 
-# 3. Software Engineering at Google — Dependency Management
+## 3. Software Engineering at Google — Dependency Management
 
 **状态：主干采用（dependency as time-varying contract / visibility problem）**
 
 正文：
 
-- https://abseil.io/resources/swe-book/html/ch21.html
+- [3. Software Engineering at Google — Dependency Management](https://abseil.io/resources/swe-book/html/ch21.html)
 
-## 实际检查内容
+### 实际检查内容
 
 实际检查了：
 
@@ -163,9 +171,9 @@ SemVer rules memorized
 - Live at Head 的适用前提；
 - provider/consumer visibility 对 change 成本的影响。
 
-## 最重要的课程结论
+### 最重要的课程结论
 
-### 1. dependency 不是一次性下载动作
+#### 1. dependency 不是一次性下载动作
 
 引入 dependency 意味着建立一个长期关系：
 
@@ -181,7 +189,7 @@ SemVer rules memorized
 transitive dependencies
 ```
 
-### 2. visibility 决定 change strategy
+#### 2. visibility 决定 change strategy
 
 如果 provider 能看到所有 consumers：
 
@@ -204,7 +212,7 @@ migration guide
 
 就重要得多。
 
-### 3. dependency graph 是 network
+#### 3. dependency graph 是 network
 
 只看：
 
@@ -222,7 +230,7 @@ my app
 
 所以 dependency update 的真实对象往往是 constraint network。
 
-## 限制
+### 限制
 
 Google 的 monorepo、code-index、CI 与 organizational control 很特殊。
 
@@ -232,15 +240,15 @@ Google 的 monorepo、code-index、CI 与 organizational control 很特殊。
 
 ---
 
-# 4. Software Engineering at Google — Deprecation
+## 4. Software Engineering at Google — Deprecation
 
 **状态：主干采用（migration 必须有 owner、milestone、anti-backsliding）**
 
 正文：
 
-- https://abseil.io/resources/swe-book/html/ch15.html
+- [4. Software Engineering at Google — Deprecation](https://abseil.io/resources/swe-book/html/ch15.html)
 
-## 实际检查内容
+### 实际检查内容
 
 实际检查：
 
@@ -251,7 +259,7 @@ Google 的 monorepo、code-index、CI 与 organizational control 很特殊。
 - preventing backsliding；
 - unknown dependents / Hyrum's Law 对 removal 的影响。
 
-## 本课程采用什么
+### 本课程采用什么
 
 一个真正可结束的 migration 至少需要：
 
@@ -276,15 +284,15 @@ removal criterion explicit
 
 ---
 
-# 5. Martin Fowler / Danilo Sato — Parallel Change
+## 5. Martin Fowler / Danilo Sato — Parallel Change
 
 **状态：主干采用（expand → migrate → contract）**
 
 原文：
 
-- https://martinfowler.com/bliki/ParallelChange.html
+- [5. Martin Fowler / Danilo Sato — Parallel Change](https://martinfowler.com/bliki/ParallelChange.html)
 
-## 实际检查内容
+### 实际检查内容
 
 正文明确把 backward-incompatible interface change 拆成三阶段：
 
@@ -296,7 +304,7 @@ Contract: 所有 usages 迁完后删除 old form
 
 文章还明确讨论 Published Interface、external clients、database refactoring、remote API evolution、continuous delivery，以及 migrate period 同时维护两种形式的成本。这里的 **Migrate 主体是 clients/usages**；原文没有把“durable producer 开始默认写新格式”重新命名成 Migrate。原文还明确写到：在 migrate phase，可以用 **Feature Flag** 控制使用 old/new interface；这是 activation/decoupling mechanism，不等于 compatibility proof。
 
-## 本课程采用什么
+### 本课程采用什么
 
 M08 不会只把它用于 function rename。API field、config、database column、serialized file、RPC/worker rollout 都可以借它思考 old/new coexistence；但不同 surface 的 concrete mechanism 不同，课程不会机械规定 dual-read 或 dual-write。
 
@@ -313,16 +321,16 @@ Expand capability
 
 ---
 
-# 6. Protocol Buffers — Updating a Message Type
+## 6. Protocol Buffers — Updating a Message Type
 
 **状态：主干采用（wire compatibility 是具体 encoding contract）**
 
 正文：
 
-- https://protobuf.dev/programming-guides/editions/#updating
-- https://protobuf.dev/programming-guides/proto3/
+- [6. Protocol Buffers — Updating a Message Type — source 1](https://protobuf.dev/programming-guides/editions/#updating)
+- [6. Protocol Buffers — Updating a Message Type — source 2](https://protobuf.dev/programming-guides/proto3/)
 
-## 实际检查内容
+### 实际检查内容
 
 官方文档明确说明 binary wire format 下哪些 changes safe/unsafe，并特别强调：
 
@@ -332,7 +340,7 @@ field number identifies a field on the wire
 
 因此已有 field number 不能随意改变，也不应该复用删除字段的 number；删除后应 reserve number，JSON/TextFormat 场景还应考虑 field name。
 
-## 为什么这对 M08 重要
+### 为什么这对 M08 重要
 
 例如：
 
@@ -351,7 +359,7 @@ name -> display_name
 
 > **“这个 schema change 是否安全”不能脱离实际 representation。**
 
-## 限制
+### 限制
 
 TaskForge M08 使用 JSON，不使用 protobuf。
 
@@ -359,15 +367,15 @@ Proto 只作为一个高质量反例：serialization semantics 是协议本身�
 
 ---
 
-# 7. Kubernetes Deprecation Policy
+## 7. Kubernetes Deprecation Policy
 
 **状态：主干采用（overlap window / storage compatibility / rollback）**
 
 正文：
 
-- https://kubernetes.io/docs/reference/using-api/deprecation-policy/
+- [7. Kubernetes Deprecation Policy](https://kubernetes.io/docs/reference/using-api/deprecation-policy/)
 
-## 实际检查内容
+### 实际检查内容
 
 Kubernetes 对 API version 演化有几个特别适合 M08 的要求，而且这几条已直接对照现行 policy 原文核过：
 
@@ -376,7 +384,7 @@ Kubernetes 对 API version 演化有几个特别适合 M08 的要求，而且这
 - preferred/storage version 向前推进前，应先有 release 同时支持 new 与 previous version；
 - policy 明确要求用户能够 upgrade 到新 release 后再 rollback，而不需要先把数据转换成 new API version（显式使用 newer-only feature 的情况除外）。
 
-## 本课程采用什么
+### 本课程采用什么
 
 最重要的不是 Kubernetes 的具体版本期限，而是这个 rollout invariant：
 
@@ -400,7 +408,7 @@ breakage / rollback failure
 
 这会直接成为 TaskForge M08 lab。
 
-## 限制
+### 限制
 
 Kubernetes 是大型分布式 API server，拥有复杂 conversion/storage machinery。
 
@@ -408,7 +416,7 @@ Kubernetes 是大型分布式 API server，拥有复杂 conversion/storage machi
 
 ---
 
-# 8. 本模块的课程综合
+## 8. 本模块的课程综合
 
 综合上述材料，M08 使用下面的 compatibility model：
 
@@ -445,9 +453,9 @@ semantic behavior preserved?
 
 ---
 
-# 9. M08 的 source policy
+## 9. M08 的 source policy
 
-## 主干采用
+### 主干采用
 
 - AIP-180：source / wire / semantic compatibility；
 - SemVer 2.0.0：版本声明 contract，但不作为证明；
@@ -457,7 +465,7 @@ semantic behavior preserved?
 - Protocol Buffers：具体 wire representation 规则；
 - Kubernetes Deprecation Policy：old/new overlap、storage decode、rollback reasoning。
 
-## 明确不升级为定律
+### 明确不升级为定律
 
 - “所有 API 都必须 SemVer”；
 - “所有 migration 都必须 dual-write”；

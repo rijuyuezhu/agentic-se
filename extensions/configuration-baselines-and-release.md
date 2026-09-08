@@ -1,3 +1,9 @@
+---
+id: ext-configuration-release
+type: extension
+visibility: student
+related: [M08, M10, M12, M13]
+---
 # Configuration、Baseline 与 Release：你到底在改变哪一个系统
 
 假设一次上线出了问题。你把代码回滚到上一个 commit，服务重新启动，CI 也重新变绿。事故却没有结束：数据库已经执行了 migration，运行时 config 仍然是新版本，worker image 没有一起回滚，前端引用了新生成的 schema client，一部分节点还在跑旧 binary。

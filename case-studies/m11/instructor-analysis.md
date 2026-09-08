@@ -1,3 +1,9 @@
+---
+id: case-M11
+type: case_study
+visibility: instructor
+related: [M11]
+---
 # M11 Instructor Reference — 从 false-green dashboard 到 reliability learning loop
 
 > 教师参考。它描述一条可接受 reference reasoning，不是要求学生照抄唯一 telemetry schema、SLO 参数或 mitigation policy。

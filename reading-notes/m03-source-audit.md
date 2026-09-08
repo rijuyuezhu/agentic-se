@@ -1,4 +1,12 @@
+---
+id: source-M03
+type: source_audit
+visibility: student
+related: [M03]
+---
 # M03 Source Audit — Testing as Executable Evidence
+
+> 审计/复核日期：**2026-09-06**。
 
 > 本文件记录 M03 真正采用的原始材料、实际检查内容、可支持的 claim，以及我们明确不从来源中过度外推的部分。
 >
@@ -33,19 +41,19 @@ M03 因此只保留能帮助学生回答以下问题的材料：
 
 ---
 
-# 1. MIT 6.102 — Reading 2: Testing
+## 1. MIT 6.102 — Reading 2: Testing
 
 **状态：主干采用（系统测试设计的基础层）**
 
 原文：
 
-- https://web.mit.edu/6.102/www/sp26/classes/02-testing/
+- [1. MIT 6.102 — Reading 2: Testing — source 1](https://web.mit.edu/6.102/www/sp26/classes/02-testing/)
 
 另外检查了 2025 Project Testing：
 
-- https://web.mit.edu/6.102/www/sp25/project/starb/testing.html
+- [1. MIT 6.102 — Reading 2: Testing — source 2](https://web.mit.edu/6.102/www/sp25/project/starb/testing.html)
 
-## 实际检查了什么
+### 实际检查了什么
 
 阅读了 Testing reading 中以下部分：
 
@@ -65,9 +73,9 @@ M03 因此只保留能帮助学生回答以下问题的材料：
 
 还检查了项目级 automated testing 页面，确认课程的项目真的通过 push → build server → compile → test 的持续反馈使用自动测试，而不是只在 lecture 中讨论。
 
-## 真正值得吸收的地方
+### 真正值得吸收的地方
 
-### 1. 把 test suite 质量拆成多个维度
+#### 1. 把 test suite 质量拆成多个维度
 
 6.102 不把“测试多”视为好，而要求区分：
 
@@ -81,7 +89,7 @@ M03 因此只保留能帮助学生回答以下问题的材料：
 
 这非常适合 Agent 时代，因为 Agent 很容易生成 100 个形式相似的测试，但数量不意味着增加 semantic discrimination。
 
-### 2. systematic partitioning 比拍脑袋 example 更可迁移
+#### 2. systematic partitioning 比拍脑袋 example 更可迁移
 
 Reading 要求根据 specification 对 input space 做 partition，并特别检查 boundaries。
 
@@ -97,7 +105,7 @@ Reading 要求根据 specification 对 input space 做 partition，并特别检�
 
 也就是说，我们不是只教数值函数的 `x < 0 / x = 0 / x > 0`。
 
-### 3. testing 被放在 validation 的更大框架里
+#### 3. testing 被放在 validation 的更大框架里
 
 MIT 明确把 testing 与 formal verification、code review 并列为 validation 方法。
 
@@ -105,7 +113,7 @@ MIT 明确把 testing 与 formal verification、code review 并列为 validation
 
 > tests 是 correctness argument 的一种 evidence，不是 correctness 本身。
 
-### 4. 正确测试只依赖 spec，因此 implementation 可以变化
+#### 4. 正确测试只依赖 spec，因此 implementation 可以变化
 
 Reading summary 明确把 ready for change 与“tests only depend on behavior in the spec”联系起来。
 
@@ -114,9 +122,9 @@ Reading summary 明确把 ready for change 与“tests only depend on behavior i
 - production code 对 implementation detail 泄漏 → client coupling；
 - test 对 implementation detail 泄漏 → test brittleness。
 
-## 局限与我们不会照搬的地方
+### 局限与我们不会照搬的地方
 
-### 1. “test-first programming”不升级为宗教
+#### 1. “test-first programming”不升级为宗教
 
 6.102 教 test-first 是合理的 construction discipline，但本课程不要求所有代码都严格 TDD。
 
@@ -133,25 +141,25 @@ Reading summary 明确把 ready for change 与“tests only depend on behavior i
 
 这比“必须先写测试文件”更本质。
 
-### 2. statement/code coverage 只是补充视角
+#### 2. statement/code coverage 只是补充视角
 
 MIT 讨论 coverage 有教学价值，但 M03 会进一步用 Google 的材料校正“coverage = quality”的误读。
 
-### 3. randomized testing 不是 property-based testing 的全部
+#### 3. randomized testing 不是 property-based testing 的全部
 
 MIT 的篇幅较短。M03 的 property-based 部分会用 Hypothesis 官方资料补充 domain/property/shrinking 的实际工作方式。
 
 ---
 
-# 2. Software Engineering at Google — Testing Overview
+## 2. Software Engineering at Google — Testing Overview
 
 **状态：主干采用（测试与长期变化、规模、coverage、test portfolio）**
 
 原文：
 
-- https://abseil.io/resources/swe-book/html/ch11.html
+- [2. Software Engineering at Google — Testing Overview](https://abseil.io/resources/swe-book/html/ch11.html)
 
-## 实际检查了什么
+### 实际检查了什么
 
 重点读了：
 
@@ -164,15 +172,15 @@ MIT 的篇幅较短。M03 的 property-based 部分会用 Hypothesis 官方资�
 - flaky tests / large test suite cost；
 - The Limits of Automated Testing。
 
-## 真正值得吸收的地方
+### 真正值得吸收的地方
 
-### 1. 测试的重要目的之一是“允许变化”
+#### 1. 测试的重要目的之一是“允许变化”
 
 正文不是只说 catch bugs，而是把 automated testing 与 refactoring、redesign、快速变化直接联系。
 
 这与全课的 “software engineering = controlled change” 主线高度一致。
 
-### 2. test size 与 test scope 是两个维度
+#### 2. test size 与 test scope 是两个维度
 
 这是比简单 “unit / integration / e2e” 三分法更精确的模型：
 
@@ -183,7 +191,7 @@ MIT 的篇幅较短。M03 的 property-based 部分会用 Hypothesis 官方资�
 
 M03 会采用这个二维模型。
 
-### 3. coverage 只说明代码被执行，不说明结果被验证
+#### 3. coverage 只说明代码被执行，不说明结果被验证
 
 Google 对 coverage 的批评非常具体：
 
@@ -197,7 +205,7 @@ Google 对 coverage 的批评非常具体：
 
 而不是 quality score。
 
-### 4. portfolio 应根据 local architecture/risk 决定
+#### 4. portfolio 应根据 local architecture/risk 决定
 
 正文给出大约 80/15/5 的经验比例，但同时明确说明每个团队的 mix 会不同，并要求根据 architectural / organizational reality 调整。
 
@@ -209,13 +217,13 @@ Google 对 coverage 的批评非常具体：
 
 > “哪些风险只有跨 boundary 的高-fidelity test 才看得到？为了这些风险，我们愿意支付多少运行成本？”
 
-### 5. 自动测试有边界
+#### 5. 自动测试有边界
 
 正文明确保留 human judgment / exploratory testing 的空间。
 
 这对 Agent 时代尤其重要：自动生成更多测试并不会自动覆盖“我们甚至没有意识到需要问的问题”。
 
-## 局限
+### 局限
 
 Google 的经验来自极大规模 monorepo、统一 build/test infrastructure。它的 size policy 和比例不能无条件复制到小型开源项目。
 
@@ -223,15 +231,15 @@ Google 的经验来自极大规模 monorepo、统一 build/test infrastructure�
 
 ---
 
-# 3. Software Engineering at Google — Unit Testing
+## 3. Software Engineering at Google — Unit Testing
 
 **状态：主干采用（test maintainability / brittleness / behavior-oriented testing）**
 
 原文：
 
-- https://abseil.io/resources/swe-book/html/ch12.html
+- [3. Software Engineering at Google — Unit Testing](https://abseil.io/resources/swe-book/html/ch12.html)
 
-## 实际检查了什么
+### 实际检查了什么
 
 重点读了：
 
@@ -244,9 +252,9 @@ Google 的经验来自极大规模 monorepo、统一 build/test infrastructure�
 - test naming / structure；
 - DAMP, Not DRY。
 
-## 真正值得吸收的地方
+### 真正值得吸收的地方
 
-### 1. 测试本身是长期维护资产
+#### 1. 测试本身是长期维护资产
 
 一个 test 若在行为不变的 refactoring 后频繁需要更新，它就把 implementation structure 错误升级成了 contract。
 
@@ -256,7 +264,7 @@ Google 的经验来自极大规模 monorepo、统一 build/test infrastructure�
 
 如果答案总是“不”，测试很可能绑错了边界。
 
-### 2. public API 是 semantic boundary，不等于语言 `public`
+#### 2. public API 是 semantic boundary，不等于语言 `public`
 
 正文明确指出 unit scope 与 public API 的定义并不等于 language visibility。
 
@@ -267,7 +275,7 @@ M03 会沿用 M02 的 boundary 语言：
 
 测试应尽量从真正的 client boundary 观察行为。
 
-### 3. behavior ≠ method
+#### 3. behavior ≠ method
 
 正文明确指出一个 method 可以实现多个 behavior，一个 behavior 也可能跨多个 method。
 
@@ -281,7 +289,7 @@ production method → corresponding test method
 
 课程要求先列 behavior table，再组织 tests。
 
-### 4. state vs interaction 是 “what vs how” 的典型冲突
+#### 4. state vs interaction 是 “what vs how” 的典型冲突
 
 正文展示了 interaction test 可能同时：
 
@@ -290,13 +298,13 @@ production method → corresponding test method
 
 M03 采用 “prefer observable state/outcome” 的方向，但不会把 interaction testing 判死刑。对于真正的 external side effect / protocol obligation，interaction 本身可能就是 observable contract。
 
-### 5. test code 可以有不同于 production code 的 duplication trade-off
+#### 5. test code 可以有不同于 production code 的 duplication trade-off
 
 DAMP 的价值不在缩写，而在 reasoning：测试需要让 reader 不跳很多层 helper 就能看到 scenario 中真正重要的信息。
 
 课程不会要求“test 永远不 DRY”；只会问 abstraction 是否隐藏了 test 的意图。
 
-## 局限
+### 局限
 
 章节有很强 Google style，但大多数 reasoning 与规模无关。
 
@@ -310,15 +318,15 @@ DAMP 的价值不在缩写，而在 reasoning：测试需要让 reader 不跳很
 
 ---
 
-# 4. Software Engineering at Google — Test Doubles
+## 4. Software Engineering at Google — Test Doubles
 
 **状态：选择性主干采用（fidelity 与 doubles 的代价）**
 
 原文：
 
-- https://abseil.io/resources/swe-book/html/ch13.html
+- [4. Software Engineering at Google — Test Doubles](https://abseil.io/resources/swe-book/html/ch13.html)
 
-## 实际检查了什么
+### 实际检查了什么
 
 重点读了：
 
@@ -329,9 +337,9 @@ DAMP 的价值不在缩写，而在 reasoning：测试需要让 reader 不跳很
 - real implementations；
 - fake / stub / interaction testing。
 
-## 真正值得吸收的地方
+### 真正值得吸收的地方
 
-### 1. double 是速度/控制能力与 fidelity 的交换
+#### 1. double 是速度/控制能力与 fidelity 的交换
 
 它不是 “unit testing 标配”。
 
@@ -339,13 +347,13 @@ DAMP 的价值不在缩写，而在 reasoning：测试需要让 reader 不跳很
 
 > 在一个不存在的世界里测试通过。
 
-### 2. mocking framework 让 overspecification 变得太容易
+#### 2. mocking framework 让 overspecification 变得太容易
 
 Google 的经验不是简单“mock bad”，而是：高度隔离的 interaction tests 曾经容易写，却长期 brittle、维护成本高、实际找 bug 价值低。
 
 这非常适合 Agent 时代：Agent 特别容易为“让测试跑得快”而 mock 掉所有真正危险的 boundary。
 
-### 3. failure injection 是 double 的高价值用途
+#### 3. failure injection 是 double 的高价值用途
 
 当真实 failure 很难稳定制造时，一个受控 dependency double 可以让：
 
@@ -358,7 +366,7 @@ Google 的经验不是简单“mock bad”，而是：高度隔离的 interactio
 
 M07 会进一步使用这个能力。
 
-## 局限
+### 局限
 
 不把 fake / stub / mock 名词辨析当考试重点。重点是：
 
@@ -368,15 +376,15 @@ M07 会进一步使用这个能力。
 
 ---
 
-# 5. Software Engineering at Google — Larger Testing
+## 5. Software Engineering at Google — Larger Testing
 
 **状态：主干采用（risk / fidelity / integration gaps）**
 
 原文：
 
-- https://abseil.io/resources/swe-book/html/ch14.html
+- [5. Software Engineering at Google — Larger Testing](https://abseil.io/resources/swe-book/html/ch14.html)
 
-## 实际检查了什么
+### 实际检查了什么
 
 重点读了：
 
@@ -389,9 +397,9 @@ M07 会进一步使用这个能力。
 - verification；
 - larger testing 的 cost / nondeterminism。
 
-## 真正值得吸收的地方
+### 真正值得吸收的地方
 
-### 1. larger test 的理由不是“更真实所以更高级”
+#### 1. larger test 的理由不是“更真实所以更高级”
 
 它们用于覆盖 narrow tests 无法充分缓解的风险，尤其：
 
@@ -401,32 +409,32 @@ M07 会进一步使用这个能力。
 - unfaithful doubles；
 - emergent behavior。
 
-### 2. fidelity 是连续变量，不是 unit/e2e 二元选择
+#### 2. fidelity 是连续变量，不是 unit/e2e 二元选择
 
 课程会要求学生针对 risk 选择 **足够的 fidelity**，而不是自动选择最大范围。
 
-### 3. larger tests 同样应尽可能小
+#### 3. larger tests 同样应尽可能小
 
 如果只需要验证 A↔B contract，不需要每次拉起 A→B→C→D→E 全链路。
 
 这与 architecture 里的 boundary thinking 是同一件事。
 
-## 局限
+### 局限
 
 这一章涉及很多 Google-specific infrastructure；M03 只抽出 general reasoning。部署、chaos、production probe 等内容留到 M11。
 
 ---
 
-# 6. Hypothesis 官方文档
+## 6. Hypothesis 官方文档
 
 **状态：选择性采用（property-based testing）**
 
 官方文档：
 
-- https://hypothesis.readthedocs.io/en/latest/
-- https://hypothesis.readthedocs.io/en/latest/tutorial/introduction.html
+- [6. Hypothesis 官方文档 — source 1](https://hypothesis.readthedocs.io/en/latest/)
+- [6. Hypothesis 官方文档 — source 2](https://hypothesis.readthedocs.io/en/latest/tutorial/introduction.html)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了：
 
@@ -439,7 +447,7 @@ M07 会进一步使用这个能力。
 - reference implementation equivalence；
 - invariant-like properties。
 
-## 为什么采用
+### 为什么采用
 
 Example-based testing 最大的问题之一是：
 
@@ -454,7 +462,7 @@ Property-based testing 把工作重心改成：
 
 这与 M01 的 invariant/spec 思维直接相连。
 
-## 不过度宣传
+### 不过度宣传
 
 官方文档自己也明确说 property-based testing 是 unit testing 的强力补充，不总是 replacement。
 
@@ -473,15 +481,15 @@ Property-based testing 把工作重心改成：
 
 ---
 
-# 7. mutmut 官方文档
+## 7. mutmut 官方文档
 
 **状态：工具选读；概念采用，主实验不依赖它**
 
 官方文档：
 
-- https://mutmut.readthedocs.io/en/latest/
+- [7. mutmut 官方文档](https://mutmut.readthedocs.io/en/latest/)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了：
 
@@ -491,7 +499,7 @@ Property-based testing 把工作重心改成：
 - example mutations（如 `<` → `<=`、integer literal change）；
 - fork/平台等工具限制。
 
-## 为什么概念值得学
+### 为什么概念值得学
 
 Coverage 问的是：
 
@@ -503,7 +511,7 @@ Mutation testing 问的是更接近我们真正关心的：
 
 它把 test suite 的 **fault discrimination ability** 变得可操作。
 
-## 为什么不把 mutmut 变成课程依赖
+### 为什么不把 mutmut 变成课程依赖
 
 - tool/version/platform 会产生 incidental complexity；
 - 并非所有 surviving mutant 都代表 meaningful missing test；
@@ -514,9 +522,9 @@ Mutation testing 问的是更接近我们真正关心的：
 
 ---
 
-# 8. 本章刻意不采用为“权威规则”的材料/说法
+## 8. 本章刻意不采用为“权威规则”的材料/说法
 
-## 8.1 Test Pyramid 比例
+### 8.1 Test Pyramid 比例
 
 会介绍历史直觉，但不把任何固定比例作为 correctness criterion。
 
@@ -530,29 +538,29 @@ risk → desired evidence → minimum sufficient fidelity → feedback cost
 
 来设计 portfolio。
 
-## 8.2 “100% coverage”
+### 8.2 “100% coverage”
 
 不作为课程目标。
 
 可以有 100% line coverage 但几乎没有有意义的 oracle。
 
-## 8.3 “Mock nothing” / “Mock everything”
+### 8.3 “Mock nothing” / “Mock everything”
 
 都不采用。
 
 讨论 fidelity、control、determinism、cost。
 
-## 8.4 Strict TDD
+### 8.4 Strict TDD
 
 作为一种 useful discipline 讨论，不作为 universal workflow。
 
-## 8.5 Snapshot/Golden testing
+### 8.5 Snapshot/Golden testing
 
 M03 会提到适用场景与 brittleness 风险，但本轮没有选一份足够好的单一材料作为权威来源，因此不建立“必须/禁止 snapshot”规则。
 
 ---
 
-# 9. M03 最终综合出的模型
+## 9. M03 最终综合出的模型
 
 来源不是拼书，而是互相补洞：
 

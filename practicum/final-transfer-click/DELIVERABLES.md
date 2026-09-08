@@ -1,3 +1,9 @@
+---
+id: practicum-click-deliverables
+type: practicum
+visibility: student
+related: [practicum-click]
+---
 # Deliverables and Rubric
 
 这份格式规定**交什么**，不规定你应该在代码里发现什么。可以用 Markdown、diagram、tables、patch 或 command transcript，只要另一个 engineer 能独立检查你的 reasoning。
@@ -141,7 +147,7 @@ Reviewer 应能独立判断：
 
 ---
 
-# Grading Rubric
+## Grading Rubric
 
 总分 100。评分重点是 reasoning quality，不奖励代码量或 Agent 数量。
 

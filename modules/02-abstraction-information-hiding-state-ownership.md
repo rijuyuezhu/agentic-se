@@ -1,3 +1,9 @@
+---
+id: M02
+type: module
+visibility: student
+order: 2
+---
 # M02 — Abstraction、Information Hiding 与 State Ownership
 
 M01 最后留下了一个没有被 specification 本身回答的问题：我们已经知道哪些状态必须合法、哪些 transition 应被拒绝，也开始寻找 invariant 的 enforcement point；但**谁有资格改变这些事实，谁只能观察或请求变化？**
@@ -409,7 +415,7 @@ Read-only reconnaissance
 
 实现完成以后，evidence 也不能只有“tests green”。至少要能证明：caller 修改 query result 不会改变 authoritative state；非法 transition 确实由 owner 拒绝；production code 没有明显绕过 owner 的直接 writes；并解释 repository search 为什么只能提供 syntactic evidence，不能单独证明完整 correctness。
 
-这正是 [`../case-studies/m02/baseline-analysis.md`](../case-studies/m02/baseline-analysis.md) 用 runtime exploit、static search 和 baseline tests 三种证据检查的内容。
+课程维护侧另有一份 instructor-only reference，用 runtime exploit、static search 和 baseline tests 三种证据检查这条 pressure。Student-facing material 不直接导航到它，避免 first-pass system model 被 reference reasoning 污染。
 
 ## 10. Review 一个 abstraction，最后问的是 knowledge 和 authority
 

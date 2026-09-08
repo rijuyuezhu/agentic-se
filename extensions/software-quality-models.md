@@ -1,3 +1,9 @@
+---
+id: ext-software-quality
+type: extension
+visibility: student
+related: [M03, M05, M09, M11]
+---
 # Software Quality：把“质量更高”拆成可讨论的 contract
 
 “这个实现质量更高。”

@@ -1,3 +1,9 @@
+---
+id: M11
+type: module
+visibility: student
+order: 11
+---
 # M11 — Production、Observability 与 Reliability：当“全绿”仍然伤害用户
 
 前十章的 evidence 大多发生在 merge 或 release 之前：specification、tests、compatibility fixtures、failure probes、review。M11 把同一套 engineering discipline 推进到系统运行之后。问题不再只是“这份 patch 在我们构造的 case 里对不对”，而是：**服务已经在跑，我们凭什么知道用户正在得到承诺的服务；如果没有，我们怎样发现、止损、解释并学习？**

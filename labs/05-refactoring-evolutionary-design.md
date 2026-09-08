@@ -1,3 +1,9 @@
+---
+id: lab-M05
+type: lab
+visibility: student
+related: [M05]
+---
 # Lab 05 — Refactoring 与 Evolutionary Design
 
 > 目标不是“让 `dashboard.py` 更漂亮”。
@@ -6,7 +12,7 @@
 
 ---
 
-# 0. 场景
+## 0. 场景
 
 TaskForge 新增了一个 text dashboard：
 
@@ -48,7 +54,7 @@ copy render_dashboard
 
 ---
 
-# 1. 先不要改代码
+## 1. 先不要改代码
 
 进入：
 
@@ -89,7 +95,7 @@ all existing text dashboard behavior preserved
 
 ---
 
-# 2. Behavior Inventory
+## 2. Behavior Inventory
 
 在改代码前，写一份：
 
@@ -99,7 +105,7 @@ m05-behavior-inventory.md
 
 至少回答：
 
-## 2.1 输入
+### 2.1 输入
 
 `render_dashboard` 的输入是什么？
 
@@ -112,7 +118,7 @@ TaskForge 当前 job state
 job insertion order
 ```
 
-## 2.2 输出
+### 2.2 输出
 
 哪些东西当前被 probe 锁住？
 
@@ -127,7 +133,7 @@ job insertion order
 - command text；
 - job ordering。
 
-## 2.3 依赖语义
+### 2.3 依赖语义
 
 判断：
 
@@ -145,7 +151,7 @@ presentation detail
 
 如果新增 JSON renderer，是否应该重新写一遍？
 
-## 2.4 这次不允许顺手改变什么
+### 2.4 这次不允许顺手改变什么
 
 至少：
 
@@ -159,7 +165,7 @@ existing text output
 
 ---
 
-# 3. 新 JSON contract
+## 3. 新 JSON contract
 
 新增：
 
@@ -206,7 +212,7 @@ render_dashboard_json(title: str = "TaskForge Dashboard") -> str
 
 ---
 
-# 4. 先做 Direct Design，不实现
+## 4. 先做 Direct Design，不实现
 
 写：
 
@@ -253,7 +259,7 @@ render_json
 
 ---
 
-# 5. 再做 Preparatory Design
+## 5. 再做 Preparatory Design
 
 写第二个设计：
 
@@ -304,7 +310,7 @@ syntax
 
 ---
 
-# 6. Design It Twice 比较表
+## 6. Design It Twice 比较表
 
 填写：
 
@@ -327,7 +333,7 @@ syntax
 
 ---
 
-# 7. 设计 Change Topology
+## 7. 设计 Change Topology
 
 在写 production code 前，先写 staged plan。
 
@@ -368,7 +374,7 @@ rollback:
 
 ---
 
-# 8. Phase A — Preparatory Refactoring Only
+## 8. Phase A — Preparatory Refactoring Only
 
 现在才开始改 production code。
 
@@ -400,7 +406,7 @@ PYTHONPATH=src uv run --with pytest --no-project python -m pytest -q
 
 ---
 
-# 9. 不要只依赖最终状态
+## 9. 不要只依赖最终状态
 
 对每个 structural commit，写一个简短 note：
 
@@ -433,7 +439,7 @@ Enables:
 
 ---
 
-# 10. Phase B — 独立 Review Structural Diff
+## 10. Phase B — 独立 Review Structural Diff
 
 在加 JSON 前停下来。
 
@@ -441,7 +447,7 @@ Enables:
 
 问：
 
-## 10.1 它真的是 behavior-preserving 吗？
+### 10.1 它真的是 behavior-preserving 吗？
 
 不要只说 tests green。
 
@@ -452,7 +458,7 @@ behavior inventory item
 → evidence
 ```
 
-## 10.2 complexity 真下降了吗？
+### 10.2 complexity 真下降了吗？
 
 比较：
 
@@ -473,7 +479,7 @@ after
 - domain interpretation 集中了吗？
 - renderer interface 变深还是变浅？
 
-## 10.3 有没有 over-abstraction？
+### 10.3 有没有 over-abstraction？
 
 如果为了一个简单 dashboard 引入：
 
@@ -490,7 +496,7 @@ StatusStrategy
 
 ---
 
-# 11. Phase C — Add JSON Behavior
+## 11. Phase C — Add JSON Behavior
 
 只有 structural phase 通过 review 后，才加：
 
@@ -502,14 +508,14 @@ render_dashboard_json(...)
 
 至少覆盖：
 
-## Empty
+### Empty
 
 ```text
 counts all zero
 jobs=[]
 ```
 
-## Mixed lifecycle
+### Mixed lifecycle
 
 覆盖：
 
@@ -521,11 +527,11 @@ failed
 cancelled
 ```
 
-## Command preservation
+### Command preservation
 
 确保 JSON 不丢 command。
 
-## Exit code semantics
+### Exit code semantics
 
 ```text
 succeeded → 0
@@ -533,7 +539,7 @@ failed → nonzero
 non-finished → null
 ```
 
-## Ordering
+### Ordering
 
 job order 与 text/dashboard 现有 contract 保持一致。
 
@@ -549,7 +555,7 @@ payload = json.loads(render_dashboard_json())
 
 ---
 
-# 12. Feature Phase 后再次验证旧 behavior
+## 12. Feature Phase 后再次验证旧 behavior
 
 运行：
 
@@ -564,7 +570,7 @@ PYTHONPATH=src uv run --with pytest --no-project python -m pytest -q
 
 ---
 
-# 13. 一个故意设置的陷阱：`status_text`
+## 13. 一个故意设置的陷阱：`status_text`
 
 现有 text output：
 
@@ -610,7 +616,7 @@ text presentation string
 
 ---
 
-# 14. 另一个陷阱：为了 JSON 改 text
+## 14. 另一个陷阱：为了 JSON 改 text
 
 你可能觉得：
 
@@ -638,7 +644,7 @@ TaskForge job dashboard
 
 ---
 
-# 15. Differential Evidence
+## 15. Differential Evidence
 
 本 lab 的 `m05_behavior_probe.py` 本质上是一个小型 differential/golden oracle。
 
@@ -666,7 +672,7 @@ after renderer
 
 ---
 
-# 16. Agent Exercise A — Vague Prompt
+## 16. Agent Exercise A — Vague Prompt
 
 建议在干净 worktree 做，不污染你的正式实现。
 
@@ -690,7 +696,7 @@ after renderer
 
 ---
 
-# 17. Agent Exercise B — Engineering Contract
+## 17. Agent Exercise B — Engineering Contract
 
 重新从 clean base 开始。
 
@@ -745,7 +751,7 @@ evidence quality
 
 ---
 
-# 18. Agent Exercise C — Exploration Patch 后重做
+## 18. Agent Exercise C — Exploration Patch 后重做
 
 第三种练习非常重要。
 
@@ -787,7 +793,7 @@ understanding is the asset
 
 ---
 
-# 19. Review Task
+## 19. Review Task
 
 把最终提交当真实 PR review。
 
@@ -799,28 +805,28 @@ Blocker / Medium / Low
 
 至少检查：
 
-## Refactoring claim
+### Refactoring claim
 
 - structural commits 是否真的无 intended behavior change？
 - 是否有 text drift？
 
-## Change separation
+### Change separation
 
 - JSON feature 是否和 structural move 分开？
 - tests 是否在正确阶段变化？
 
-## Abstraction
+### Abstraction
 
 - shared structure 隐藏的是 domain knowledge，还是只为了 DRY syntax？
 - 是否 over-engineered？
 
-## Evidence
+### Evidence
 
 - probe 是否在 structural phase 每一步都通过？
 - JSON tests 是否验证 semantic schema？
 - 是否出现“改 snapshot 让它绿”的行为？
 
-## Scope
+### Scope
 
 - 是否顺手改 M04 public API？
 - 是否改 lifecycle？
@@ -828,17 +834,17 @@ Blocker / Medium / Low
 
 ---
 
-# 20. 评分标准
+## 20. 评分标准
 
-## 20% — Behavior inventory
+### 20% — Behavior inventory
 
 是否真正列出 observable surface，而不是只写“tests pass”。
 
-## 20% — Design it twice
+### 20% — Design it twice
 
 是否公平比较 direct 与 preparatory 两条路径。
 
-## 25% — Change topology
+### 25% — Change topology
 
 是否做到：
 
@@ -849,7 +855,7 @@ structural checkpoints
 
 并且每一步 coherent。
 
-## 20% — Evidence
+### 20% — Evidence
 
 是否有：
 
@@ -861,7 +867,7 @@ new JSON tests
 
 以及 evidence 与 claim 是否匹配。
 
-## 15% — Review / Agent retrospective
+### 15% — Review / Agent retrospective
 
 是否能识别：
 
@@ -874,12 +880,6 @@ weak evidence
 
 ---
 
-# 21. Instructor Reference
+## 21. Instructor Reference
 
-完成实验前不要看：
-
-[`../case-studies/m05/instructor-analysis.md`](../case-studies/m05/instructor-analysis.md)
-
-reference 不提供“唯一正确 class diagram”。
-
-它会展示一条经过实际运行验证的 staged path，并解释为什么这条 path 足够小、为什么没有继续抽更多 abstraction。
+课程维护侧保留一份 instructor-only reference。它不提供“唯一正确 class diagram”，只验证一条 staged path 为什么足够小、为什么没有继续抽更多 abstraction。Student-facing build 不生成或导航到它；如需课后对照，由课程组织者在提交完成后另行提供。

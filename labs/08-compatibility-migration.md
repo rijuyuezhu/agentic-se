@@ -1,3 +1,9 @@
+---
+id: lab-M08
+type: lab
+visibility: student
+related: [M08]
+---
 # Lab 08 — Compatibility 与 Migration：不要把 final schema 当 rollout plan
 
 > 本实验不是“把 JSON version 从 1 改成 2”。
@@ -6,7 +12,7 @@
 
 ---
 
-# 0. 场景
+## 0. 场景
 
 TaskForge 现在有一个 durable snapshot format：
 
@@ -58,7 +64,7 @@ fixtures/m08/snapshot-v1.json
 
 ---
 
-# 1. Baseline
+## 1. Baseline
 
 运行：
 
@@ -87,7 +93,7 @@ PYTHONPATH=src uv run --with pytest --no-project python -m pytest
 
 ---
 
-# 2. 第一阶段：只读 Reconnaissance
+## 2. 第一阶段：只读 Reconnaissance
 
 在改代码前输出：
 
@@ -97,7 +103,7 @@ m08-compatibility-map.md
 
 至少回答以下问题。
 
-## 2.1 Compatibility surfaces
+### 2.1 Compatibility surfaces
 
 列出 snapshot 对外暴露的：
 
@@ -124,7 +130,7 @@ unknown
 
 不要把所有 JSON whitespace 都自动升级成 public contract。
 
-## 2.2 Producer / consumer inventory
+### 2.2 Producer / consumer inventory
 
 至少列出：
 
@@ -144,7 +150,7 @@ potential future v2 reader/writer
 代表已经部署/已经持久化的历史
 ```
 
-## 2.3 R/W matrix
+### 2.3 R/W matrix
 
 先写 starter：
 
@@ -159,11 +165,11 @@ potential future v2 reader/writer
 
 ---
 
-# 3. Design It Twice
+## 3. Design It Twice
 
 提出至少两个方案。
 
-## 方案 A：直接切 v2
+### 方案 A：直接切 v2
 
 ```text
 replace v1 parser
@@ -182,7 +188,7 @@ historical fixture
 
 会发生什么。
 
-## 方案 B：Expand first
+### 方案 B：Expand first
 
 例如：
 
@@ -213,11 +219,11 @@ cleanup cost
 
 ---
 
-# 4. 本轮 Change Contract
+## 4. 本轮 Change Contract
 
 本实验的代码 change **只实现 capability expansion**：让新版本具备同时读取 v1/v2 的能力，但不宣称 supported consumers 已完成迁移，也不切 production writer。这里的 E/M/W/C 是受 Parallel Change 启发的 durable-data adaptation：TaskForge 第一步扩的是 **reader/consumer capability**，不要求与 Fowler 原义里的 supplier-side Expand 做角色一一映射；后续 reader deployment/migration 和 durable writer cutover 是独立 rollout events。
 
-## 4.1 必须保持
+### 4.1 必须保持
 
 - `snapshot-v1.json` 文件内容不允许修改；
 - v1-format decode semantics 保持；
@@ -227,7 +233,7 @@ cleanup cost
 - `status` / `exit_code` semantics 保持；
 - unknown future major schema version 必须 explicit reject，不允许猜。
 
-## 4.2 必须新增
+### 4.2 必须新增
 
 new reader 必须同时接受：
 
@@ -256,15 +262,15 @@ normalized domain representation
 
 分开。
 
-## 4.3 v2 writer
+### 4.3 v2 writer
 
 你有两个合法选择：
 
-### Choice 1
+#### Choice 1
 
 本轮完全不提供 production v2 writer，只构造 v2 fixture/test input。
 
-### Choice 2
+#### Choice 2
 
 提供显式：
 
@@ -280,7 +286,7 @@ dumps_current_snapshot(format_version=2)
 
 而且 API/documentation 必须明确 v2 writer 还未进入默认 rollout。
 
-## 4.4 Non-goals
+### 4.4 Non-goals
 
 本轮不要：
 
@@ -296,11 +302,11 @@ dumps_current_snapshot(format_version=2)
 
 ---
 
-# 5. Required Evidence
+## 5. Required Evidence
 
 至少写以下 tests。
 
-## 5.1 Historical old data → new reader
+### 5.1 Historical old data → new reader
 
 ```text
 snapshot-v1.json
@@ -318,7 +324,7 @@ exit_code
 ordering
 ```
 
-## 5.2 v2 → new reader
+### 5.2 v2 → new reader
 
 构造至少：
 
@@ -330,7 +336,7 @@ queued
 
 不要只测一个 happy path。
 
-## 5.3 Default new writer → frozen old reader
+### 5.3 Default new writer → frozen old reader
 
 这是本实验最重要的 migration test 之一：
 
@@ -342,7 +348,7 @@ current default W
 
 它证明当前 capability-expansion change 还没有越过 writer cutover boundary；它**不能**证明 reader migration 已经完成。
 
-## 5.4 Explicit v2 writer → new reader
+### 5.4 Explicit v2 writer → new reader
 
 如果你实现 W2：
 
@@ -358,7 +364,7 @@ W2 → R1 → FAIL
 
 是已知 incompatibility，所以当前不能默认启用。
 
-## 5.5 Unknown future version
+### 5.5 Unknown future version
 
 ```text
 version 99
@@ -371,7 +377,7 @@ version 99
 fallback to v1
 ```
 
-## 5.6 Malformed v2 task
+### 5.6 Malformed v2 task
 
 至少覆盖：
 
@@ -392,7 +398,7 @@ wrong type
 
 ---
 
-# 6. Rollout Plan
+## 6. Rollout Plan
 
 代码完成后写：
 
@@ -402,7 +408,7 @@ m08-rollout-plan.md
 
 不能只写“先升级 reader 再 writer”。本实验把 Fowler 的 `Expand → Migrate clients → Contract` 与 durable format 额外存在的 writer cutover 分开记录，至少包括下面四个 event。
 
-## Phase E — Expand capability
+### Phase E — Expand capability
 
 ```text
 R2 code can read v1/v2
@@ -411,7 +417,7 @@ W1 remains default
 
 这一阶段的 exit criterion 只证明新 reader capability 本身经过测试、可以部署；**不要**把“所有 reader 都已升级”塞进 Expand 的定义。
 
-## Phase M — Migrate readers / consumers
+### Phase M — Migrate readers / consumers
 
 逐步把所有仍受支持、且可能读取 shared snapshot 的 consumers 迁到 R2。Exit criterion 可以是：
 
@@ -421,7 +427,7 @@ all supported processes/tools that may read the shared snapshot are known to run
 
 inventory 必须包括 daemon 之外的 offline repair tool、backup restore image、supported old-release rollback target 等。如果某类 consumer 无法确认，说明 writer cutover 仍有未消除的 compatibility risk。
 
-## Phase W — Writer cutover
+### Phase W — Writer cutover
 
 只有 Phase M 的前置条件满足后，才定义：
 
@@ -433,7 +439,7 @@ inventory 必须包括 daemon 之外的 offline repair tool、backup restore ima
 
 这个 event 会改变 durable data universe；它是 TaskForge 对 Parallel Change 的 operational adaptation，不要把它重命名成 Fowler 的 client-migration phase。
 
-## Phase C — Contract / cleanup
+### Phase C — Contract / cleanup
 
 明确：
 
@@ -452,11 +458,11 @@ v1 read support retained intentionally
 
 ---
 
-# 7. Rollback Analysis
+## 7. Rollback Analysis
 
 回答三个具体场景。
 
-## Case A
+### Case A
 
 ```text
 supported reader migration 已完成
@@ -467,7 +473,7 @@ rollback binaries
 
 为什么在 **snapshot-format 这一层** rollback space 仍然较大？不要把这个结论扩大成“整个 release rollback 一定容易”。
 
-## Case B
+### Case B
 
 ```text
 W2 已经写出 v2
@@ -476,7 +482,7 @@ rollback 到只支持 R1 的 binary
 
 会怎样？
 
-## Case C
+### Case C
 
 ```text
 W2 写了一部分 snapshot
@@ -496,7 +502,7 @@ W2 写了一部分 snapshot
 
 ---
 
-# 8. Dependency Review Exercise
+## 8. Dependency Review Exercise
 
 有人建议：
 
@@ -532,9 +538,9 @@ security/update cadence
 
 ---
 
-# 9. Agent Version
+## 9. Agent Version
 
-## Round A — 模糊 prompt
+### Round A — 模糊 prompt
 
 给 Agent：
 
@@ -551,7 +557,7 @@ security/update cadence
 - 忽略 rollback；
 - 自动 tolerant parse unknown future version。
 
-## Round B — Engineering prompt
+### Round B — Engineering prompt
 
 使用你在 Part 4 写的 change contract。
 
@@ -579,7 +585,7 @@ migration risk
 
 ---
 
-# 10. Independent Review
+## 10. Independent Review
 
 reviewer 不应只看 tests 绿不绿。
 
@@ -599,7 +605,7 @@ reviewer 不应只看 tests 绿不绿。
 
 ---
 
-# 11. 评分
+## 11. 评分
 
 | 部分 | 权重 |
 |---|---:|
@@ -612,7 +618,7 @@ reviewer 不应只看 tests 绿不绿。
 
 ---
 
-# 12. 完成标准
+## 12. 完成标准
 
 完成后，你应该能精确说：
 
@@ -628,8 +634,6 @@ reviewer 不应只看 tests 绿不绿。
 
 ---
 
-# 13. Instructor reference
+## 13. Instructor reference
 
-完成实验前不要看：
-
-[`../case-studies/m08/instructor-analysis.md`](../case-studies/m08/instructor-analysis.md)
+课程维护侧保留一份 instructor-only reference，用来验证 compatibility matrix、rollout/rollback reasoning 和一条可行 migration path。Student-facing build 不生成或导航到它；它也不是 writer-cutover 的唯一答案。

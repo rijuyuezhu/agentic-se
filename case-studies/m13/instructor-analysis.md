@@ -1,3 +1,9 @@
+---
+id: case-M13
+type: case_study
+visibility: instructor
+related: [M13]
+---
 # M13 Instructor Analysis — TaskForge Lease Recovery Capstone
 
 > 这是 instructor reference，不是学生第一次接触 Capstone 时应该先看的答案。建议至少完成 first-pass issue review、human decision delta、system model、design memo、candidate implementation 与 independent review 后再读。

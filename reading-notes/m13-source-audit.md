@@ -1,4 +1,12 @@
+---
+id: source-M13
+type: source_audit
+visibility: instructor
+related: [M13]
+---
 # M13 Source Audit — Capstone synthesis
+
+> 审计/复核日期：**2026-09-07**。
 
 M13 不引入新的 software-engineering principle，也不新增一套“Capstone 专用最佳实践”。它的教学目标是检验 M00–M12 已审计内容能否在一个持续演化、约束互相作用的 change 中被组合使用。
 
@@ -28,9 +36,9 @@ new empirical result
 
 ---
 
-# 2. M13 使用的 audited claim map
+## 2. M13 使用的 audited claim map
 
-## 2.1 Specification / invariant / behavior ownership
+### 2.1 Specification / invariant / behavior ownership
 
 来源：
 
@@ -52,7 +60,7 @@ Capstone 中使用：
 
 ---
 
-## 2.2 Testing / characterization / negative controls
+### 2.2 Testing / characterization / negative controls
 
 来源：
 
@@ -77,7 +85,7 @@ Capstone 中使用：
 
 ---
 
-## 2.3 Error / retry / idempotency semantics
+### 2.3 Error / retry / idempotency semantics
 
 来源：
 
@@ -98,7 +106,7 @@ Capstone 中使用：
 
 ---
 
-## 2.4 Refactoring / change topology
+### 2.4 Refactoring / change topology
 
 来源：
 
@@ -115,7 +123,7 @@ Capstone 中使用：
 
 ---
 
-## 2.5 Concurrency / linearization / crash window
+### 2.5 Concurrency / linearization / crash window
 
 来源：
 
@@ -133,7 +141,7 @@ Capstone 中使用：
 
 ---
 
-## 2.6 Compatibility / migration / rollback
+### 2.6 Compatibility / migration / rollback
 
 来源：
 
@@ -166,7 +174,7 @@ After v2 attempt activation:
 
 ---
 
-## 2.7 Architecture / authority / failure domain
+### 2.7 Architecture / authority / failure domain
 
 来源：
 
@@ -184,7 +192,7 @@ Capstone 中使用：
 
 ---
 
-## 2.8 Code review / acceptance
+### 2.8 Code review / acceptance
 
 来源：
 
@@ -202,7 +210,7 @@ Capstone 中使用：
 
 ---
 
-## 2.9 Production evidence / rollout gates
+### 2.9 Production evidence / rollout gates
 
 来源：
 
@@ -219,7 +227,7 @@ Capstone 中使用：
 
 ---
 
-## 2.10 Agent orchestration
+### 2.10 Agent orchestration
 
 来源：
 
@@ -238,7 +246,7 @@ Capstone 中使用：
 
 ---
 
-# 3. Capstone 自己新增了什么？
+## 3. Capstone 自己新增了什么？
 
 新增的是 **composition**，不是新原则。
 
@@ -274,7 +282,7 @@ Production evidence
 
 ---
 
-# 4. Reference implementation 的证据边界
+## 4. Reference implementation 的证据边界
 
 Instructor reference 在临时副本中实际验证：
 
@@ -299,7 +307,7 @@ baseline tests + reference tests = 14 passed
 
 ---
 
-# 5. 明确拒绝的 Capstone 伪规则
+## 5. 明确拒绝的 Capstone 伪规则
 
 M13 不会教：
 
@@ -331,7 +339,7 @@ Agent orchestration discipline
 
 ---
 
-# 6. Module-level audit conclusion
+## 6. Module-level audit conclusion
 
 M13 没有新增未经检查的“著名最佳实践”。
 

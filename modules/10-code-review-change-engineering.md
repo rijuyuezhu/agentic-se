@@ -1,3 +1,9 @@
+---
+id: M10
+type: module
+visibility: student
+order: 10
+---
 # M10 — Code Review 与 Change Engineering：为什么“9 passed”仍然不能替你 Approve
 
 > 一个 PR 不是一堆 changed lines。它是一份**有边界的工程论证**：作者声称某个具体 change 应该进入系统，并用实现、测试、迁移/回滚说明和其他 evidence 支撑这个 claim。
@@ -446,7 +452,7 @@ regression that this CL must repair.
 7. 聚合 root cause、校准 severity；
 8. 设计 corrected change topology 与 re-review plan。
 
-Instructor reference 在 [M10 case analysis](../case-studies/m10/instructor-analysis.md)。不要在 first-pass 前读它。
+课程维护侧保留 instructor-only case analysis；它不进入 student-facing first-pass material，也不应在 reveal probe 前充当 review oracle。
 
 ## 21. 来源边界：哪些是 source-backed，哪些是课程综合
 

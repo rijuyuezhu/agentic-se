@@ -1,4 +1,12 @@
+---
+id: source-M09
+type: source_audit
+visibility: student
+related: [M09]
+---
 # M09 Source Audit — Architecture：边界、数据流、Authority 与 Failure Domain
+
+> 审计/复核日期：**2026-09-07**。
 
 > 目标：不是收集“流行架构风格”，而是确认哪些一手材料真的能支撑 M09 的核心判断：什么决定值得上升到 architecture，系统边界怎样影响 change amplification / authority / failure propagation，以及架构文档应该记录什么。
 >
@@ -6,7 +14,7 @@
 
 ---
 
-# 0. 本模块真正要回答的问题
+## 0. 本模块真正要回答的问题
 
 M09 不问：
 
@@ -37,18 +45,18 @@ M09 不问：
 
 ---
 
-# 1. SEI — Software Architecture as Structures for Reasoning
+## 1. SEI — Software Architecture as Structures for Reasoning
 
 **状态：主干采用（architecture 的结构化定义）**
 
 实际检查：
 
 - SEI: Three Roles and Three Failure Patterns of Software Architects
-  - https://insights.sei.cmu.edu/blog/three-roles-and-three-failure-patterns-of-software-architects/
+  - [1. SEI — Software Architecture as Structures for Reasoning — source 1](https://insights.sei.cmu.edu/blog/three-roles-and-three-failure-patterns-of-software-architects/)
 - SEI historical reflection on software architecture definition
-  - https://insights.sei.cmu.edu/blog/reflections-on-20-years-of-software-architecture-a-presentation-by-linda-northrop/
+  - [1. SEI — Software Architecture as Structures for Reasoning — source 2](https://insights.sei.cmu.edu/blog/reflections-on-20-years-of-software-architecture-a-presentation-by-linda-northrop/)
 
-## 实际内容
+### 实际内容
 
 SEI 给出的核心定义不是“最高层模块图”，而是：
 
@@ -62,7 +70,7 @@ SEI 给出的核心定义不是“最高层模块图”，而是：
 
 并明确指出，仅与 element 内部实现有关、不会被其他 element 依赖的 private details，不属于 architecture concern。
 
-## 本课程吸收
+### 本课程吸收
 
 M09 因此把 architecture 看成：
 
@@ -84,7 +92,7 @@ compatibility view-> producer / consumer / version
 
 这也解释为什么“唯一正确的 architecture diagram”通常是个错误目标。
 
-## 限制
+### 限制
 
 SEI 的定义本身不告诉我们 TaskForge 应该拆成几个 process，也不会自动得出 microservice/monolith 选择。
 
@@ -94,15 +102,15 @@ SEI 的定义本身不告诉我们 TaskForge 应该拆成几个 process，也不
 
 ---
 
-# 2. Martin Fowler / Ralph Johnson — Architecture Is the Important Stuff
+## 2. Martin Fowler / Ralph Johnson — Architecture Is the Important Stuff
 
 **状态：主干采用（architectural significance / evolutionary architecture）**
 
 实际检查：
 
-- https://martinfowler.com/architecture/
+- [2. Martin Fowler / Ralph Johnson — Architecture Is the Important Stuff](https://martinfowler.com/architecture/)
 
-## 实际内容
+### 实际内容
 
 Fowler 总结 Ralph Johnson 的观点：architecture 不容易被客观地等同于“最高层”或“必须最早决定的东西”。更有用的问题是：
 
@@ -110,7 +118,7 @@ Fowler 总结 Ralph Johnson 的观点：architecture 不容易被客观地等同
 
 Fowler 同时强调：好的 architecture 应支持自身 evolution，而不是把 architecture 与 programming 分离。
 
-## 本课程吸收
+### 本课程吸收
 
 本模块把 architectural significance 写成一个定性 heuristic：
 
@@ -126,7 +134,7 @@ Fowler 同时强调：好的 architecture 应支持自身 evolution，而不是�
 
 不是公式，也不产生一个分数；它是 review checklist。
 
-## 课程拒绝的误读
+### 课程拒绝的误读
 
 不是：
 
@@ -146,17 +154,17 @@ Fowler 同时强调：好的 architecture 应支持自身 evolution，而不是�
 
 ---
 
-# 3. Stanford CS190 — Modular Design / Information Leakage
+## 3. Stanford CS190 — Modular Design / Information Leakage
 
 **状态：主干复用（dependency / knowledge boundary）**
 
 实际检查：
 
-- https://web.stanford.edu/~ouster/cgi-bin/cs190-spring16/lecture.php?topic=modularDesign
+- [3. Stanford CS190 — Modular Design / Information Leakage — source 1](https://web.stanford.edu/~ouster/cgi-bin/cs190-spring16/lecture.php?topic=modularDesign)
 - current course page:
-  - https://web.stanford.edu/~ouster/cs190-winter24/
+  - [3. Stanford CS190 — Modular Design / Information Leakage — source 2](https://web.stanford.edu/~ouster/cs190-winter24/)
 
-## 实际内容
+### 实际内容
 
 CS190 的 modular-design framing：
 
@@ -166,7 +174,7 @@ CS190 的 modular-design framing：
 - 发现 leakage 时应考虑把相关 knowledge 聚合到一个地方；
 - simple API 往往比 simple implementation 更重要。
 
-## 本课程吸收
+### 本课程吸收
 
 M02 已经把这些用于 class/module-level information hiding。
 
@@ -189,22 +197,22 @@ knowledge locality
 
 一个 in-process module 可以是很强的 semantic boundary；一个独立 service 也可能因为 shared database / backdoor reads / synchronized deployment 而根本没有形成真正独立的 boundary。
 
-## 限制
+### 限制
 
 CS190 主要讨论软件 design/modularity，不直接给 distributed failure-domain 设计规则。因此本章的 failure-domain 部分需要额外来源。
 
 ---
 
-# 4. AWS Well-Architected — Cell-based Architecture / Scope of Impact
+## 4. AWS Well-Architected — Cell-based Architecture / Scope of Impact
 
 **状态：主干采用（failure domain / isolation 是 architecture concern）**
 
 实际检查：
 
-- https://docs.aws.amazon.com/wellarchitected/latest/reducing-scope-of-impact-with-cell-based-architecture/what-is-a-cell-based-architecture.html
-- https://docs.aws.amazon.com/whitepapers/latest/aws-fault-isolation-boundaries/control-planes-and-data-planes.html
+- [4. AWS Well-Architected — Cell-based Architecture / Scope of Impact — source 1](https://docs.aws.amazon.com/wellarchitected/latest/reducing-scope-of-impact-with-cell-based-architecture/what-is-a-cell-based-architecture.html)
+- [4. AWS Well-Architected — Cell-based Architecture / Scope of Impact — source 2](https://docs.aws.amazon.com/whitepapers/latest/aws-fault-isolation-boundaries/control-planes-and-data-planes.html)
 
-## 实际内容
+### 实际内容
 
 AWS 的 cell-based architecture guidance 将 workload 分成多个独立 cell：
 
@@ -216,11 +224,11 @@ AWS 的 cell-based architecture guidance 将 workload 分成多个独立 cell：
 
 AWS 另一份 fault-isolation 文档还明确区分 **control plane** 与 **data plane**：术语来自网络；control plane 负责创建/修改资源与规则、执行 orchestration，data plane 承担服务的主要功能。AWS 强调两者可以有不同的 complexity / availability profile。
 
-## 本课程吸收
+### 本课程吸收
 
 这里最重要的不是“大家应该做 cell architecture”，而是几个 architecture questions：
 
-### 1. Scope of impact 是设计对象
+#### 1. Scope of impact 是设计对象
 
 不能只问：
 
@@ -234,15 +242,15 @@ AWS 另一份 fault-isolation 文档还明确区分 **control plane** 与 **data
 它失败时谁一起失败？
 ```
 
-### 2. Isolation boundary 需要和 state / traffic grain 对齐
+#### 2. Isolation boundary 需要和 state / traffic grain 对齐
 
 如果你画了多个 cell，却仍共享同一个 hot mutable authority，或每次请求都跨 cell 协调，那么这个 isolation boundary 很可能只是部署上的框。
 
-### 3. Control plane / data plane 是一个有条件的 reasoning lens
+#### 3. Control plane / data plane 是一个有条件的 reasoning lens
 
 TaskForge 不是网络设备，也不是 AWS 服务，因此本课程不会把术语机械套用。课程借它区分两类 responsibility：lifecycle/control authority 负责决定和记录 job 的合法状态变化；remote worker 负责执行 command 与接触 external effect，接近 **data/execution plane**。这个映射属于课程综合。它的用途是检查 privilege、availability 与 failure coupling，而不是规定必须拆成两个 service。
 
-## 限制
+### 限制
 
 TaskForge M09 不会实现 production cell architecture。
 
@@ -256,15 +264,15 @@ failure containment must correspond to real dependency/state boundaries
 
 ---
 
-# 5. Google SRE — Cascading Failures
+## 5. Google SRE — Cascading Failures
 
 **状态：主干采用（failure propagation / fallback / retry 可改变 failure domain）**
 
 实际检查：
 
-- https://sre.google/sre-book/addressing-cascading-failures/
+- [5. Google SRE — Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/)
 
-## 实际内容
+### 实际内容
 
 Google SRE 明确描述：
 
@@ -275,7 +283,7 @@ Google SRE 明确描述：
 
 这和 M07 retry amplification 是同一类系统现象。
 
-## 本课程吸收
+### 本课程吸收
 
 一个“可靠性机制”是否真的可靠，不能只从局部 happy-path 名字判断：
 
@@ -298,7 +306,7 @@ failure X
 → blast radius 变大还是变小？
 ```
 
-## 限制
+### 限制
 
 不是“不要 failover”。
 
@@ -308,15 +316,15 @@ failure X
 
 ---
 
-# 6. Martin Fowler — Monolith First
+## 6. Martin Fowler — Monolith First
 
 **状态：案例材料（deployment boundary 不等于 semantic boundary）**
 
 实际检查：
 
-- https://martinfowler.com/bliki/MonolithFirst.html
+- [6. Martin Fowler — Monolith First](https://martinfowler.com/bliki/MonolithFirst.html)
 
-## 实际内容
+### 实际内容
 
 Fowler 的文章强调：
 
@@ -324,7 +332,7 @@ Fowler 的文章强调：
 - service decomposition 依赖 good, stable boundaries；
 - 过早选择 distributed service boundaries 可能在 domain boundary 尚未理解时引入额外复杂度。
 
-## 本课程吸收
+### 本课程吸收
 
 M09 明确区分：
 
@@ -355,7 +363,7 @@ Job Authority
 
 才需要进一步考虑 process/network boundary。
 
-## 限制
+### 限制
 
 `Monolith First` 是经验性文章，不是定理。
 
@@ -373,21 +381,21 @@ Job Authority
 
 ---
 
-# 7. MartinFowler.com — DIP in the Wild
+## 7. MartinFowler.com — DIP in the Wild
 
 **状态：主干采用（dependency inversion 的实际用途）**
 
 实际检查：
 
-- https://martinfowler.com/articles/dipInTheWild.html
+- [7. MartinFowler.com — DIP in the Wild](https://martinfowler.com/articles/dipInTheWild.html)
 
-## 实际内容
+### 实际内容
 
 Brett Schuchert 对 Dependency Inversion Principle 的概括包括：high-level policy 不应依赖 low-level detail，依赖应指向更接近 domain 的 abstraction。文章特别强调，DIP 不是“有 interface 就完成了”，也不是 Dependency Injection / IoC 的同义词；把一个 JDBC connection 注入 domain code 仍然可能是错误的 dependency shape。文章的实际例子是把数据库 detail 藏到 domain-relevant repository 后面，让 storage mechanism 可以变化而不污染高层 policy。
 
 文章同时有一个重要 qualifier：abstraction 有成本，design principle 应按 context 使用，不能为了原则本身制造 speculative flexibility。
 
-## 本课程吸收
+### 本课程吸收
 
 TaskForge 的 remote-worker case 正好给出一个 system-scale application：
 
@@ -402,22 +410,22 @@ worker -> claim / finish / heartbeat semantics
 
 这里所谓“dependency inversion 的真实用途”不是给每个 class 加 interface，也不是引入 DI framework，而是让 **execution-side code 依赖 domain-level lifecycle contract，而不是低层 persistence detail**。这使 storage migration、privilege separation 和 network boundary 可以在不泄漏 row/schema knowledge 给 worker 的前提下演化。
 
-## 限制
+### 限制
 
 DIP 不自动证明 Job Authority 这个 architecture 一定正确。它只帮助判断 dependency 应朝哪个 abstraction level 指向；是否值得建立该 boundary，仍要由 remote execution、authority、security、failure 与 evolution requirements 支付。
 
 ---
 
-# 8. Martin Fowler — Architecture Decision Record (2026)
+## 8. Martin Fowler — Architecture Decision Record (2026)
 
 
 **状态：主干采用（architecture reasoning preservation）**
 
 实际检查：
 
-- https://martinfowler.com/bliki/ArchitectureDecisionRecord.html
+- [8. Martin Fowler — Architecture Decision Record (2026)](https://martinfowler.com/bliki/ArchitectureDecisionRecord.html)
 
-## 实际内容
+### 实际内容
 
 Fowler 2026 的 ADR 页面将 ADR 定义为短文档，记录单个相关 decision，并包含：
 
@@ -430,7 +438,7 @@ Fowler 2026 的 ADR 页面将 ADR 定义为短文档，记录单个相关 decisi
 
 他特别强调写 ADR 不只是为了 archival；写作本身会迫使参与者明确 trade-offs 和 disagreement。
 
-## 本课程吸收
+### 本课程吸收
 
 M09 不要求“每个技术选择一个 ADR”。
 
@@ -445,7 +453,7 @@ M09 不要求“每个技术选择一个 ADR”。
 
 TaskForge M09 lab 会让学生写一个**短 ADR**，而不是写宏大的 architecture spec。
 
-## 特别适合 Agent 时代的一点
+### 特别适合 Agent 时代的一点
 
 代码保留的是：
 
@@ -465,7 +473,7 @@ what assumption would trigger reconsideration
 
 因此它是跨 human/Agent session 的 reasoning boundary。
 
-## 限制
+### 限制
 
 ADR 本身不会让错误 architecture 变正确。
 
@@ -473,7 +481,7 @@ ADR 本身不会让错误 architecture 变正确。
 
 ---
 
-# 9. Parnas 1972 — 本轮处理方式
+## 9. Parnas 1972 — 本轮处理方式
 
 历史论文：
 
@@ -491,7 +499,7 @@ M02/M09 关于 information hiding 的课程主张已经有 Stanford CS190 / Oust
 
 ---
 
-# 10. 本模块的综合模型：Architecture = Consequential Boundaries
+## 10. 本模块的综合模型：Architecture = Consequential Boundaries
 
 下面是课程综合，不归因于单一来源。
 
@@ -537,11 +545,11 @@ worker 又可以直接修改 authoritative row
 
 ---
 
-# 11. Architecture View 不是“一张全能图”
+## 11. Architecture View 不是“一张全能图”
 
 课程综合采用多-view：
 
-## View A — Responsibility / knowledge
+### View A — Responsibility / knowledge
 
 ```text
 谁知道 command representation？
@@ -549,7 +557,7 @@ worker 又可以直接修改 authoritative row
 谁知道 persistence schema？
 ```
 
-## View B — Authority / state
+### View B — Authority / state
 
 ```text
 source of truth
@@ -559,13 +567,13 @@ snapshot
 cache
 ```
 
-## View C — Runtime data/control flow
+### View C — Runtime data/control flow
 
 ```text
 submit → schedule → execute → finish → observe
 ```
 
-## View D — Failure propagation
+### View D — Failure propagation
 
 ```text
 process crash
@@ -575,7 +583,7 @@ external sink duplicate
 bad deployment
 ```
 
-## View E — Evolution / compatibility
+### View E — Evolution / compatibility
 
 ```text
 producer version
@@ -590,7 +598,7 @@ rollback target
 
 ---
 
-# 12. Source audit 之后 M09 可以严谨教授什么
+## 12. Source audit 之后 M09 可以严谨教授什么
 
 可以：
 
@@ -618,7 +626,7 @@ rollback target
 
 ---
 
-# 13. M09 TaskForge teaching target
+## 13. M09 TaskForge teaching target
 
 TaskForge 前几章已经自然暴露了 architecture pressure：
 

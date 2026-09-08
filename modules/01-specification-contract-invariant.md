@@ -1,3 +1,9 @@
+---
+id: M01
+type: module
+visibility: student
+order: 1
+---
 # M01 — Specification、Contract 与 Invariant
 
 M00 里，TaskForge 的 `cancel(job_id)` 从几行代码一路长出了 durability、concurrency、state transition 和 compatibility 问题。现在假设实现者已经交来一个 patch，tests 也全绿。reviewer 问了一句看似最简单的话：**这个实现对不对？**
@@ -380,8 +386,8 @@ Specification 让 implementation 有了 correctness target；invariant 让多个
 
 ### 可选原始材料
 
-本章没有单独新增 technical provenance；重写保持原知识线，材料审查见 [`../MATERIALS_REVIEW.md`](../MATERIALS_REVIEW.md) 中 MIT 6.102 的部分。进一步可读：
+本章没有单独新增 technical provenance；重写保持原知识线，相关 MIT 6.102 材料已经经过课程维护侧审计。进一步可读：
 
-- MIT 6.102 Specifications: https://web.mit.edu/6.102/www/sp26/classes/04-specifications/
-- MIT 6.102 Designing Specifications: https://web.mit.edu/6.102/www/sp26/classes/05-designing-specs/
-- MIT 6.102 AF/RI: https://web.mit.edu/6.102/www/sp26/classes/07-abstraction-functions-rep-invariants/
+- [MIT 6.102 Specifications](https://web.mit.edu/6.102/www/sp26/classes/04-specifications/)
+- [MIT 6.102 Designing Specifications](https://web.mit.edu/6.102/www/sp26/classes/05-designing-specs/)
+- [MIT 6.102 AF/RI](https://web.mit.edu/6.102/www/sp26/classes/07-abstraction-functions-rep-invariants/)

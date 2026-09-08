@@ -1,3 +1,9 @@
+---
+id: ext-professional-practice
+type: extension
+visibility: student
+related: [M10, M12]
+---
 # Professional Practice：责任、沟通、隐私与许可
 
 Coding agent 能生成一个 patch，不能回答一个更根本的问题：**如果这个 patch 造成损害，谁对“为什么允许它进入系统”负责？**

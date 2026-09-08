@@ -1,3 +1,9 @@
+---
+id: lab-M10
+type: lab
+visibility: student
+related: [M10]
+---
 # Lab 10 — 独立 Review 一个“9 passed”的 Agent PR
 
 > 这不是“老师藏了几个 bug，学生负责猜答案”的实验。
@@ -35,13 +41,7 @@ tools/m10_review_case.py
 3. **不因为 CI green 自动 approve，也不因为“这是教学坏 PR”自动 request changes。**
 4. **introduced regression、pre-existing issue、historical exception 和 out-of-scope cleanup 必须分开。**
 
-Instructor reference：
-
-```text
-case-studies/m10/instructor-analysis.md
-```
-
-在 first-pass review 完成前不要读。
+课程维护侧保留 instructor-only reference，但它不进入 student-facing build，也不提供给 first-pass review。学生先完成自己的 finding/evidence，再由课程组织者决定是否提供 reference 做课后校准。
 
 ## 2. Phase A — 先把 issue/change contract 写出来
 

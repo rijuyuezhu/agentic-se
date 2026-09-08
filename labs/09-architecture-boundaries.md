@@ -1,3 +1,9 @@
+---
+id: lab-M09
+type: lab
+visibility: student
+related: [M09]
+---
 # Lab 09 — Architecture：从“很多模块”到可推理的系统边界
 
 > 本实验不是画一张漂亮的大图。
@@ -6,7 +12,7 @@
 
 ---
 
-# 0. 规则
+## 0. 规则
 
 本实验有几个强制约束：
 
@@ -23,7 +29,7 @@
 
 ---
 
-# 1. Baseline
+## 1. Baseline
 
 进入：
 
@@ -63,7 +69,7 @@ concurrent_claim, service, worker
 
 ---
 
-# 2. 先做 Source Classification
+## 2. 先做 Source Classification
 
 把 `src/taskforge/*.py` 分成：
 
@@ -106,11 +112,11 @@ concurrent_claim.py
 
 ---
 
-# 3. Current Architecture — 五张小图
+## 3. Current Architecture — 五张小图
 
 不要画一张万能图。
 
-## 3.1 Responsibility / Knowledge View
+### 3.1 Responsibility / Knowledge View
 
 填写：
 
@@ -129,7 +135,7 @@ concurrent_claim.py
 
 ---
 
-## 3.2 Authority / State View
+### 3.2 Authority / State View
 
 列出：
 
@@ -148,7 +154,7 @@ concurrent_claim.py
 
 ---
 
-## 3.3 Runtime View
+### 3.3 Runtime View
 
 画：
 
@@ -165,7 +171,7 @@ external effect
 
 ---
 
-## 3.4 Failure View
+### 3.4 Failure View
 
 至少分析：
 
@@ -187,7 +193,7 @@ not yet modeled
 
 ---
 
-## 3.5 Evolution View
+### 3.5 Evolution View
 
 结合 M08：
 
@@ -199,7 +205,7 @@ not yet modeled
 
 ---
 
-# 4. 新需求
+## 4. 新需求
 
 产品现在提出：
 
@@ -219,11 +225,11 @@ not yet modeled
 
 ---
 
-# 5. 设计两个 Architecture
+## 5. 设计两个 Architecture
 
 必须至少做 A/B 两案。
 
-## Design A — Central Semantic Authority + Remote Worker Protocol
+### Design A — Central Semantic Authority + Remote Worker Protocol
 
 建议起点：
 
@@ -261,7 +267,7 @@ external effect
 
 ---
 
-## Design B — Shared DB Coordination
+### Design B — Shared DB Coordination
 
 ```text
 API --------\
@@ -287,7 +293,7 @@ worker ------/
 
 ---
 
-# 6. Optional Design C — Replicated Per-Worker State
+## 6. Optional Design C — Replicated Per-Worker State
 
 如果你愿意，再设计：
 
@@ -308,7 +314,7 @@ sync/event reconciliation
 
 ---
 
-# 7. Decision Matrix
+## 7. Decision Matrix
 
 至少包含：
 
@@ -335,7 +341,7 @@ B simpler
 
 ---
 
-# 8. 写 Architecture Invariants
+## 8. 写 Architecture Invariants
 
 至少写 6 条。
 
@@ -361,7 +367,7 @@ A6. Independently deployed authority/worker versions require an explicit
 
 ---
 
-# 9. 写 Failure Walk
+## 9. 写 Failure Walk
 
 对下面每个 failure：
 
@@ -390,7 +396,7 @@ M07 的结论在这里必须复用。
 
 ---
 
-# 10. 明确 Snapshot Role
+## 10. 明确 Snapshot Role
 
 当前 `snapshot.py` 只是：
 
@@ -421,7 +427,7 @@ reference 建议本轮选 A。
 
 ---
 
-# 11. 写 ADR
+## 11. 写 ADR
 
 创建你自己的：
 
@@ -462,7 +468,7 @@ Status: Proposed / Accepted
 
 ---
 
-# 12. Implementation Phase：只做一个 Architecture-Enabling Refactor
+## 12. Implementation Phase：只做一个 Architecture-Enabling Refactor
 
 目标：
 
@@ -524,7 +530,7 @@ metrics.py
 
 ---
 
-# 13. Dependency inversion 也不等于“现在就建十个 Interface”
+## 13. Dependency inversion 也不等于“现在就建十个 Interface”
 
 本章确实要求你理解 dependency inversion 的实际用途：high-level lifecycle/execution code 应依赖 domain-relevant contract，而不是 storage representation。但这**不等于**现在必须实现 Store Interface + RPC Interface + Repository + DI framework。
 
@@ -553,7 +559,7 @@ in-memory storage
 
 ---
 
-# 14. Architecture Fitness Check
+## 14. Architecture Fitness Check
 
 refactor 后写一个小检查。它的 scope 是 **direct-state dependency localization**，不是 complete mutation-capability isolation。
 
@@ -582,7 +588,7 @@ all files in repo must not import state
 
 ---
 
-# 15. Behavior Evidence
+## 15. Behavior Evidence
 
 至少跑：
 
@@ -616,7 +622,7 @@ record why no longer applicable
 
 ---
 
-# 16. Evidence Table
+## 16. Evidence Table
 
 交付：
 
@@ -632,7 +638,7 @@ record why no longer applicable
 
 ---
 
-# 17. Agent Reconnaissance Prompt
+## 17. Agent Reconnaissance Prompt
 
 先给 Agent：
 
@@ -662,7 +668,7 @@ Support claims with file/line evidence.
 
 ---
 
-# 18. Agent Design Prompt
+## 18. Agent Design Prompt
 
 第二轮：
 
@@ -695,7 +701,7 @@ Do not add infrastructure without tying it to a stated requirement.
 
 ---
 
-# 19. Agent Implementation Contract
+## 19. Agent Implementation Contract
 
 只在 design review 后：
 
@@ -716,11 +722,11 @@ Run core tests and M05-M09 probes.
 
 ---
 
-# 20. Independent Review
+## 20. Independent Review
 
 reviewer 不看 Agent summary，自己检查：
 
-## Architecture
+### Architecture
 
 - normal transition policy / direct-state access 是否真的 localize 到 accepted seam？
 - storage knowledge 是否仍从 normal worker path 泄漏？
@@ -729,14 +735,14 @@ reviewer 不看 Agent summary，自己检查：
 - snapshot role 是否明确？
 - historical exception 是否 document？
 
-## Change
+### Change
 
 - 有没有顺手引入 repository/DI framework？
 - 有没有改变 public behavior？
 - 有没有破坏 prior compatibility fixture？
 - 有没有把 M07 teaching artifact 当 production bug 修掉？
 
-## Future
+### Future
 
 - 换 SQLite/Postgres 时 worker 是否需要知道？
 - 真正加 RPC 时 semantic API 是否已经足够清楚？
@@ -744,40 +750,40 @@ reviewer 不看 Agent summary，自己检查：
 
 ---
 
-# 21. Grading
+## 21. Grading
 
 总分 100。
 
-## 25 — Current architecture recovery
+### 25 — Current architecture recovery
 
 - source classification；
 - five views；
 - actual authority / dependency evidence。
 
-## 20 — Alternative design quality
+### 20 — Alternative design quality
 
 - 至少两个真实 alternatives；
 - 不 strawman；
 - consequence-based comparison。
 
-## 20 — Failure / evolution reasoning
+### 20 — Failure / evolution reasoning
 
 - failure walk；
 - rollout / rollback；
 - protocol versioning；
 - blast radius。
 
-## 15 — Architecture invariants / ADR
+### 15 — Architecture invariants / ADR
 
 - stable consequential rules；
 - ADR 有 context / alternatives / consequences / revisit trigger。
 
-## 10 — Minimal implementation
+### 10 — Minimal implementation
 
 - authority boundary 清楚；
 - 不 overbuild。
 
-## 10 — Evidence / Agent orchestration
+### 10 — Evidence / Agent orchestration
 
 - prior behavior evidence；
 - architecture fitness check；
@@ -785,7 +791,7 @@ reviewer 不看 Agent summary，自己检查：
 
 ---
 
-# 22. 本章不按这些东西加分
+## 22. 本章不按这些东西加分
 
 不会因为你：
 
@@ -805,7 +811,7 @@ reviewer 不看 Agent summary，自己检查：
 
 ---
 
-# 23. 最后问题
+## 23. 最后问题
 
 完成后，不看你的图，尝试只用 90 秒回答：
 

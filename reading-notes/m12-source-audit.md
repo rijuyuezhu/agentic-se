@@ -1,3 +1,9 @@
+---
+id: source-M12
+type: source_audit
+visibility: student
+related: [M12]
+---
 # M12 Source Audit — Agentic Software Engineering
 
 > 本文件记录 M12 真正检查过的一手/近一手材料、课程吸收的具体 claim、以及明确不升级成课程定律的内容。
@@ -27,11 +33,9 @@ M12 不是一个产品使用教程。
 
 ---
 
-# 1. OpenAI Codex — Best practices
+## 1. OpenAI Codex — Best practices
 
-URL:
-
-https://learn.chatgpt.com/guides/best-practices
+[1. OpenAI Codex — Best practices](https://learn.chatgpt.com/guides/best-practices)
 
 本轮实际检查的当前内容包括：
 
@@ -99,11 +103,9 @@ workflow architecture
 
 ---
 
-# 2. OpenAI Codex — `AGENTS.md`
+## 2. OpenAI Codex — `AGENTS.md`
 
-URL:
-
-https://learn.chatgpt.com/docs/agent-configuration/agents-md
+[2. OpenAI Codex — `AGENTS.md`](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
 
 本轮实际检查：
 
@@ -143,11 +145,9 @@ task-specific contract
 
 ---
 
-# 3. OpenAI Codex — ExecPlans / `PLANS.md`
+## 3. OpenAI Codex — ExecPlans / `PLANS.md`
 
-URL:
-
-https://developers.openai.com/cookbook/articles/codex_exec_plans
+[3. OpenAI Codex — ExecPlans / `PLANS.md`](https://developers.openai.com/cookbook/articles/codex_exec_plans)
 
 本轮检查的核心不是模板格式，而是：
 
@@ -182,11 +182,9 @@ cross-cutting / multi-stage / long-running change
 
 ---
 
-# 4. OpenAI Codex — Subagents
+## 4. OpenAI Codex — Subagents
 
-URL:
-
-https://learn.chatgpt.com/docs/agent-configuration/subagents
+[4. OpenAI Codex — Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents)
 
 本轮实际检查：
 
@@ -240,11 +238,9 @@ Agent A/B/C simultaneously edit service.py
 
 ---
 
-# 5. OpenAI — Unrolling the Codex agent loop
+## 5. OpenAI — Unrolling the Codex agent loop
 
-URL:
-
-https://openai.com/index/unrolling-the-codex-agent-loop/
+[5. OpenAI — Unrolling the Codex agent loop](https://openai.com/index/unrolling-the-codex-agent-loop/)
 
 本轮检查的关键内容：
 
@@ -296,11 +292,9 @@ authority
 
 ---
 
-# 6. Anthropic — Building effective agents
+## 6. Anthropic — Building effective agents
 
-URL:
-
-https://www.anthropic.com/engineering/building-effective-agents
+[6. Anthropic — Building effective agents](https://www.anthropic.com/engineering/building-effective-agents)
 
 Published: 2024-12-19。
 
@@ -350,11 +344,9 @@ right autonomy at the right boundary
 
 ---
 
-# 7. Anthropic — Effective harnesses for long-running agents
+## 7. Anthropic — Effective harnesses for long-running agents
 
-URL:
-
-https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
+[7. Anthropic — Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)
 
 Published: 2025-11-26。
 
@@ -417,11 +409,9 @@ agent conversation state
 
 ---
 
-# 8. Anthropic — Harness design for long-running application development
+## 8. Anthropic — Harness design for long-running application development
 
-URL:
-
-https://www.anthropic.com/engineering/harness-design-long-running-apps
+[8. Anthropic — Harness design for long-running application development](https://www.anthropic.com/engineering/harness-design-long-running-apps)
 
 Published: 2026-03-24。
 
@@ -459,11 +449,9 @@ identify invariant / risk
 
 ---
 
-# 9. Anthropic — Demystifying evals for AI agents
+## 9. Anthropic — Demystifying evals for AI agents
 
-URL:
-
-https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
+[9. Anthropic — Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)
 
 Published: 2026-01-09。
 
@@ -500,11 +488,9 @@ M12 会要求对 Agent workflow 的 eval 同样问：
 
 ---
 
-# 10. Anthropic — Building a C compiler with a team of parallel Claudes
+## 10. Anthropic — Building a C compiler with a team of parallel Claudes
 
-URL:
-
-https://www.anthropic.com/engineering/building-c-compiler
+[10. Anthropic — Building a C compiler with a team of parallel Claudes](https://www.anthropic.com/engineering/building-c-compiler)
 
 Published: 2026-02-05。
 
@@ -539,11 +525,9 @@ verification quality + task decomposition + coordination surface
 
 ---
 
-# 11. SWE-bench original paper
+## 11. SWE-bench original paper
 
-URL:
-
-https://arxiv.org/abs/2310.06770
+[11. SWE-bench original paper](https://arxiv.org/abs/2310.06770)
 
 本轮使用它只建立 benchmark scope：
 
@@ -560,11 +544,9 @@ https://arxiv.org/abs/2310.06770
 
 ---
 
-# 12. METR 2026 — Many SWE-bench-Passing PRs Would Not Be Merged into Main
+## 12. METR 2026 — Many SWE-bench-Passing PRs Would Not Be Merged into Main
 
-URL:
-
-https://metr.org/notes/2026-03-10-many-swe-bench-passing-prs-would-not-be-merged-into-main/
+[12. METR 2026 — Many SWE-bench-Passing PRs Would Not Be Merged into Main](https://metr.org/notes/2026-03-10-many-swe-bench-passing-prs-would-not-be-merged-into-main/)
 
 Published: 2026-03-10。
 
@@ -607,15 +589,11 @@ benchmark/test pass
 
 ---
 
-# 13. METR — Developer productivity evidence
+## 13. METR — Developer productivity evidence
 
-Early-2025 study:
+[Early-2025 study](https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/)
 
-https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/
-
-2026 methodology update:
-
-https://metr.org/blog/2026-02-24-uplift-update/
+[2026 methodology update](https://metr.org/blog/2026-02-24-uplift-update/)
 
 课程使用这组材料的目的不是宣称：
 
@@ -658,11 +636,9 @@ maintainer acceptance
 
 并根据实际 workflow 调整 measurement model。
 
-## 13.1 METR 2026-05 — self-reported technical-worker survey
+### 13.1 METR 2026-05 — self-reported technical-worker survey
 
-Primary source:
-
-https://metr.org/blog/2026-05-11-ai-usage-survey/
+[Primary source](https://metr.org/blog/2026-05-11-ai-usage-survey/)
 
 Published: 2026-05-11。
 
@@ -683,13 +659,11 @@ Published: 2026-05-11。
 
 ---
 
-# 14. GitHub Copilot Code Review docs
+## 14. GitHub Copilot Code Review docs
 
-URLs:
+[URLs](https://docs.github.com/en/copilot/concepts/agents/code-review)
 
-https://docs.github.com/en/copilot/concepts/agents/code-review
-
-https://docs.github.com/en/copilot/tutorials/customize-code-review
+[14. GitHub Copilot Code Review docs — source](https://docs.github.com/en/copilot/tutorials/customize-code-review)
 
 本轮使用的不是 GitHub 的产品结论，而是几个具体 operational fact：
 
@@ -727,7 +701,7 @@ PR can edit its own workflow / tests
 
 ---
 
-# 15. 本章综合模型
+## 15. 本章综合模型
 
 这些材料来自不同厂商、研究团队和时间点，但共同指向一个稳定结构：
 
@@ -767,11 +741,11 @@ PR can edit its own workflow / tests
 
 ---
 
-# 16. M12 明确拒绝升级成“定律”的说法
+## 16. M12 明确拒绝升级成“定律”的说法
 
 以下都不会成为本课程 rule：
 
-## 16.1 “Prompt 越长越好”
+### 16.1 “Prompt 越长越好”
 
 错误。
 
@@ -783,7 +757,7 @@ relevant + scoped + durable + testable context
 
 ---
 
-## 16.2 “一定先让 Agent 写 plan”
+### 16.2 “一定先让 Agent 写 plan”
 
 错误。
 
@@ -793,7 +767,7 @@ relevant + scoped + durable + testable context
 
 ---
 
-## 16.3 “两个 Agent 一定比一个 Agent 好”
+### 16.3 “两个 Agent 一定比一个 Agent 好”
 
 错误。
 
@@ -801,7 +775,7 @@ parallel write-heavy task 可能增加 semantic/merge coordination cost。
 
 ---
 
-## 16.4 “实现 Agent 不能 review 自己”
+### 16.4 “实现 Agent 不能 review 自己”
 
 作为唯一 acceptance authority：通常不够独立。
 
@@ -817,7 +791,7 @@ independent acceptance path
 
 ---
 
-## 16.5 “所有 production action 都必须人工点按钮”
+### 16.5 “所有 production action 都必须人工点按钮”
 
 不是 universal rule。
 
@@ -838,7 +812,7 @@ independent acceptance path
 
 ---
 
-## 16.6 “SWE-bench score 就是软件工程能力”
+### 16.6 “SWE-bench score 就是软件工程能力”
 
 错误。
 
@@ -846,7 +820,7 @@ benchmark 是 evidence source，不是完整 real-world acceptance model。
 
 ---
 
-## 16.7 “AI 一定提高/降低开发效率”
+### 16.7 “AI 一定提高/降低开发效率”
 
 当前 evidence 强烈依赖：
 
@@ -862,7 +836,7 @@ benchmark 是 evidence source，不是完整 real-world acceptance model。
 
 ---
 
-# 17. 对 M12 教学设计的直接影响
+## 17. 对 M12 教学设计的直接影响
 
 M12 应当训练学生产出这些 artifacts：
 
@@ -883,7 +857,7 @@ M12 应当训练学生产出这些 artifacts：
 
 ---
 
-# 18. TaskForge M12 适合施加的 pressure
+## 18. TaskForge M12 适合施加的 pressure
 
 前面模块已经具备：
 
@@ -918,7 +892,7 @@ production evidence
 
 ---
 
-# 19. Source-quality conclusion
+## 19. Source-quality conclusion
 
 M12 不需要一部“Agentic Software Engineering 圣经”。
 

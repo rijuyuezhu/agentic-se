@@ -1,3 +1,8 @@
+---
+id: materials-review
+type: reference
+visibility: internal
+---
 # 候选课程 / 教材审计记录
 
 > 目的：防止“因为有名所以推荐”。
@@ -25,15 +30,15 @@
 
 ---
 
-# 1. MIT 6.102 — Software Construction
+## 1. MIT 6.102 — Software Construction
 
 **状态：主干采用（基础层）**
 
 官方课程：
-- Spring 2026: https://web.mit.edu/6.102/www/sp26/
-- Spring 2025: https://web.mit.edu/6.102/www/sp25/
+- [Spring 2026](https://web.mit.edu/6.102/www/sp26/)
+- [Spring 2025](https://web.mit.edu/6.102/www/sp25/)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了 2025/2026 课程总目录、readings、problem sets，以及 AF/RI 和作业要求。
 
@@ -62,13 +67,13 @@ PS 不只是“写对功能”：课程要求写 documented specifications、abs
 
 AF/RI 阅读还明确使用一个三阶段 recipe：**Spec → Test → Implement**，并强调写测试会反过来给 spec 施加压力。
 
-## 为什么好
+### 为什么好
 
-### 1. 它把“spec”放在 implementation 前面
+#### 1. 它把“spec”放在 implementation 前面
 
 这对 Agent 协作尤其重要。Agent 很容易生成实现；真正稀缺的是“实现应该满足什么”。
 
-### 2. ADT / AF / RI 把 abstraction 讲到了可推理层
+#### 2. ADT / AF / RI 把 abstraction 讲到了可推理层
 
 很多课程说“封装”，但 6.102 会追问：
 
@@ -78,13 +83,13 @@ AF/RI 阅读还明确使用一个三阶段 recipe：**Spec → Test → Implemen
 
 这比背“encapsulation is good”强很多。
 
-### 3. 测试、spec、code review 是连续教学，而不是孤立章节
+#### 3. 测试、spec、code review 是连续教学，而不是孤立章节
 
 作业有 alpha / code review / beta 的迭代结构，这说明 review 被当成 construction feedback loop，而不是最后检查 style。
 
-## 局限
+### 局限
 
-### 1. 规模上限偏中等
+#### 1. 规模上限偏中等
 
 它非常适合“software construction”，但不是完整的长期 software evolution 课程。
 
@@ -98,11 +103,11 @@ AF/RI 阅读还明确使用一个三阶段 recipe：**Spec → Test → Implemen
 - incident/failure recovery；
 - 大规模 change management。
 
-### 2. TypeScript 只是载体，不应成为课程主体
+#### 2. TypeScript 只是载体，不应成为课程主体
 
 部分内容（如 equality、parsing、specific TS mechanics）对我们的目标优先级较低。
 
-## 本课程怎么用
+### 本课程怎么用
 
 重点吸收：
 
@@ -118,14 +123,14 @@ AF/RI 阅读还明确使用一个三阶段 recipe：**Spec → Test → Implemen
 
 ---
 
-# 2. Stanford CS190 — Software Design Studio
+## 2. Stanford CS190 — Software Design Studio
 
 **状态：主干采用（设计训练方法）**
 
 官方课程：
-- Winter 2021: https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/
+- [Winter 2021](https://web.stanford.edu/~ouster/cgi-bin/cs190-winter21/)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了：
 
@@ -164,9 +169,9 @@ reviewer 则被要求检查：
 - concurrency/failure 是否容易推理；
 - 新需求加入时多少地方要改。
 
-## 为什么好
+### 为什么好
 
-### 1. 它真正训练 design judgment
+#### 1. 它真正训练 design judgment
 
 它不要求学生“定义 information hiding”，而是让学生在自己刚写完的系统上被追问：
 
@@ -174,31 +179,31 @@ reviewer 则被要求检查：
 
 这是很强的训练。
 
-### 2. revision 是课程的一等公民
+#### 2. revision 是课程的一等公民
 
 Project 2 明确要求学生基于 review **重做 Project 1 的设计**，并写 changes 文件解释最显著的结构改进。
 
 这非常贴近真实 engineering：第一次设计不是最终答案。
 
-### 3. review 看系统上下文，而非只看 diff/style
+#### 3. review 看系统上下文，而非只看 diff/style
 
 尤其 persistence、RPC、state machine 的 rubric 很适合移植成 Agent PR review checklist。
 
-## 局限
+### 局限
 
-### 1. 很大程度上代表 Ousterhout 的设计哲学
+#### 1. 很大程度上代表 Ousterhout 的设计哲学
 
 “deep classes”“general-purpose modules”等观点有很强解释力，但不能伪装成已被形式证明的普适定律。
 
-### 2. 课程使用 C++ / class decomposition 的语言较多
+#### 2. 课程使用 C++ / class decomposition 的语言较多
 
 我们的课程会把概念提升到 module/process/service/state owner，不绑定 OO class。
 
-### 3. correctness 在该 studio 中不是第一评分目标
+#### 3. correctness 在该 studio 中不是第一评分目标
 
 这是为了聚焦 design 的教学取舍；我们的课程不能照搬，因为 Agent 时代尤其需要把 design judgment 和 correctness evidence 合起来。
 
-## 本课程怎么用
+### 本课程怎么用
 
 重点吸收它的 **教学方法**：
 
@@ -210,15 +215,15 @@ Project 2 明确要求学生基于 review **重做 Project 1 的设计**，并�
 
 ---
 
-# 3. John Ousterhout — A Philosophy of Software Design, 2nd ed.
+## 3. John Ousterhout — A Philosophy of Software Design, 2nd ed.
 
 **状态：主干采用，但明确视为“设计哲学”，不是圣经**
 
 作者官方页面：
-- https://web.stanford.edu/~ouster/cgi-bin/aposd.php
-- 2nd edition extract: https://web.stanford.edu/~ouster/cgi-bin/aposd2ndEdExtract.pdf
+- [3. John Ousterhout — A Philosophy of Software Design, 2nd ed.](https://web.stanford.edu/~ouster/cgi-bin/aposd.php)
+- [2nd edition extract](https://web.stanford.edu/~ouster/cgi-bin/aposd2ndEdExtract.pdf)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了作者对第二版变更的说明、公开 extract、CS190 对全书核心概念的讨论。
 
@@ -238,13 +243,13 @@ Project 2 明确要求学生基于 review **重做 Project 1 的设计**，并�
 - comments / obvious code；
 - decide what matters。
 
-## 为什么好
+### 为什么好
 
 它最大的价值是提供了一套 **讨论软件设计的 vocabulary**。
 
 尤其“复杂度不是代码行数，而是修改者需要同时理解多少东西、修改会扩散多远、是否存在 unknown unknowns”非常适合作为全课的统一视角。
 
-## 局限和争议
+### 局限和争议
 
 - 很多原则来自长期系统构建经验，不是 empirical law；
 - 对 general-purpose module 的偏好需要防止被学生误解为“提前做万能框架”；
@@ -255,14 +260,14 @@ Project 2 明确要求学生基于 review **重做 Project 1 的设计**，并�
 
 ---
 
-# 4. Software Engineering at Google
+## 4. Software Engineering at Google
 
 **状态：主干采用（时间、规模、组织与变更层）**
 
 官方免费全文：
-- https://abseil.io/resources/swe-book/html/toc.html
+- [4. Software Engineering at Google](https://abseil.io/resources/swe-book/html/toc.html)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了前言/定义，以及以下章节正文或详细目录：
 
@@ -278,9 +283,9 @@ Project 2 明确要求学生基于 review **重做 Project 1 的设计**，并�
 
 书的核心定义很符合本课程：software engineering 不只是 programming，而是 **programming integrated over time**，也就是组织用来长期构建和维护代码的工具与过程。
 
-## 为什么好
+### 为什么好
 
-### 1. 它把“time”真正引入软件工程
+#### 1. 它把“time”真正引入软件工程
 
 很多本科课程把设计理解成“交作业前设计一次”；这本书反复讨论：
 
@@ -289,27 +294,27 @@ Project 2 明确要求学生基于 review **重做 Project 1 的设计**，并�
 - dependency 如何升级；
 - large-scale change 为什么不能靠一次 atomic commit。
 
-### 2. testing 章节不是 coverage 崇拜
+#### 2. testing 章节不是 coverage 崇拜
 
 它强调测试支持 **change confidence**；unit testing 章节讨论 brittle tests、public API、state vs interactions、DAMP vs DRY。
 
-### 3. dependency management 章节足够诚实
+#### 3. dependency management 章节足够诚实
 
 它明确承认该问题很难、没有万能答案，并讨论 SemVer 的信息损失、diamond dependency、Hyrum's Law 和跨组织协调限制。
 
 这比“版本号按 x.y.z 就解决了”严谨得多。
 
-### 4. large-scale changes 非常适合 Agent 时代
+#### 4. large-scale changes 非常适合 Agent 时代
 
 其中直接讨论 machine-authored / tool-generated changes 如何依赖测试、sharding、review 和异常检测。这和未来大量 Agent patch 的治理问题高度相关。
 
-## 局限
+### 局限
 
 - Google 的 monorepo、build/test infra、组织规模非常特殊；
 - “Google 这样做”不能直接推出小团队也应这样做；
 - 人员/组织章节很多，不全部服务于本课程目标。
 
-## 本课程怎么用
+### 本课程怎么用
 
 选择性吸收：
 
@@ -323,14 +328,14 @@ Project 2 明确要求学生基于 review **重做 Project 1 的设计**，并�
 
 ---
 
-# 5. Martin Fowler — Refactoring, 2nd ed.
+## 5. Martin Fowler — Refactoring, 2nd ed.
 
 **状态：选择性采用**
 
 作者官方页：
-- https://martinfowler.com/books/refactoring.html
+- [5. Martin Fowler — Refactoring, 2nd ed.](https://martinfowler.com/books/refactoring.html)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了作者对第二版结构的说明、opening chapter 入口、refactoring catalog 的定位。
 
@@ -342,19 +347,19 @@ Project 2 明确要求学生基于 review **重做 Project 1 的设计**，并�
 - code smells 是“进一步调查”的信号，而不是形式化错误；
 - 大量 refactoring 有明确 mechanics。
 
-## 为什么好
+### 为什么好
 
 它提供的是 **change mechanics**：把“我觉得应该重构”变成一系列可以验证的小步。
 
 Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，因为它降低的是 **reasoning/review risk**，而不只是人敲键盘的成本。
 
-## 局限
+### 局限
 
 - catalog 很大，不值得逐项背；
 - 许多 IDE 已自动化机械 refactoring；
 - 如果学生只学“smell → pattern”，会退化成模式匹配而不是设计 reasoning。
 
-## 本课程怎么用
+### 本课程怎么用
 
 只讲：
 
@@ -367,15 +372,15 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 
 ---
 
-# 6. Michael Feathers — Working Effectively with Legacy Code
+## 6. Michael Feathers — Working Effectively with Legacy Code
 
 **状态：选择性采用，强烈保留核心概念**
 
 可检查目录/章节：
-- https://www.oreilly.com/library/view/working-effectively-with/0131177052/toc.html
-- Seam Model: https://www.oreilly.com/library/view/working-effectively-with/0131177052/ch04.html
+- [6. Michael Feathers — Working Effectively with Legacy Code](https://www.oreilly.com/library/view/working-effectively-with/0131177052/toc.html)
+- [Seam Model](https://www.oreilly.com/library/view/working-effectively-with/0131177052/ch04.html)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了目录与 Seam Model 章节内容。全书结构不是“整理旧代码”，而是围绕：
 
@@ -386,7 +391,7 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 - dependency-breaking techniques；
 - 在必须修改、但没有安全网时如何降低风险。
 
-## 为什么好
+### 为什么好
 
 它回答了课堂里经常被忽略的问题：
 
@@ -394,13 +399,13 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 
 “先测试再写代码”对 greenfield 有用，但对真实 legacy repo 不够。Seam/characterization 思维特别适合 Agent 接管旧项目：先建立可观察边界，再允许大规模自动修改。
 
-## 局限
+### 局限
 
 - 2004 年出版，示例和工具明显带有当时 C++/Java/OO 风格；
 - 某些 dependency-breaking technique 在现代语言/测试工具下不再是最佳做法；
 - 不应照抄技术动作。
 
-## 本课程怎么用
+### 本课程怎么用
 
 保留概念，不照抄时代性的 mechanics：
 
@@ -412,14 +417,14 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 
 ---
 
-# 7. Google Site Reliability Engineering
+## 7. Google Site Reliability Engineering
 
 **状态：选择性采用（Production / Failure 层）**
 
 官方免费全文：
-- https://sre.google/sre-book/table-of-contents/
+- [7. Google Site Reliability Engineering](https://sre.google/sre-book/table-of-contents/)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了完整目录以及：
 
@@ -430,7 +435,7 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 - Cascading Failure 相关内容；
 - production best practices。
 
-## 为什么好
+### 为什么好
 
 它迫使学生面对“软件不是只在 unit test 世界里运行”的事实：
 
@@ -444,7 +449,7 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 
 对系统代码而言，failure semantics 本身就是 API/architecture 的一部分。
 
-## 局限
+### 局限
 
 - 很多章节针对大规模在线服务；
 - 本课程不是 SRE 课程；
@@ -452,17 +457,17 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 
 ---
 
-# 8. Robert C. Martin — Clean Code
+## 8. Robert C. Martin — Clean Code
 
 **状态：对照阅读，不作为主干权威**
 
 第一版官方目录/样章：
-- https://www.informit.com/store/clean-code-a-handbook-of-agile-software-craftsmanship-9780132350884
+- [8. Robert C. Martin — Clean Code — source 1](https://www.informit.com/store/clean-code-a-handbook-of-agile-software-craftsmanship-9780132350884)
 
 第二版官方页面：
-- https://www.informit.com/store/clean-code-a-handbook-of-agile-software-craftsmanship-9780135398579
+- [8. Robert C. Martin — Clean Code — source 2](https://www.informit.com/store/clean-code-a-handbook-of-agile-software-craftsmanship-9780135398579)
 
-## 实际检查了什么
+### 实际检查了什么
 
 检查了第一版目录/公开章节、第二版详细目录，以及 APOSD 第二版专门加入的对比内容。
 
@@ -477,7 +482,7 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 
 2025 第二版仍延续“Everything Small, Well Named, Organized, and Ordered”等主线，并增加 AI/LLM 章节。
 
-## 为什么不作为主干
+### 为什么不作为主干
 
 不是因为它“差”或“过时”，而是因为 **我们的课程目标不是让学生接受一套 stylistic school**。
 
@@ -488,7 +493,7 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 3. comments 的价值在 interface contract、design rationale、hidden invariant 中不能被简单归为失败；
 4. 课程更想训练 trade-off argument，而不是 rule compliance。
 
-## 为什么仍然值得读一部分
+### 为什么仍然值得读一部分
 
 它很适合做 **design debate**：
 
@@ -498,7 +503,7 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 
 ---
 
-# 9. 当前暂不放入主干的材料
+## 9. 当前暂不放入主干的材料
 
 以下不是否定，只是目前还没有完成足够审计，或者与已有主干重合：
 
@@ -515,7 +520,7 @@ Agent 一次改几千行的时代，小步是否仍然重要？仍然重要，�
 
 ---
 
-# 10. 当前组合为什么不是“拼书”
+## 10. 当前组合为什么不是“拼书”
 
 这几份材料分别填不同层次：
 
@@ -553,7 +558,7 @@ system model → task contract → agent implementation → evidence → indepen
 
 ---
 
-# 11. 审计粒度：教材级与模块级分开
+## 11. 审计粒度：教材级与模块级分开
 
 `MATERIALS_REVIEW.md` 只负责回答“这门课/这本书总体值得怎样使用”。
 
@@ -639,7 +644,7 @@ Capstone 不再引入新的 normative source，而是显式复用 M02–M12 已�
 
 ---
 
-## Extensions — 传统 Software Engineering gap audit
+### Extensions — 传统 Software Engineering gap audit
 
 M00–M13 完成后，我们另外检查了“课程没有按传统 syllabus 展开的内容，是否真的都不值得学”。结果记录在 [`reading-notes/traditional-se-gap-map.md`](reading-notes/traditional-se-gap-map.md) 和 [`reading-notes/extensions-source-audit.md`](reading-notes/extensions-source-audit.md)。
 

@@ -1,3 +1,9 @@
+---
+id: M13
+type: module
+visibility: student
+order: 13
+---
 # M13 — Capstone：让一次 Change 经得起现实世界
 
 M13 不再引入新的 software-engineering principle。它把前面分开练过的 system model、contract、state ownership、testing、concurrency、migration、architecture、production evidence、review 与 Agent authority 放进同一个 change，检查这些判断能不能同时成立。
@@ -188,7 +194,7 @@ Review closure 后仍不能把 rollout 写成“deploy succeeded”。Activation
 
 Instructor reference 选择单 SQLite jobs table、conditional claim、monotonic attempt、nullable lease expiry、manual default、dual worker protocol 与 activation gate。它在临时 solution copy 中记录了 `14 passed`（6 个 baseline + 8 个 focused tests），并记录 frozen-v1 expand compatibility、external duplicate negative control 与 post-v2 old-server rollback counterexample；但那组 focused tests 只验证了 v1-v1 claim single-winner，没有覆盖当前 contract 明确要求的 v1-v2 concurrent arbitration。
 
-这些结果的 provenance 记录在 [`../reading-notes/m13-source-audit.md`](../reading-notes/m13-source-audit.md) 与 instructor analysis 中。Historical `14 passed` 只证明它实际覆盖的局部 claims，不是 clarified current contract 的完整 acceptance proof；reference solution 本身也不是 canonical starter 或学生 oracle。你可以采用 transaction、separate attempts table 或其它等价结构，只要自己的 contract、mixed-protocol ownership history、compatibility、v2 fencing、legacy residual risk、migration、rollback 与 production evidence 闭合。
+这些结果的 provenance 由课程维护侧的 instructor-only M13 audit 与 instructor analysis 记录。Historical `14 passed` 只证明它实际覆盖的局部 claims，不是 clarified current contract 的完整 acceptance proof；reference solution 本身也不是 canonical starter 或学生 oracle。你可以采用 transaction、separate attempts table 或其它等价结构，只要自己的 contract、mixed-protocol ownership history、compatibility、v2 fencing、legacy residual risk、migration、rollback 与 production evidence 闭合。
 
 Reference 也没有解决真实 scheduler 的所有问题：clock uncertainty、worker authentication、DB corruption recovery、多 server heavy contention、真实 worker inventory、external-effect idempotency、operator UI、schema downgrade tooling 与 v1 protocol removal 都仍在 scope 外。Capstone 的目标不是把这个教学系统伪装成 production-grade scheduler。
 

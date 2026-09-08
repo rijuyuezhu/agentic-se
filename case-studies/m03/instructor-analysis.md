@@ -1,3 +1,9 @@
+---
+id: case-M03
+type: case_study
+visibility: instructor
+related: [M03]
+---
 # M03 Instructor Analysis — TaskForge Testing
 
 > **Spoiler warning**：完成 [`../../labs/03-testing-evidence.md`](../../labs/03-testing-evidence.md) 前不要读。
