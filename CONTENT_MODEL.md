@@ -221,6 +221,8 @@ Validator 至少检查：
 
 CI 运行 validator regression tests、content validation，并 smoke-test student/instructor/all 三种 derived manifest。网站框架将来可以增加自己的 build/search/render checks，但不能取代 content validation。
 
+`site/` 是 renderer implementation subtree，不是课程内容区。Canonical discovery 明确不扫描 `site/`（包括 framework template、theme source、generated files 和 `node_modules`）；否则前端依赖自己的 Markdown/frontmatter 会被误升级成课程页面。这个排除只隔离 renderer implementation，不改变上述 pure/mixed content-zone inclusion policy。
+
 ## 10. Repository layout 决定
 
 本轮不搬到 `content/` root。

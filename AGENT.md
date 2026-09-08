@@ -107,6 +107,7 @@ M04 pilot 的经验是：reviewer 对 narrative rewind 的 diagnosis 成立，�
 - canonical Markdown 使用 `CONTENT_MODEL.md` 定义的 fail-closed subset：column-0 ATX H1–H6、simple inline links/images、task-list marker、paired single-backtick inline code、exactly-triple fenced code；其它 square-bracket/reference、heading/backtick/fence grammar、angle autolink 或 raw HTML 都不要使用；
 - pure canonical zone 中缺 frontmatter 是错误；`practicum/` 是 mixed zone，只有 root entry 强制 canonical，nested page 用 frontmatter opt in。目录只做 inclusion check，不推导页面 semantics；
 - repo-only editorial/source-work records 不需要为了形式统一强行加入 canonical graph；
+- `site/` 只放 renderer/config/theme/generated build state，整个 subtree 不参与 canonical discovery；不要把课程正文复制进去，也不要让 framework metadata 反向成为内容 authority；
 - 不要因为某个网站框架偏好 MDX、slug 或 presentation field 就扩 schema。先证明新的 content semantic 真有消费者。
 
 涉及 canonical content 的改动，提交前至少运行：
@@ -120,6 +121,8 @@ python tools/content_model.py manifest --visibility all >/dev/null
 ```
 
 网站实现必须消费这个派生 content graph，而不是重新从目录名或前端配置猜课程结构。
+
+课程网站当前使用 VitePress；framework trade-off 记录在 `reading-notes/site-framework-decision.md`。涉及 renderer 的改动至少运行 `npm ci --prefix site`（依赖变化时）和 `npm --prefix site run build:student`。Student visibility 必须在 source discovery 阶段排除，不能用 sidebar/CSS/client-side hiding 代替。
 
 ## Canonical pilot
 

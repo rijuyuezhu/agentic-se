@@ -1,0 +1,134 @@
+:root {
+  --vp-layout-max-width: 1480px;
+}
+
+.VPDoc .content-container {
+  max-width: 760px;
+}
+
+.vp-doc {
+  font-size: 16.5px;
+  line-height: 1.82;
+}
+
+.vp-doc p,
+.vp-doc li {
+  text-wrap: pretty;
+}
+
+.vp-doc p {
+  margin: 1em 0;
+}
+
+.vp-doc h2 {
+  margin-top: 2.2em;
+}
+
+.vp-doc h3,
+.vp-doc h4 {
+  margin-top: 1.7em;
+}
+
+.vp-doc table {
+  font-size: 0.94em;
+}
+
+.vp-doc pre,
+.vp-doc div[class*='language-'] {
+  max-width: 100%;
+}
+
+.vp-doc a:focus-visible,
+.course-context a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.course-context {
+  margin: 0 0 2rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  background: var(--vp-c-bg-soft);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.course-context__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.course-context__type {
+  font-weight: 700;
+}
+
+.course-context__progress-text {
+  color: var(--vp-c-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.course-context__progress {
+  display: block;
+  width: 100%;
+  height: 0.35rem;
+  margin: 0.6rem 0 0;
+  accent-color: var(--vp-c-brand-1);
+}
+
+.course-context__related {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.8rem 1.25rem;
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+.course-context__group ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.course-context__group li + li {
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .vp-doc {
+    font-size: 16px;
+    line-height: 1.78;
+  }
+
+  .course-context {
+    margin-inline: -0.25rem;
+  }
+}
+
+@media print {
+  .VPNav,
+  .VPSidebar,
+  .VPDocAside,
+  .VPDocFooter,
+  .course-context {
+    display: none !important;
+  }
+
+  .VPContent,
+  .VPDoc,
+  .VPDoc .content,
+  .VPDoc .content-container {
+    max-width: none !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .vp-doc {
+    font-size: 11pt;
+    line-height: 1.55;
+  }
+}
