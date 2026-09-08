@@ -85,13 +85,13 @@ if (!home) throw new Error('site model must contain canonical course-overview')
 const labs = pagesOfType('lab')
 const cases = pagesOfType('case_study')
 const extensions = pagesOfType('extension')
-const sources = pagesOfType('source_audit')
+const sources = model.visibility === 'all' ? pagesOfType('source_audit') : []
 const practicums = pagesOfType('practicum')
 const references = pagesOfType('reference').filter((page: any) => page.id !== 'course-overview')
 
 const sidebar: any[] = []
-if (home) sidebar.push({ text: '课程概览', items: [routeItem(home)] })
-sidebar.push({ text: 'Main Path', collapsed: false, items: mainPath.map(routeItem) })
+if (home) sidebar.push({ text: '课程概览', link: home.route })
+sidebar.push({ text: 'Main Path', collapsed: true, items: mainPath.map(routeItem) })
 if (labs.length) sidebar.push({ text: 'Labs', collapsed: true, items: labs.map(routeItem) })
 if (cases.length) sidebar.push({ text: 'Case Studies', collapsed: true, items: cases.map(routeItem) })
 if (extensions.length)
@@ -106,13 +106,15 @@ if (references.length)
 const nav: any[] = []
 if (home) nav.push({ text: '首页', link: home.route })
 if (mainPath.length) nav.push({ text: 'Main Path', link: mainPath[0].route })
-if (labs.length) nav.push({ text: 'Labs', link: labs[0].route })
-if (cases.length) nav.push({ text: 'Case Studies', link: cases[0].route })
+const practiceNav: any[] = []
+if (labs.length) practiceNav.push({ text: 'Labs', link: labs[0].route })
+if (cases.length) practiceNav.push({ text: 'Case Studies', link: cases[0].route })
+const finalPracticum = byId.get('final-practicum')
+if (finalPracticum) practiceNav.push({ text: 'Final Practicum', link: finalPracticum.route })
+if (practiceNav.length) nav.push({ text: '实践', items: practiceNav })
 const extensionIndex = byId.get('extensions') ?? extensions[0]
 if (extensionIndex) nav.push({ text: 'Extensions', link: extensionIndex.route })
 if (sources.length) nav.push({ text: 'Sources', link: sources[0].route })
-const finalPracticum = byId.get('final-practicum')
-if (finalPracticum) nav.push({ text: 'Final Practicum', link: finalPracticum.route })
 
 function sourcePageFromBuildSource(source: string | undefined) {
   if (!source) return undefined
@@ -212,6 +214,11 @@ export default defineConfig({
     resolve: {
       alias: [
         {
+          // Keep the default mobile drawer, but let readers control group expansion.
+          find: /^.*\/VPSidebarGroup\.vue$/,
+          replacement: resolve(configDir, 'theme/CourseSidebar.vue'),
+        },
+        {
           find: /^vue$/,
           replacement: resolve(siteDir, 'node_modules/vue/dist/vue.runtime.esm-bundler.js'),
         },
@@ -266,6 +273,7 @@ export default defineConfig({
     pageData.frontmatter.next = next ? routeItem(next) : false
   },
   themeConfig: {
+    siteTitle: '软件工程 · Agent',
     nav,
     sidebar,
     outline: { level: [2, 4], label: '本页目录' },

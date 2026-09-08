@@ -36,17 +36,26 @@ function forbidText(body, needle, context) {
   if (body.includes(needle)) throw new Error(`${context}: unexpectedly contains ${JSON.stringify(needle)}`)
 }
 
+function requireMatch(body, pattern, context) {
+  const match = body.match(pattern)
+  if (!match) throw new Error(`${context}: missing ${pattern}`)
+  return match[0]
+}
+
+const checkSourceNavigation = model.visibility === 'all' ? requireText : forbidText
 const m07 = await html('modules/07-concurrency-lifecycle-failure.html')
-requireText(m07, '<aside class="course-context"', 'M07 course context')
-requireText(m07, 'Main Path · 8 / 15', 'M07 progress')
-requireText(m07, `href="${href(routeFor('lab-M07'))}"`, 'M07 related Lab')
-requireText(m07, `href="${href(routeFor('source-M07'))}"`, 'M07 related source audit')
-requireText(m07, `href="${href(routeFor('ext-models-notation'))}"`, 'M07 related extension')
+const m07Context = requireMatch(
+  m07, /<aside\b[^>]*class="course-context"[^>]*>[\s\S]*?<\/aside>/, 'M07 course context'
+)
+requireText(m07Context, 'Main Path · 8 / 15', 'M07 progress')
+requireText(m07Context, `href="${href(routeFor('lab-M07'))}"`, 'M07 related Lab')
+checkSourceNavigation(m07Context, `href="${href(routeFor('source-M07'))}"`, 'M07 related source audit')
+requireText(m07Context, `href="${href(routeFor('ext-models-notation'))}"`, 'M07 related extension')
 const m07Case = byId.get('case-M07')
 if (m07Case) {
-  requireText(m07, `href="${href(m07Case.route)}"`, 'M07 related Case Study')
+  requireText(m07Context, `href="${href(m07Case.route)}"`, 'M07 related Case Study')
 } else {
-  forbidText(m07, '/case-studies/m07/', 'student M07 hidden Case Study relation')
+  forbidText(m07Context, '/case-studies/m07/', 'student M07 hidden Case Study relation')
 }
 requireText(
   m07,
@@ -74,14 +83,70 @@ requireText(
   source('blob', 'labs/taskforge/capstone-starter/ISSUE.md'),
   'repo-only file link'
 )
-const m13Source = byId.get('source-M13')
-if (m13Source) {
-  requireText(m13, `href="${href(m13Source.route)}"`, 'M13 instructor source audit relation')
+const m13Context = requireMatch(
+  m13, /<aside\b[^>]*class="course-context"[^>]*>[\s\S]*?<\/aside>/, 'M13 course context'
+)
+if (model.visibility === 'all') {
+  requireText(m13Context, `href="${href(routeFor('source-M13'))}"`, 'M13 all source audit relation')
 } else {
-  forbidText(m13, '/reading-notes/m13-source-audit', 'student M13 hidden source audit relation')
+  forbidText(m13Context, '/reading-notes/m13-source-audit', 'M13 hidden source audit relation')
+}
+checkSourceNavigation(m07Context, '<strong>Source Audit</strong>', 'M07 source audit cards')
+checkSourceNavigation(m13Context, '<strong>Source Audit</strong>', 'M13 source audit cards')
+
+for (const [name, context] of [['M07', m07Context], ['M13', m13Context]]) {
+  const details = requireMatch(
+    context, /<details\b[^>]*class="course-context__related"[^>]*>/, `${name} related disclosure`
+  )
+  if (/\sopen(?:\s|=|>)/.test(details)) throw new Error(`${name}: related materials must start closed`)
+  const meta = context.slice(0, context.indexOf(details))
+  requireText(meta, 'class="course-context__meta"', `${name} metadata outside disclosure`)
+  requireText(meta, 'class="course-context__progress-text"', `${name} progress text outside disclosure`)
+  requireText(meta, 'class="course-context__progress"', `${name} progress outside disclosure`)
+}
+
+const nav = requireMatch(
+  m07, /<nav\b[^>]*class="VPNavBarMenu\b[^"]*"[^>]*>[\s\S]*?<\/nav>/, 'top navigation'
+)
+const sidebar = requireMatch(
+  m07, /<nav\b[^>]*id="VPSidebarNav"[^>]*>[\s\S]*?<\/nav>/, 'sidebar navigation'
+)
+checkSourceNavigation(nav, '>Sources</span>', `${model.visibility} Sources top navigation`)
+checkSourceNavigation(sidebar, '>Source Audits</span>', `${model.visibility} Source Audits sidebar`)
+for (const page of model.pages.filter((page) => page.type === 'source_audit')) {
+  const link = `href="${href(page.route)}"`
+  checkSourceNavigation(sidebar, link, `${model.visibility} sidebar ${page.id}`)
+  if (model.visibility !== 'all') forbidText(nav, link, `${model.visibility} top navigation ${page.id}`)
+}
+const audienceLabels = { student: '学生版', instructor: '教师版', all: '完整版' }
+requireText(
+  sidebar, `class="course-sidebar__audience">${audienceLabels[model.visibility]}</span>`, 'sidebar audience'
+)
+const groups = sidebar.match(/<details\b[^>]*class="course-sidebar__group[^"]*"[^>]*>[\s\S]*?<\/details>/g) ?? []
+if (!groups.length || groups.length !== (sidebar.match(/class="course-sidebar__summary"/g) ?? []).length) {
+  throw new Error('sidebar: named groups must use native details')
+}
+for (const group of groups) {
+  if (/^<details\b[^>]*\sopen(?:\s|=|>)/.test(group)) throw new Error('sidebar groups must start closed')
+  const count = (group.match(/<a\b/g) ?? []).length
+  requireText(group, `class="course-sidebar__count" aria-label="${count} 篇"`, 'sidebar group count')
+}
+const activeLink = `href="${href(routeFor('M07'))}"`
+const activeGroup = groups.find((group) => group.includes(activeLink)) ?? ''
+requireText(activeGroup, 'course-sidebar__group has-active-link', 'M07 active sidebar group')
+requireText(activeGroup, `${activeLink} aria-current="page"`, 'M07 current sidebar link')
+
+const layout = requireMatch(m07, /<div\b[^>]*class="Layout\b[^"]*"[^>]*>/, 'course layout')
+requireText(layout, 'course-sidebar-collapsed', 'desktop sidebar default')
+const toggle = requireMatch(m07, /<button\b[^>]*class="course-sidebar-toggle"[^>]*>/, 'sidebar toggle')
+for (const attribute of [
+  'type="button"', 'aria-expanded="false"', 'aria-controls="VPSidebarNav"',
+  'aria-label="展开课程导航"', 'title="展开课程导航"',
+]) {
+  requireText(toggle, attribute, 'collapsed sidebar toggle')
 }
 
 const home = await html('index.html')
 forbidText(home, '<aside class="course-context"', 'course overview')
 
-console.log('render verification: PASS (relations, Main Path pagination, repo artifacts)')
+console.log('render verification: PASS (audience navigation, closed disclosures/sidebar, relations, Main Path pagination, repo artifacts)')

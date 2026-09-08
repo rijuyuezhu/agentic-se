@@ -59,6 +59,7 @@ const relatedGroups = computed(() => {
       : ['module', 'lab', 'case_study', 'source_audit', 'extension', 'practicum', 'reference']
 
   return wanted
+    .filter((type) => type !== 'source_audit' || model.visibility === 'all')
     .map((type) => ({
       type,
       label: GROUP_LABELS[type] ?? type,
@@ -69,6 +70,9 @@ const relatedGroups = computed(() => {
     .filter((group) => group.pages.length > 0)
 })
 
+const relatedCount = computed(() =>
+  relatedGroups.value.reduce((count, group) => count + group.pages.length, 0)
+)
 const show = computed(() => current.value && current.value.id !== 'course-overview')
 </script>
 
@@ -89,15 +93,22 @@ const show = computed(() => current.value && current.value.id !== 'course-overvi
       :aria-label="`Main Path ${mainPosition.current} / ${mainPosition.total}`"
     />
 
-    <div v-if="relatedGroups.length" class="course-context__related">
-      <div v-for="group in relatedGroups" :key="group.type" class="course-context__group">
-        <strong>{{ group.label }}</strong>
-        <ul>
-          <li v-for="page in group.pages" :key="page.id">
-            <a :href="withBase(page.route)">{{ page.title }}</a>
-          </li>
-        </ul>
+    <details v-if="relatedGroups.length" class="course-context__related">
+      <summary class="course-context__summary">
+        <span>配套材料</span>
+        <span class="course-context__count">{{ relatedCount }} 项</span>
+        <span class="vpi-chevron-right course-context__chevron" aria-hidden="true" />
+      </summary>
+      <div class="course-context__grid">
+        <div v-for="group in relatedGroups" :key="group.type" class="course-context__group">
+          <strong>{{ group.label }}</strong>
+          <ul>
+            <li v-for="page in group.pages" :key="page.id">
+              <a :href="withBase(page.route)">{{ page.title }}</a>
+            </li>
+          </ul>
+        </div>
       </div>
-    </div>
+    </details>
   </aside>
 </template>
