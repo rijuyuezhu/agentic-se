@@ -95,6 +95,28 @@ M04 pilot 的经验是：reviewer 对 narrative rewind 的 diagnosis 成立，�
 
 尽量让 commit 按 reasoning phase 可审查，例如 guide、pilot、review refinement 分开提交。
 
+## Canonical content model
+
+进入课程网站内容图的 Markdown 必须遵守 [`CONTENT_MODEL.md`](CONTENT_MODEL.md)。不要把 frontmatter 当网站样式配置：它只表达稳定的 content identity、page type、visibility、Main Path order 和页面级 relations。
+
+特别注意：
+
+- 页面标题的 authority 仍是正文唯一 H1，不要在 frontmatter 再复制一份 `title`；
+- relation 使用 stable content ID，由 validator / renderer 建反向索引，不要维护第二份 module→lab/case/source map；
+- `visibility: instructor` / `internal` 是 build exclusion contract。Student page 不得 link / relate 到 instructor/internal；instructor page 也不得依赖 internal；不要靠“提醒读者别点”替代隔离；
+- repo-only editorial/source-work records 不需要为了形式统一强行加入 canonical graph；
+- 不要因为某个网站框架偏好 MDX、slug 或 presentation field 就扩 schema。先证明新的 content semantic 真有消费者。
+
+涉及 canonical content 的改动，提交前至少运行：
+
+```bash
+python tools/test_content_model.py
+python tools/content_model.py validate
+python tools/content_model.py manifest --visibility student >/dev/null
+```
+
+网站实现必须消费这个派生 content graph，而不是重新从目录名或前端配置猜课程结构。
+
 ## Canonical pilot
 
 PR #7（`教材编辑：建立 Editorial Guide 并重写 M04 pilot`）是 issue #2 的首个已通过独立 semantic/cold-reader review 的困难章节 pilot。后续 M00–M13 rewrite 应复用它的方法，而不是机械复制它的章节结构或 heading 数量。
