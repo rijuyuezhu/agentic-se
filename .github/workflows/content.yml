@@ -22,3 +22,16 @@ jobs:
           python tools/content_model.py manifest --visibility student >/dev/null
           python tools/content_model.py manifest --visibility instructor >/dev/null
           python tools/content_model.py manifest --visibility all >/dev/null
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install site dependencies
+        run: npm ci --prefix site
+      - name: Build and verify student site
+        run: npm --prefix site run build:student
+      - uses: actions/upload-artifact@v4
+        with:
+          name: student-course-site
+          path: site/.vitepress/dist
