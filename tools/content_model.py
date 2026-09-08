@@ -10,7 +10,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,6 +41,9 @@ FENCE_CANDIDATE_RE = re.compile(r"^( *)(`+|~+)(.*)$")
 LINK_RE = re.compile(r"(?<!!)\[[^\[\]\n]+\]\(([^()\n]+)\)")
 IMAGE_RE = re.compile(r"!\[[^\[\]\n]*\]\(([^()\n]+)\)")
 EXTERNAL_URL_RE = re.compile(r"https?://[^\s)>]+")
+CHARACTER_REFERENCE_RE = re.compile(
+    r"&(?:#[0-9]+|#[xX][0-9A-Fa-f]+|[A-Za-z][A-Za-z0-9]+);"
+)
 TASK_LIST_RE = re.compile(
     r"^[ \t]*(?:(?:[-+*])|(?:\d+[.)]))[ \t]+\[[ xX]\](?=[ \t]+|$)"
 )
@@ -288,6 +291,22 @@ def markdown_structure(
             else:
                 # Optional Markdown link titles are outside the target token.
                 raw = raw.split(maxsplit=1)[0]
+            if CHARACTER_REFERENCE_RE.search(raw):
+                syntax_errors.append(
+                    (
+                        lineno,
+                        "Markdown character references are not allowed in link/image destinations; "
+                        "use raw or percent-encoded URL characters",
+                    )
+                )
+            if "\\" in raw:
+                syntax_errors.append(
+                    (
+                        lineno,
+                        "backslash escapes are not allowed in link/image destinations; "
+                        "use raw or percent-encoded URL characters",
+                    )
+                )
             links.append((lineno, raw))
 
         # Inline code may intentionally show a literal URL or command. The link
@@ -452,7 +471,7 @@ def load_pages() -> tuple[list[Page], list[str], dict[Path, list[tuple[int, str]
 def _local_target(source: Path, raw_target: str) -> Path | None:
     if not raw_target or raw_target.startswith("#"):
         return None
-    parsed = urlparse(raw_target)
+    parsed = urlsplit(raw_target)
     if parsed.scheme or raw_target.startswith("//"):
         return None
     target_path = unquote(parsed.path)

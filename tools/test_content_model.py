@@ -358,6 +358,69 @@ class ContentModelValidationTests(unittest.TestCase):
             handle.write("\n[nested [label]](../labs/05-lab.md)\n")
         self.assertTrue(any("unsupported inline link/image syntax" in error for error in self.errors()))
 
+    def test_character_reference_destination_visibility_bypass_is_rejected(self) -> None:
+        self.write_page(
+            "case-studies/m07/instructor.md",
+            page_id="case-M07",
+            page_type="case_study",
+            visibility="instructor",
+            title="Instructor Case",
+            related=("M07",),
+        )
+        artifact = self.root / "case-studies/m07/instructor&period"
+        artifact.write_text("repo-only artifact\n", encoding="utf-8")
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n[spoiler](../case-studies/m07/instructor&period;md)\n")
+        self.assertTrue(
+            any("Markdown character references are not allowed" in error for error in self.errors())
+        )
+
+    def test_backslash_escape_destination_visibility_bypass_is_rejected(self) -> None:
+        self.write_page(
+            "case-studies/m07/instructor.md",
+            page_id="case-M07",
+            page_type="case_study",
+            visibility="instructor",
+            title="Instructor Case",
+            related=("M07",),
+        )
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n[spoiler](../case-studies/m07/instructor\\.md)\n")
+        self.assertTrue(
+            any("backslash escapes are not allowed" in error for error in self.errors())
+        )
+
+    def test_percent_encoded_destination_still_resolves_for_visibility(self) -> None:
+        self.write_page(
+            "case-studies/m07/instructor.md",
+            page_id="case-M07",
+            page_type="case_study",
+            visibility="instructor",
+            title="Instructor Case",
+            related=("M07",),
+        )
+        path = self.root / "modules/07-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n[spoiler](../case-studies/m07/%69nstructor.md)\n")
+        self.assertTrue(any("outside its build visibility" in error for error in self.errors()))
+
+    def test_semicolon_remains_part_of_local_path(self) -> None:
+        artifact = self.root / "practicum/raw/name;part.md"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text("repo-only artifact\n", encoding="utf-8")
+        path = self.root / "modules/05-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n[artifact](../practicum/raw/name;part.md)\n")
+        self.assertEqual(self.errors(), [])
+
+    def test_plain_ampersand_query_destination_remains_supported(self) -> None:
+        path = self.root / "modules/05-module.md"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n[source](https://example.com/a?p=1&seq=2)\n")
+        self.assertEqual(self.errors(), [])
+
     def test_local_link_may_not_escape_repository_root(self) -> None:
         outside = self.root.parent / "outside.md"
         outside.write_text("outside\n", encoding="utf-8")

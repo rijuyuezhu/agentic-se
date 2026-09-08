@@ -154,7 +154,7 @@ Canonical authoring 使用一个刻意小、仍可在 GitHub/普通编辑器高�
 
 - heading 只使用 **column-0 ATX H1–H6**（`#` 到 `######`）；禁止任何前导空白缩进、blockquote/list container heading、Setext `Title\n=====`，也禁止 closing ATX hashes（例如 `## Title ##`）；
 - cross-reference 使用 simple inline `[text](target)` / `![alt](target)`；GFM task-list marker `[ ]` / `[x]` 也允许；除此之外 prose 中的 square-bracket syntax 一律 fail closed，因此 full/collapsed/shortcut reference、escaped-label definition 与普通 literal brackets 都必须改成 inline code 或允许的 inline link/image；
-- inline link/image target 不使用 raw nested parentheses；需要时 percent-encode，避免 parser ambiguity；
+- inline link/image destination 不使用 raw nested parentheses、Markdown character reference（如 `&period;` / `&#46;`）或 backslash escape；需要转义 path 字符时只使用 percent encoding，validator 会在 filesystem/visibility comparison 前显式 `unquote()`；普通 query 中不构成 character reference 的 `&` 保持合法；
 - 禁止 angle-bracket autolink `<https://...>`，改用有语义的 inline link text；
 - canonical page 禁止 raw HTML；未来真需要组件能力时，应先定义统一 renderer contract，而不是用 HTML 绕开 content validation；
 - inline code 只允许**同一行、成对且未 escape 的单 backtick**；backslash-escaped backtick、double-backtick、unmatched/mixed backtick runs 直接 fail closed，不猜测 code span 边界；
