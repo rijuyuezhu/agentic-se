@@ -480,6 +480,15 @@ class ContentModelValidationTests(unittest.TestCase):
         path.write_text("# Repo-only notes\n", encoding="utf-8")
         self.assertEqual(self.errors(), [])
 
+    def test_renderer_site_markdown_is_outside_canonical_discovery(self) -> None:
+        path = self.root / "site/node_modules/framework/template.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "---\ntitle: Framework Template\noutline: deep\n---\n# Framework Template\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(self.errors(), [])
+
     def test_manifest_visibility_and_inverse_relations(self) -> None:
         self.write_page(
             "labs/07-lab.md",

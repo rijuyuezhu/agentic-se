@@ -392,6 +392,9 @@ def load_pages() -> tuple[list[Page], list[str], dict[Path, list[tuple[int, str]
     with_frontmatter: set[Path] = set()
 
     for path in sorted(ROOT.rglob("*.md")):
+        rel = path.relative_to(ROOT)
+        if rel.parts and rel.parts[0] == "site":
+            continue
         if any(part in {".git", ".venv", ".pytest_cache"} for part in path.parts):
             continue
         try:
